@@ -43,3 +43,40 @@ def test_get_llm_config_partial_override():
     assert cfg["api_key"] == "sk-default"
     assert cfg["model"] == "gpt-4"
     assert cfg["base_url"] == "https://api.openai.com/v1"
+
+
+import pytest
+from unittest.mock import AsyncMock, patch
+
+
+@pytest.mark.asyncio
+async def test_get_llm_client_returns_cached_instance():
+    """相同 module 应返回同一实例"""
+    from app.deps import get_llm_client
+    import app.deps as deps_mod
+    deps_mod._module_clients.clear()
+
+    with patch("app.deps.OpenAIClient") as mock_cls:
+        mock_instance = AsyncMock()
+        mock_cls.return_value = mock_instance
+
+        client1 = await get_llm_client("teaching")
+        client2 = await get_llm_client("teaching")
+        assert client1 is client2
+        mock_cls.assert_called_once()
+
+
+@pytest.mark.asyncio
+async def test_get_llm_client_different_modules():
+    """不同 module 应创建不同实例"""
+    from app.deps import get_llm_client
+    import app.deps as deps_mod
+    deps_mod._module_clients.clear()
+
+    with patch("app.deps.OpenAIClient") as mock_cls:
+        mock_cls.side_effect = lambda **kw: AsyncMock(**kw)
+
+        client1 = await get_llm_client("teaching")
+        client2 = await get_llm_client("parser")
+        assert client1 is not client2
+        assert mock_cls.call_count == 2

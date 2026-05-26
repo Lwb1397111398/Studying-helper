@@ -10,23 +10,31 @@ from app.modules.user_storage.services import (
 )
 from app.modules.user_storage.auth import get_current_user_id
 
-# 全局LLM客户端实例（延迟初始化）
-_llm_client: OpenAIClient | None = None
+# 模块级 LLM 客户端缓存 {module_name: OpenAIClient}
+_module_clients: dict[str, OpenAIClient] = {}
 _llm_lock = asyncio.Lock()
 
 
-async def get_llm_client() -> OpenAIClient:
-    """获取LLM客户端单例（线程安全）"""
-    global _llm_client
-    if _llm_client is None:
-        async with _llm_lock:
-            if _llm_client is None:
-                _llm_client = OpenAIClient(
-                    api_key=settings.LLM_API_KEY,
-                    model=settings.LLM_MODEL,
-                    base_url=settings.LLM_BASE_URL,
-                )
-    return _llm_client
+async def get_llm_client(module: str = "default") -> OpenAIClient:
+    """获取指定模块的 LLM 客户端。
+
+    相同 module 复用同一实例，不同 module 使用各自的配置和实例。
+    module="default" 时向后兼容原有行为。
+    """
+    if module in _module_clients:
+        return _module_clients[module]
+
+    async with _llm_lock:
+        if module in _module_clients:
+            return _module_clients[module]
+        cfg = settings.get_llm_config(module)
+        client = OpenAIClient(
+            api_key=cfg["api_key"],
+            model=cfg["model"],
+            base_url=cfg["base_url"],
+        )
+        _module_clients[module] = client
+        return client
 
 
 async def get_user_service(db: AsyncSession = Depends(get_db)) -> UserService:
