@@ -80,7 +80,7 @@ async def _get_units_for_session(db: AsyncSession, session_id: str) -> List[Lear
 
 def _get_service(
     db: AsyncSession = Depends(get_db),
-    llm_client=Depends(get_llm_client),
+    llm_client=Depends(lambda: get_llm_client("teaching")),
 ) -> TeachingService:
     return TeachingService(llm_client=llm_client, db=db)
 
