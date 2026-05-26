@@ -1,71 +1,43 @@
-"""设置模块的REST端点"""
+"""设置模块 REST 端点"""
 from fastapi import APIRouter
-from pydantic import BaseModel
-from pathlib import Path
-import os
+from pydantic import BaseModel, Field
+
+from app.modules.settings.settings_service import read_env, write_env
+from app.config import settings
 
 router = APIRouter(prefix="/api/settings", tags=["settings"])
 
-ENV_FILE = Path(__file__).parent.parent.parent.parent / ".env"
 
+# ── 用户偏好（可读写）──
 
-class SettingsResponse(BaseModel):
-    llm_provider: str = "openai"
-    llm_api_base: str = "https://api.openai.com/v1"
-    llm_api_key: str = ""
-    llm_model: str = "gpt-4"
-    daily_goal_minutes: int = 30
-    daily_goal_units: int = 5
+class UserPreferences(BaseModel):
+    daily_goal_minutes: int = Field(ge=1, le=1440, default=30)
+    daily_goal_units: int = Field(ge=1, le=100, default=5)
     review_reminder: bool = True
-    reminder_time: str = "20:00"
+    reminder_time: str = Field(pattern=r"^\d{2}:\d{2}$", default="20:00")
 
 
-class SettingsUpdate(BaseModel):
-    llm_provider: str | None = None
-    llm_api_base: str | None = None
-    llm_api_key: str | None = None
-    llm_model: str | None = None
-    daily_goal_minutes: int | None = None
-    daily_goal_units: int | None = None
+class UserPreferencesUpdate(BaseModel):
+    daily_goal_minutes: int | None = Field(ge=1, le=1440, default=None)
+    daily_goal_units: int | None = Field(ge=1, le=100, default=None)
     review_reminder: bool | None = None
-    reminder_time: str | None = None
+    reminder_time: str | None = Field(pattern=r"^\d{2}:\d{2}$", default=None)
 
 
-def _read_env() -> dict[str, str]:
-    """读取.env文件"""
-    result = {}
-    if ENV_FILE.exists():
-        for line in ENV_FILE.read_text(encoding="utf-8").splitlines():
-            line = line.strip()
-            if line and not line.startswith("#") and "=" in line:
-                key, _, value = line.partition("=")
-                result[key.strip()] = value.strip().strip('"').strip("'")
-    return result
+# 用户偏好 .env 键名映射
+_PREF_ENV_KEYS = {
+    "daily_goal_minutes": "DAILY_GOAL_MINUTES",
+    "daily_goal_units": "DAILY_GOAL_UNITS",
+    "review_reminder": "REVIEW_REMINDER",
+    "reminder_time": "REMINDER_TIME",
+}
 
 
-def _write_env(updates: dict[str, str | None]):
-    """更新.env文件"""
-    existing = _read_env()
-    existing.update({k: v for k, v in updates.items() if v is not None})
-    lines = [f'{k}="{v}"' for k, v in existing.items()]
-    ENV_FILE.write_text("\n".join(lines) + "\n", encoding="utf-8")
-
-
-def _to_str(v) -> str | None:
-    if v is None:
-        return None
-    return str(v)
-
-
-@router.get("", response_model=SettingsResponse)
-async def get_settings():
-    """获取当前设置"""
-    env = _read_env()
-    return SettingsResponse(
-        llm_provider=env.get("LLM_PROVIDER", "openai"),
-        llm_api_base=env.get("LLM_BASE_URL", "https://api.openai.com/v1"),
-        llm_api_key=env.get("LLM_API_KEY", ""),
-        llm_model=env.get("LLM_MODEL", "gpt-4"),
+@router.get("/preferences", response_model=UserPreferences)
+async def get_preferences():
+    """获取用户偏好"""
+    env = read_env()
+    return UserPreferences(
         daily_goal_minutes=int(env.get("DAILY_GOAL_MINUTES", 30)),
         daily_goal_units=int(env.get("DAILY_GOAL_UNITS", 5)),
         review_reminder=env.get("REVIEW_REMINDER", "true").lower() == "true",
@@ -73,30 +45,84 @@ async def get_settings():
     )
 
 
-@router.put("", response_model=SettingsResponse)
-async def update_settings(body: SettingsUpdate):
-    """更新设置"""
+@router.put("/preferences", response_model=UserPreferences)
+async def update_preferences(body: UserPreferencesUpdate):
+    """更新用户偏好"""
     updates = {
-        "LLM_PROVIDER": body.llm_provider,
-        "LLM_BASE_URL": body.llm_api_base,
-        "LLM_API_KEY": body.llm_api_key,
-        "LLM_MODEL": body.llm_model,
-        "DAILY_GOAL_MINUTES": _to_str(body.daily_goal_minutes),
-        "DAILY_GOAL_UNITS": _to_str(body.daily_goal_units),
-        "REVIEW_REMINDER": _to_str(body.review_reminder),
-        "REMINDER_TIME": body.reminder_time,
+        _PREF_ENV_KEYS[k]: str(v)
+        for k, v in body.model_dump(exclude_none=True).items()
     }
-    _write_env(updates)
-    os.environ.update({k: v for k, v in updates.items() if v})
-
-    env = _read_env()
-    return SettingsResponse(
-        llm_provider=env.get("LLM_PROVIDER", "openai"),
-        llm_api_base=env.get("LLM_BASE_URL", "https://api.openai.com/v1"),
-        llm_api_key=env.get("LLM_API_KEY", ""),
-        llm_model=env.get("LLM_MODEL", "gpt-4"),
+    write_env(updates)
+    env = read_env()
+    return UserPreferences(
         daily_goal_minutes=int(env.get("DAILY_GOAL_MINUTES", 30)),
         daily_goal_units=int(env.get("DAILY_GOAL_UNITS", 5)),
         review_reminder=env.get("REVIEW_REMINDER", "true").lower() == "true",
         reminder_time=env.get("REMINDER_TIME", "20:00"),
+    )
+
+
+# ── AI 配置（只读）──
+
+class LLMModuleConfig(BaseModel):
+    module: str
+    label: str
+    description: str
+    strength_hint: str
+    model: str
+    has_custom_key: bool
+    base_url: str
+
+
+class AIConfigResponse(BaseModel):
+    default_model: str
+    default_base_url: str
+    modules: list[LLMModuleConfig]
+
+
+# 模块元数据：实际调用 LLM 的模块
+_MODULE_META = [
+    {
+        "key": "teaching",
+        "label": "🎯 教学策略",
+        "desc": "类比/举例/对比生成、问答、测试出题",
+        "hint": "强",
+    },
+    {
+        "key": "ai_analysis",
+        "label": "🧠 AI 分析",
+        "desc": "内容分析、出题、掌握度评估",
+        "hint": "强",
+    },
+    {
+        "key": "parser",
+        "label": "📚 书本导入",
+        "desc": "目录识别、章节标题优化（LLM fallback）",
+        "hint": "弱",
+    },
+]
+
+
+@router.get("/ai-config", response_model=AIConfigResponse)
+async def get_ai_config():
+    """获取 AI 模型配置（只读，需改 .env 重启生效）"""
+    modules = []
+    for m in _MODULE_META:
+        cfg = settings.get_llm_config(m["key"])
+        has_custom = bool(
+            getattr(settings, f"LLM_{m['key'].upper()}_API_KEY", "")
+        )
+        modules.append(LLMModuleConfig(
+            module=m["key"],
+            label=m["label"],
+            description=m["desc"],
+            strength_hint=m["hint"],
+            model=cfg["model"],
+            has_custom_key=has_custom,
+            base_url=cfg["base_url"],
+        ))
+    return AIConfigResponse(
+        default_model=settings.LLM_DEFAULT_MODEL or settings.LLM_MODEL,
+        default_base_url=settings.LLM_DEFAULT_BASE_URL or settings.LLM_BASE_URL,
+        modules=modules,
     )

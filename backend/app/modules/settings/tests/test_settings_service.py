@@ -67,3 +67,83 @@ def test_write_env_skip_none_values(tmp_path, monkeypatch):
     result = read_env()
     assert result["KEEP"] == "yes"
     assert result["ADD"] == "new"
+
+
+# ── 路由端点测试 ──
+
+import pytest
+from fastapi.testclient import TestClient
+from unittest.mock import patch
+from app.main import app
+
+
+def test_get_preferences():
+    """GET /api/settings/preferences 应返回用户偏好"""
+    with patch("app.modules.settings.router.read_env") as mock_read:
+        mock_read.return_value = {
+            "DAILY_GOAL_MINUTES": "45",
+            "DAILY_GOAL_UNITS": "8",
+            "REVIEW_REMINDER": "true",
+            "REMINDER_TIME": "21:00",
+        }
+        client = TestClient(app)
+        resp = client.get("/api/settings/preferences")
+        assert resp.status_code == 200
+        data = resp.json()
+        assert data["daily_goal_minutes"] == 45
+        assert data["daily_goal_units"] == 8
+        assert data["review_reminder"] is True
+        assert data["reminder_time"] == "21:00"
+
+
+def test_update_preferences():
+    """PUT /api/settings/preferences 应更新用户偏好"""
+    with patch("app.modules.settings.router.read_env") as mock_read, \
+         patch("app.modules.settings.router.write_env") as mock_write:
+        mock_read.return_value = {
+            "DAILY_GOAL_MINUTES": "60",
+            "DAILY_GOAL_UNITS": "10",
+            "REVIEW_REMINDER": "false",
+            "REMINDER_TIME": "19:00",
+        }
+        client = TestClient(app)
+        resp = client.put("/api/settings/preferences", json={
+            "daily_goal_minutes": 60,
+            "daily_goal_units": 10,
+            "review_reminder": False,
+            "reminder_time": "19:00",
+        })
+        assert resp.status_code == 200
+        mock_write.assert_called_once()
+
+
+def test_update_preferences_validation():
+    """无效输入应返回 422"""
+    client = TestClient(app)
+    resp = client.put("/api/settings/preferences", json={
+        "daily_goal_minutes": -1,
+    })
+    assert resp.status_code == 422
+
+
+def test_get_ai_config():
+    """GET /api/settings/ai-config 应返回 AI 配置（只读）"""
+    with patch("app.config.settings") as mock_settings:
+        mock_settings.get_llm_config.return_value = {
+            "api_key": "sk-test",
+            "model": "gpt-4",
+            "base_url": "https://api.openai.com/v1",
+        }
+        mock_settings.LLM_DEFAULT_MODEL = "gpt-4o-mini"
+        mock_settings.LLM_DEFAULT_BASE_URL = "https://api.openai.com/v1"
+        mock_settings.LLM_TEACHING_API_KEY = ""
+        mock_settings.LLM_AI_ANALYSIS_API_KEY = ""
+        mock_settings.LLM_PARSER_API_KEY = ""
+
+        client = TestClient(app)
+        resp = client.get("/api/settings/ai-config")
+        assert resp.status_code == 200
+        data = resp.json()
+        assert "default_model" in data
+        assert "modules" in data
+        assert len(data["modules"]) == 3  # teaching, ai_analysis, parser
