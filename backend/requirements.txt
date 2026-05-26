@@ -1,0 +1,15 @@
+fastapi>=0.100.0
+uvicorn[standard]>=0.23.0
+sqlalchemy[asyncio]>=2.0.0
+aiosqlite>=0.19.0
+pydantic>=2.0.0
+pydantic-settings>=2.0.0
+pdfplumber>=0.10.0
+ebooklib>=0.18
+chardet>=5.0.0
+beautifulsoup4>=4.12.0
+httpx>=0.24.0
+openai>=1.0.0
+pytest>=7.0.0
+pytest-asyncio>=0.21.0
+PyJWT>=2.8.0

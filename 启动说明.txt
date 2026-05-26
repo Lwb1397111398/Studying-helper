@@ -1,0 +1,75 @@
+========================================
+      学习辅助系统 - 启动说明
+========================================
+
+一、首次启动
+-----------
+1. 确保已安装以下软件：
+   - Python 3.11+ (https://python.org)
+   - Node.js 18+ (https://nodejs.org)
+
+2. 双击运行 "start.bat" 或右键选择 "以管理员身份运行"
+
+3. 等待依赖安装完成（首次可能需要几分钟）
+
+4. 浏览器会自动打开，如未打开请手动访问：
+   - 前端: http://localhost:3000
+   - 后端API文档: http://localhost:8000/docs
+
+
+二、日常启动
+-----------
+直接双击 "start.bat" 即可（依赖已安装会跳过）
+
+
+三、停止服务
+-----------
+双击运行 "stop.bat"
+
+
+四、常见问题
+-----------
+
+Q: 提示 "Python 未找到" 怎么办？
+A: 请安装 Python 并勾选 "Add Python to PATH"
+   下载地址: https://python.org/downloads/
+
+Q: 提示 "Node.js 未找到" 怎么办？
+A: 请安装 Node.js
+   下载地址: https://nodejs.org/
+
+Q: 端口被占用怎么办？
+A: 运行 stop.bat 清理端口，或手动关闭占用端口的程序
+
+Q: 依赖安装失败怎么办？
+A: 检查网络连接，或使用国内镜像：
+   pip config set global.index-url https://pypi.tuna.tsinghua.edu.cn/simple
+   npm config set registry https://registry.npmmirror.com
+
+
+五、开发模式
+-----------
+如需分别启动：
+
+启动后端：
+  cd backend
+  uvicorn app.main:app --reload
+
+启动前端：
+  cd frontend
+  npm run dev
+
+
+六、项目结构
+-----------
+Studying-helper/
+├── start.bat          # 一键启动（推荐）
+├── start.ps1          # PowerShell启动脚本
+├── stop.bat           # 停止服务
+├── 启动说明.txt        # 本文件
+├── backend/           # 后端代码
+│   ├── app/
+│   └── requirements.txt
+└── frontend/          # 前端代码
+    ├── src/
+    └── package.json
