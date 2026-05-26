@@ -236,7 +236,7 @@ async def start_learning(
     book_id: str,
     request: LearnRequest,
     db: AsyncSession = Depends(get_db),
-    llm_client: LLMClient = Depends(get_llm_client),
+    llm_client: LLMClient = Depends(lambda: get_llm_client("ai_analysis")),
 ):
     """开始AI学习（整本书或指定单元）"""
     from app.modules.ai_learning.service import AILearningService
@@ -303,7 +303,7 @@ async def start_selected_learning(
     book_id: str,
     request: LearnSelectedRequest,
     db: AsyncSession = Depends(get_db),
-    llm_client: LLMClient = Depends(get_llm_client),
+    llm_client: LLMClient = Depends(lambda: get_llm_client("ai_analysis")),
 ):
     """选择性学习"""
     from app.modules.ai_learning.service import SelectiveLearningService
