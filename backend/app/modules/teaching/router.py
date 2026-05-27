@@ -11,21 +11,18 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.common.errors import ServiceError, ErrorCode, ERROR_STATUS_MAP
 from app.db.database import get_db
 from app.db.models import KnowledgeUnitModel, TeachingSessionModel
-from app.deps import get_llm_client
+from app.deps import get_llm_client, get_current_user
 from app.modules.ai_learning.schemas import LearnedUnit
 from app.modules.teaching.service import TeachingService
 from app.modules.teaching.schemas import TeachingMessage, UserQuestion, Annotation, SessionTest
 
 router = APIRouter(prefix="/api/v1/teaching", tags=["teaching"])
 
-DEFAULT_USER_ID = "anonymous"
-
 
 class StartSessionRequest(BaseModel):
     plan_session_id: str = ""
     book_id: str
     unit_ids: List[str]
-    user_id: str = DEFAULT_USER_ID
 
 
 class AskQuestionRequest(BaseModel):
@@ -36,7 +33,6 @@ class AnnotationRequest(BaseModel):
     unit_id: str
     annotation_type: str
     content: Optional[str] = None
-    user_id: str = DEFAULT_USER_ID
 
 
 class SubmitTestRequest(BaseModel):
@@ -88,14 +84,17 @@ def _get_service(
 @router.post("/sessions/start")
 async def start_session(
     request: StartSessionRequest,
+    current_user: str = Depends(get_current_user),
     svc: TeachingService = Depends(_get_service),
     db: AsyncSession = Depends(get_db),
 ):
     """开始教学会话"""
+    if current_user == "anonymous":
+        raise HTTPException(status_code=401, detail="请先登录")
     try:
         units = await _load_learned_units(db, request.unit_ids)
         session = await svc.start_session(
-            user_id=request.user_id,
+            user_id=current_user,
             plan_session_id=request.plan_session_id,
             book_id=request.book_id,
             unit_ids=request.unit_ids,
@@ -109,10 +108,13 @@ async def start_session(
 @router.get("/sessions/{session_id}/next-message")
 async def get_next_message(
     session_id: str,
+    current_user: str = Depends(get_current_user),
     svc: TeachingService = Depends(_get_service),
     db: AsyncSession = Depends(get_db),
 ):
     """获取下一条教学消息"""
+    if current_user == "anonymous":
+        raise HTTPException(status_code=401, detail="请先登录")
     try:
         units = await _get_units_for_session(db, session_id)
         message = await svc.get_next_message(session_id, units)
@@ -125,10 +127,13 @@ async def get_next_message(
 async def ask_question(
     session_id: str,
     request: AskQuestionRequest,
+    current_user: str = Depends(get_current_user),
     svc: TeachingService = Depends(_get_service),
     db: AsyncSession = Depends(get_db),
 ):
     """提问"""
+    if current_user == "anonymous":
+        raise HTTPException(status_code=401, detail="请先登录")
     try:
         units = await _get_units_for_session(db, session_id)
         answer = await svc.answer_question(session_id, request.question, units)
@@ -140,9 +145,12 @@ async def ask_question(
 @router.get("/sessions/{session_id}/messages")
 async def get_session_messages(
     session_id: str,
+    current_user: str = Depends(get_current_user),
     svc: TeachingService = Depends(_get_service),
 ):
     """获取会话所有消息"""
+    if current_user == "anonymous":
+        raise HTTPException(status_code=401, detail="请先登录")
     try:
         messages = await svc.get_session_messages(session_id)
         return [m.model_dump() for m in messages]
@@ -153,12 +161,15 @@ async def get_session_messages(
 @router.post("/annotations")
 async def add_annotation(
     request: AnnotationRequest,
+    current_user: str = Depends(get_current_user),
     svc: TeachingService = Depends(_get_service),
 ):
     """添加笔记/标记"""
+    if current_user == "anonymous":
+        raise HTTPException(status_code=401, detail="请先登录")
     try:
         annotation = await svc.add_annotation(
-            user_id=request.user_id,
+            user_id=current_user,
             unit_id=request.unit_id,
             annotation_type=request.annotation_type,
             content=request.content,
@@ -171,10 +182,13 @@ async def add_annotation(
 @router.post("/sessions/{session_id}/test")
 async def run_test(
     session_id: str,
+    current_user: str = Depends(get_current_user),
     svc: TeachingService = Depends(_get_service),
     db: AsyncSession = Depends(get_db),
 ):
     """运行测试"""
+    if current_user == "anonymous":
+        raise HTTPException(status_code=401, detail="请先登录")
     try:
         units = await _get_units_for_session(db, session_id)
         test = await svc.run_session_test(session_id, units)
@@ -187,9 +201,12 @@ async def run_test(
 async def submit_test(
     test_id: str,
     request: SubmitTestRequest,
+    current_user: str = Depends(get_current_user),
     svc: TeachingService = Depends(_get_service),
 ):
     """提交测试答案"""
+    if current_user == "anonymous":
+        raise HTTPException(status_code=401, detail="请先登录")
     try:
         test = await svc.submit_test_answers(test_id, request.answers)
         return test.model_dump()
@@ -200,9 +217,12 @@ async def submit_test(
 @router.post("/sessions/{session_id}/complete")
 async def complete_session(
     session_id: str,
+    current_user: str = Depends(get_current_user),
     svc: TeachingService = Depends(_get_service),
 ):
     """完成会话"""
+    if current_user == "anonymous":
+        raise HTTPException(status_code=401, detail="请先登录")
     try:
         summary = await svc.complete_session(session_id)
         return summary.model_dump()

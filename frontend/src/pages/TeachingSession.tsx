@@ -16,13 +16,13 @@ import { PHASE_CONFIG } from '../types/teaching';
 
 // 后端 API 前缀与学习会话相同，复用 books API 加载知识单元
 import { getBookChapters } from '../api/books';
+import { useAppState } from '../contexts/AppContext';
 import type { Chapter, KnowledgeUnit } from '../types';
-
-const CURRENT_USER_ID = 'anonymous';
 
 export default function TeachingSession() {
   const { bookId } = useParams<{ bookId: string }>();
   const navigate = useNavigate();
+  const { user } = useAppState();
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
   // 数据状态
@@ -79,7 +79,7 @@ export default function TeachingSession() {
   const startNewSession = async (unitList: KnowledgeUnit[]) => {
     try {
       const unitIds = unitList.map((u) => u.id);
-      const sess = await startTeachingSession(CURRENT_USER_ID, bookId!, unitIds);
+      const sess = await startTeachingSession(bookId!, unitIds);
       setSession(sess);
       setCurrentPhase(sess.current_phase);
       // 自动获取第一条消息
@@ -161,7 +161,7 @@ export default function TeachingSession() {
       const currentMsg = messages[messages.length - 1];
       if (currentMsg) {
         await addTeachingAnnotation(
-          CURRENT_USER_ID, currentMsg.unit_id, type, noteInput.trim(),
+          currentMsg.unit_id, type, noteInput.trim(),
         );
       }
       setNoteInput('');

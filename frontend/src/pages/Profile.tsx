@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import Card from '../components/Card';
 import Loading from '../components/Loading';
 import { useAppState } from '../contexts/AppContext';
+import client from '../api/client';
 import type { AuthUser, LearningStyle } from '../types';
 
 interface ProfileData {
@@ -28,7 +29,7 @@ export default function Profile() {
 
   const loadProfile = async () => {
     try {
-      const res: any = await fetch('/api/v1/users/profile').then(r => r.json());
+      const res: any = await client.get('/v1/users/profile');
       setProfile(res);
     } catch (err: any) {
       setError(err.message || '加载失败');
@@ -53,10 +54,11 @@ export default function Profile() {
 
   const { user, total_books, total_learning_minutes, total_units_learned, current_streak } = profile;
 
-  // 解析学习风格
+  // 解析学习风格（API 可能返回额外字段）
   let style: LearningStyle | null = null;
-  if (user.learning_style_json) {
-    try { style = JSON.parse(user.learning_style_json); } catch {}
+  const extra = user as any;
+  if (extra.learning_style_json) {
+    try { style = JSON.parse(extra.learning_style_json); } catch {}
   }
 
   const hours = Math.floor(total_learning_minutes / 60);

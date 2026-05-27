@@ -157,7 +157,7 @@ export default function ExamSession() {
         </div>
         <div className="flex items-center gap-3">
           <div className="w-32">
-            <ProgressBar value={currentIndex + 1} max={total} size="sm" color="orange" />
+            <ProgressBar value={currentIndex + 1} max={total} size="sm" color="yellow" />
           </div>
           <span className="text-sm font-semibold text-orange-600">{progress}%</span>
         </div>

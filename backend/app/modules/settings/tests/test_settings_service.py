@@ -72,9 +72,33 @@ def test_write_env_skip_none_values(tmp_path, monkeypatch):
 # ── 路由端点测试 ──
 
 import pytest
+from unittest.mock import patch, AsyncMock
 from fastapi.testclient import TestClient
-from unittest.mock import patch
+from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine, async_sessionmaker
+
 from app.main import app
+from app.db.database import get_db
+from app.deps import get_current_user
+
+
+# 创建内存数据库并 override get_db 依赖，同时 mock 用户认证
+@pytest.fixture(autouse=True)
+def _override_deps():
+    """为路由测试提供内存 SQLite 数据库 session 和 mock 用户认证"""
+    engine = create_async_engine("sqlite+aiosqlite:///:memory:", echo=False)
+    factory = async_sessionmaker(engine, class_=AsyncSession, expire_on_commit=False)
+
+    async def _get_db():
+        async with factory() as session:
+            yield session
+
+    async def _get_current_user():
+        return "test-user"
+
+    app.dependency_overrides[get_db] = _get_db
+    app.dependency_overrides[get_current_user] = _get_current_user
+    yield
+    app.dependency_overrides.clear()
 
 
 def test_get_preferences():

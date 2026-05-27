@@ -146,9 +146,9 @@ export default function ReviewSession() {
 
       {/* 反馈 */}
       {feedback && (
-        <Card className={`mb-6 animate-scale-in ${feedback.correct ? 'border-emerald-200 bg-emerald-50/50' : 'border-red-200 bg-red-50/50'}`}>
+        <Card className={`mb-6 animate-scale-in ${feedback.is_correct ? 'border-emerald-200 bg-emerald-50/50' : 'border-red-200 bg-red-50/50'}`}>
           <div className="flex items-center gap-2 mb-2">
-            <span className="text-xl">{feedback.correct ? '🎉' : '💡'}</span>
+            <span className="text-xl">{feedback.is_correct ? '🎉' : '💡'}</span>
             <p className={`font-semibold ${feedback.is_correct ? 'text-emerald-600' : 'text-red-600'}`}>
               {feedback.is_correct ? '回答正确！' : '回答错误'}
             </p>

@@ -2,8 +2,8 @@ import client from './client';
 import type { ReviewSession, ReviewQuestion, MasteryRecord, ExamResult, ReviewFeedback } from '../types';
 
 // 开始复习会话（间隔重复）
-export const startReviewSession = (bookId: string, reviewType: string = 'spaced'): Promise<ReviewSession> => {
-  return client.post('/v1/review/start', { book_id: bookId, review_type: reviewType });
+export const startReviewSession = (bookId: string, unitIds: string[] = [], reviewType: string = 'spaced'): Promise<ReviewSession> => {
+  return client.post('/v1/review/start', { book_id: bookId, unit_ids: unitIds, review_type: reviewType });
 };
 
 // 提交答案
@@ -30,7 +30,7 @@ export const getPendingReviews = (bookId: string): Promise<{ unit_id: string; ne
 };
 
 // 开始考试
-export const startExam = (bookId: string, chapterIds: string[]): Promise<ReviewSession> => {
+export const startExam = (bookId: string, chapterIds: string[] = []): Promise<ReviewSession> => {
   return client.post('/v1/review/exam/start', { book_id: bookId, chapter_ids: chapterIds });
 };
 

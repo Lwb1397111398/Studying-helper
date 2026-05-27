@@ -6,13 +6,11 @@ import type {
 
 // 开始教学会话
 export const startTeachingSession = (
-  userId: string,
   bookId: string,
   unitIds: string[],
   userProfile?: UserTeachingProfile,
 ): Promise<TeachingSession> => {
   return client.post('/v1/teaching/sessions/start', {
-    user_id: userId,
     book_id: bookId,
     unit_ids: unitIds,
     user_profile: userProfile,
@@ -43,13 +41,11 @@ export const getTeachingMessages = (
 
 // 添加笔记/标记
 export const addTeachingAnnotation = (
-  userId: string,
   unitId: string,
   annotationType: string,
   content?: string,
 ): Promise<void> => {
   return client.post('/v1/teaching/annotations', {
-    user_id: userId,
     knowledge_unit_id: unitId,
     annotation_type: annotationType,
     content,

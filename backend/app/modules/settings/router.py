@@ -1,9 +1,10 @@
 """设置模块 REST 端点"""
-from fastapi import APIRouter
+from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel, Field
 
 from app.modules.settings.settings_service import read_env, write_env
 from app.config import settings
+from app.deps import get_current_user
 
 router = APIRouter(prefix="/api/settings", tags=["settings"])
 
@@ -34,8 +35,10 @@ _PREF_ENV_KEYS = {
 
 
 @router.get("/preferences", response_model=UserPreferences)
-async def get_preferences():
+async def get_preferences(current_user: str = Depends(get_current_user)):
     """获取用户偏好"""
+    if current_user == "anonymous":
+        raise HTTPException(status_code=401, detail="请先登录")
     env = read_env()
     return UserPreferences(
         daily_goal_minutes=int(env.get("DAILY_GOAL_MINUTES", 30)),
@@ -46,8 +49,13 @@ async def get_preferences():
 
 
 @router.put("/preferences", response_model=UserPreferences)
-async def update_preferences(body: UserPreferencesUpdate):
+async def update_preferences(
+    body: UserPreferencesUpdate,
+    current_user: str = Depends(get_current_user),
+):
     """更新用户偏好"""
+    if current_user == "anonymous":
+        raise HTTPException(status_code=401, detail="请先登录")
     updates = {
         _PREF_ENV_KEYS[k]: str(v)
         for k, v in body.model_dump(exclude_none=True).items()
@@ -104,8 +112,10 @@ _MODULE_META = [
 
 
 @router.get("/ai-config", response_model=AIConfigResponse)
-async def get_ai_config():
+async def get_ai_config(current_user: str = Depends(get_current_user)):
     """获取 AI 模型配置（只读，需改 .env 重启生效）"""
+    if current_user == "anonymous":
+        raise HTTPException(status_code=401, detail="请先登录")
     modules = []
     for m in _MODULE_META:
         cfg = settings.get_llm_config(m["key"])

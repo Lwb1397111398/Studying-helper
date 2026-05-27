@@ -12,8 +12,8 @@ from app.deps import get_user_service, get_book_service, get_record_service, get
 from app.modules.user_storage.services import UserService, BookService, LearningRecordService, FileStorage
 from app.modules.user_storage.auth import create_token
 from app.modules.user_storage.schemas import (
-    UserCreate, UserUpdate, User, UserProfile,
-    BookCreate, Book, BookStatusUpdate,
+    UserUpdate, User, UserProfile,
+    Book, BookStatusUpdate,
     LearningRecordCreate, LearningRecordComplete, LearningRecord,
     DailyStats,
 )

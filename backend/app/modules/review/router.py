@@ -17,10 +17,9 @@ from app.modules.review.schemas import (
 )
 from app.modules.review.service import ReviewService
 from app.modules.knowledge_splitter.schemas import KnowledgeUnit
+from app.deps import get_current_user
 
 router = APIRouter(prefix="/api/v1/review", tags=["review"])
-
-DEFAULT_USER_ID = "anonymous"
 
 
 def _get_service(db: AsyncSession) -> ReviewService:
@@ -30,7 +29,6 @@ def _get_service(db: AsyncSession) -> ReviewService:
 # ===== 请求模型 =====
 
 class StartReviewRequest(BaseModel):
-    user_id: str = DEFAULT_USER_ID
     book_id: str
     unit_ids: List[str] = []
     review_type: str = 'spaced'
@@ -41,11 +39,9 @@ class SubmitAnswerRequest(BaseModel):
     question_id: str
     answer: str
     response_time: float = 0.0
-    user_id: str = DEFAULT_USER_ID
 
 
 class StartExamRequest(BaseModel):
-    user_id: str
     book_id: str
     chapter_ids: List[str]
     config: Optional[ExamConfig] = None
@@ -54,7 +50,6 @@ class StartExamRequest(BaseModel):
 class SubmitExamRequest(BaseModel):
     session_id: str
     answers: Dict[str, str]
-    user_id: str = DEFAULT_USER_ID
 
 
 class ExportRequest(BaseModel):
@@ -144,13 +139,19 @@ async def _load_review_history(db: AsyncSession, user_id: str, unit_id: str) -> 
 # ===== API 端点 =====
 
 @router.get("/due")
-async def get_due_reviews(user_id: str, book_id: str, db: AsyncSession = Depends(get_db)):
+async def get_due_reviews(
+    book_id: str,
+    current_user: str = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    if current_user == "anonymous":
+        raise HTTPException(status_code=401, detail="请先登录")
     try:
         svc = _get_service(db)
-        records = await _load_mastery_records(db, user_id)
-        due = svc.get_due_reviews(user_id, book_id, records)
+        records = await _load_mastery_records(db, current_user)
+        due = svc.get_due_reviews(current_user, book_id, records)
         return {
-            "user_id": user_id,
+            "user_id": current_user,
             "book_id": book_id,
             "due_count": len(due),
             "records": [r.model_dump() for r in due],
@@ -160,12 +161,18 @@ async def get_due_reviews(user_id: str, book_id: str, db: AsyncSession = Depends
 
 
 @router.post("/start")
-async def start_review(request: StartReviewRequest, db: AsyncSession = Depends(get_db)):
+async def start_review(
+    request: StartReviewRequest,
+    current_user: str = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    if current_user == "anonymous":
+        raise HTTPException(status_code=401, detail="请先登录")
     try:
         svc = _get_service(db)
         knowledge_units = await _load_units(db, request.book_id, request.unit_ids or [])
         session = await svc.start_review(
-            user_id=request.user_id,
+            user_id=current_user,
             book_id=request.book_id,
             unit_ids=[u.id for u in knowledge_units],
             knowledge_units=knowledge_units,
@@ -177,7 +184,13 @@ async def start_review(request: StartReviewRequest, db: AsyncSession = Depends(g
 
 
 @router.post("/answer")
-async def submit_answer(request: SubmitAnswerRequest, db: AsyncSession = Depends(get_db)):
+async def submit_answer(
+    request: SubmitAnswerRequest,
+    current_user: str = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    if current_user == "anonymous":
+        raise HTTPException(status_code=401, detail="请先登录")
     try:
         svc = _get_service(db)
         feedback = await svc.submit_review_answer(
@@ -185,7 +198,7 @@ async def submit_answer(request: SubmitAnswerRequest, db: AsyncSession = Depends
             question_id=request.question_id,
             answer=request.answer,
             response_time=request.response_time,
-            user_id=request.user_id,
+            user_id=current_user,
         )
         return feedback.model_dump()
     except ServiceError as e:
@@ -193,25 +206,37 @@ async def submit_answer(request: SubmitAnswerRequest, db: AsyncSession = Depends
 
 
 @router.get("/mastery/{unit_id}")
-async def assess_mastery(unit_id: str, user_id: str, db: AsyncSession = Depends(get_db)):
+async def assess_mastery(
+    unit_id: str,
+    current_user: str = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    if current_user == "anonymous":
+        raise HTTPException(status_code=401, detail="请先登录")
     try:
         svc = _get_service(db)
-        history = await _load_review_history(db, user_id, unit_id)
-        assessment = svc.assess_mastery(user_id=user_id, unit_id=unit_id, review_history=history)
+        history = await _load_review_history(db, current_user, unit_id)
+        assessment = svc.assess_mastery(user_id=current_user, unit_id=unit_id, review_history=history)
         return assessment.model_dump()
     except ServiceError as e:
         raise HTTPException(status_code=ERROR_STATUS_MAP.get(e.code, 500), detail=e.message)
 
 
 @router.post("/exam/start")
-async def start_exam(request: StartExamRequest, db: AsyncSession = Depends(get_db)):
+async def start_exam(
+    request: StartExamRequest,
+    current_user: str = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    if current_user == "anonymous":
+        raise HTTPException(status_code=401, detail="请先登录")
     try:
         svc = _get_service(db)
         config = request.config or ExamConfig()
         knowledge_units = await _load_units(db, request.book_id)
-        mastery_records = await _load_mastery_records(db, request.user_id)
+        mastery_records = await _load_mastery_records(db, current_user)
         session = await svc.start_exam(
-            user_id=request.user_id,
+            user_id=current_user,
             book_id=request.book_id,
             chapter_ids=request.chapter_ids,
             config=config,
@@ -224,10 +249,16 @@ async def start_exam(request: StartExamRequest, db: AsyncSession = Depends(get_d
 
 
 @router.post("/exam/submit")
-async def submit_exam(request: SubmitExamRequest, db: AsyncSession = Depends(get_db)):
+async def submit_exam(
+    request: SubmitExamRequest,
+    current_user: str = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    if current_user == "anonymous":
+        raise HTTPException(status_code=401, detail="请先登录")
     try:
         svc = _get_service(db)
-        result = await svc.submit_exam(session_id=request.session_id, answers=request.answers, user_id=request.user_id)
+        result = await svc.submit_exam(session_id=request.session_id, answers=request.answers, user_id=current_user)
         return result.model_dump()
     except ServiceError as e:
         raise HTTPException(status_code=ERROR_STATUS_MAP.get(e.code, 500), detail=e.message)
@@ -238,8 +269,11 @@ async def export_book(
     book_id: str,
     book_title: str,
     format: ExportFormat = ExportFormat.MARKDOWN,
+    current_user: str = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
+    if current_user == "anonymous":
+        raise HTTPException(status_code=401, detail="请先登录")
     try:
         svc = _get_service(db)
         result = svc.export(
