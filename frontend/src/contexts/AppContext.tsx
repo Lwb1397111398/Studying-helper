@@ -1,8 +1,8 @@
 // Global app state - auth + user info + settings cache
 
 import { createContext, useContext, useState, useEffect, useCallback, type ReactNode } from 'react';
-import type { AuthUser, UserSettings } from '../types';
-import { getSettings, updateSettings as apiUpdateSettings } from '../api/settings';
+import type { AuthUser, UserSettings, AIConfigResponse } from '../types';
+import { getPreferences, updatePreferences as apiUpdatePreferences, getAIConfig } from '../api/settings';
 import client from '../api/client';
 
 interface AppState {
@@ -11,10 +11,12 @@ interface AppState {
   isLoggedIn: boolean;
   settings: UserSettings | null;
   settingsLoaded: boolean;
+  aiConfig: AIConfigResponse | null;
   login: (username: string) => Promise<void>;
   logout: () => void;
   refreshSettings: () => Promise<void>;
   saveSettings: (patch: Partial<UserSettings>) => Promise<void>;
+  refreshAIConfig: () => Promise<void>;
 }
 
 const defaultSettings: UserSettings = {
@@ -22,10 +24,6 @@ const defaultSettings: UserSettings = {
   daily_goal_units: 5,
   review_reminder: true,
   reminder_time: '20:00',
-  llm_provider: 'openai',
-  llm_api_base: 'https://api.openai.com/v1',
-  llm_api_key: '',
-  llm_model: 'gpt-4',
 };
 
 const AppContext = createContext<AppState | null>(null);
@@ -40,6 +38,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
   );
   const [settings, setSettings] = useState<UserSettings | null>(null);
   const [settingsLoaded, setSettingsLoaded] = useState(false);
+  const [aiConfig, setAiConfig] = useState<AIConfigResponse | null>(null);
 
   const isLoggedIn = !!localStorage.getItem('auth_token');
 
@@ -60,7 +59,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
 
   const refreshSettings = useCallback(async () => {
     try {
-      const data = await getSettings();
+      const data = await getPreferences();
       setSettings(prev => ({ ...defaultSettings, ...prev, ...data }));
     } catch {
       setSettings(prev => prev ?? defaultSettings);
@@ -70,18 +69,30 @@ export function AppProvider({ children }: { children: ReactNode }) {
   }, []);
 
   const saveSettings = useCallback(async (patch: Partial<UserSettings>) => {
-    const updated = await apiUpdateSettings(patch);
+    const updated = await apiUpdatePreferences(patch);
     setSettings(prev => ({ ...defaultSettings, ...prev, ...updated }));
+  }, []);
+
+  const refreshAIConfig = useCallback(async () => {
+    try {
+      const data = await getAIConfig();
+      setAiConfig(data);
+    } catch {
+      // 静默失败，AI 配置非关键
+    }
   }, []);
 
   useEffect(() => {
     refreshSettings();
-  }, [refreshSettings]);
+    refreshAIConfig();
+  }, [refreshSettings, refreshAIConfig]);
 
   return (
     <AppContext.Provider value={{
       userId, user, isLoggedIn, settings, settingsLoaded,
+      aiConfig,
       login, logout, refreshSettings, saveSettings,
+      refreshAIConfig,
     }}>
       {children}
     </AppContext.Provider>
