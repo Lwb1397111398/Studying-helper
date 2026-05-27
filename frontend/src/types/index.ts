@@ -175,21 +175,12 @@ export interface LoginResponse {
 
 // ===== 学习方案 =====
 
-// 学习风格
+// 学习风格（4 维偏好，各 0-1）
 export interface LearningStyle {
-  visual_score: number;
-  auditory_score: number;
-  reading_score: number;
-  kinesthetic_score: number;
-  fast_paced: boolean;
-  step_by_step: boolean;
-  holistic: boolean;
-  example_heavy: boolean;
-  theory_first: boolean;
-  problem_based: boolean;
-  interactive: boolean;
-  self_paced: boolean;
-  confidence: number;
+  visual_score: number;     // 视觉偏好：图表/思维导图
+  verbal_score: number;     // 文字偏好：阅读/写作
+  active_score: number;     // 主动偏好：练习/实践
+  sequential_score: number; // 顺序偏好：按步骤 vs 跳跃
 }
 
 // 方案中的单次会话
@@ -240,14 +231,27 @@ export interface PlanUpdate {
   milestone_reached: Milestone | null;
 }
 
-// 用户设置
+// 用户设置（仅用户偏好，不含 LLM 配置）
 export interface UserSettings {
   daily_goal_minutes: number;
   daily_goal_units: number;
   review_reminder: boolean;
   reminder_time: string;
-  llm_provider: string;
-  llm_api_base: string;
-  llm_api_key: string;
-  llm_model: string;
+}
+
+// AI 模块配置（只读）
+export interface LLMModuleConfig {
+  module: string;
+  label: string;
+  description: string;
+  strength_hint: string;
+  model: string;
+  has_custom_key: boolean;
+  base_url: string;
+}
+
+export interface AIConfigResponse {
+  default_model: string;
+  default_base_url: string;
+  modules: LLMModuleConfig[];
 }
