@@ -446,7 +446,7 @@ async def get_overview(book_id: str, db: AsyncSession = Depends(get_db)):
 async def relearn_unit(
     unit_id: str,
     db: AsyncSession = Depends(get_db),
-    llm_client: LLMClient = Depends(get_llm_client),
+    llm_client: LLMClient = Depends(lambda: get_llm_client("ai_analysis")),
 ):
     """重新生成指定知识单元的 AI 分析（覆盖旧结果）"""
     from app.modules.ai_learning.service import AILearningService
@@ -485,7 +485,7 @@ async def enrich_unit(
     unit_id: str,
     body: EnrichRequest,
     db: AsyncSession = Depends(get_db),
-    llm_client: LLMClient = Depends(get_llm_client),
+    llm_client: LLMClient = Depends(lambda: get_llm_client("ai_analysis")),
 ):
     """增量更新指定知识单元（在原有基础上补充细节，不覆盖）"""
     from app.modules.ai_learning.service import AILearningService
