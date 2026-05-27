@@ -15,6 +15,7 @@ from sqlalchemy import select, delete
 from app.common.errors import ServiceError, ErrorCode
 from app.config import settings
 from app.db.database import get_db
+from app.deps import get_llm_client as _get_llm_client
 from app.db.models import BookModel, ChapterModel, KnowledgeUnitModel, MasteryRecordModel, AnnotationModel
 from app.modules.document_parser.service import DocumentParserService
 from app.modules.document_parser.parsers import PDFParser, TXTParser, EPUBParser
@@ -41,12 +42,13 @@ class TOCConfirmRequest(BaseModel):
     items: list[TOCConfirmItem]
 
 
-def _get_service() -> DocumentParserService:
+def _get_service(llm_client=None) -> DocumentParserService:
     """获取文档解析服务实例"""
     parsers = [PDFParser(), TXTParser(), EPUBParser()]
     return DocumentParserService(
         parsers=parsers,
-        storage_dir=settings.FILE_STORAGE_DIR
+        storage_dir=settings.FILE_STORAGE_DIR,
+        llm_client=llm_client,
     )
 
 
@@ -73,9 +75,12 @@ async def parse_document(
         content = await file.read()
         file_path.write_bytes(content)
 
+        # 获取 parser 模块专属 LLM 客户端
+        parser_llm = await _get_llm_client("parser")
+
         # 调用服务解析（同步方法，放线程池避免阻塞事件循环）
         import asyncio
-        service = _get_service()
+        service = _get_service(llm_client=parser_llm)
         loop = asyncio.get_event_loop()
         parsed = await loop.run_in_executor(
             _executor,
@@ -213,8 +218,11 @@ async def confirm_toc(
     if book is None:
         raise HTTPException(status_code=404, detail="书籍不存在")
 
+    # 获取 parser 模块专属 LLM 客户端
+    parser_llm = await _get_llm_client("parser")
+
     # 重新解析文件
-    service = _get_service()
+    service = _get_service(llm_client=parser_llm)
     import asyncio
     loop = asyncio.get_event_loop()
     parsed = await loop.run_in_executor(

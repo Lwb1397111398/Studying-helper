@@ -2,9 +2,10 @@
 
 import logging
 from pathlib import Path
-from typing import List
+from typing import List, Optional
 
 from app.common.errors import ServiceError, ErrorCode
+from app.common.llm_client import LLMClient
 from app.modules.document_parser.schemas import ParsedDocument
 from app.modules.document_parser.parsers.base import DocumentParser
 
@@ -22,9 +23,10 @@ class DocumentParserService:
 
     MAX_FILE_SIZE = 100 * 1024 * 1024  # 100MB
 
-    def __init__(self, parsers: List[DocumentParser], storage_dir: str):
+    def __init__(self, parsers: List[DocumentParser], storage_dir: str, llm_client: Optional[LLMClient] = None):
         self.parsers = parsers
         self.storage_dir = storage_dir
+        self.llm_client = llm_client
 
     def parse_and_store(self, file_path: str, user_id: str) -> ParsedDocument:
         """
