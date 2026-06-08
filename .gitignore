@@ -13,8 +13,16 @@ venv/
 node_modules/
 dist/
 
+# Android
+android/local.properties
+android/.gradle/
+android/.gradle-user-home/
+android/**/build/
+*.apk
+
 # Data
-data/
+/data/
+backend/data/
 
 # IDE
 .vscode/
@@ -26,3 +34,8 @@ Thumbs.db
 
 # Codegraph
 .codegraph/
+
+# Local runtime artifacts
+*.db
+*.sqlite
+*.stackdump
