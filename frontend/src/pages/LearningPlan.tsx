@@ -1,4 +1,4 @@
-import { useEffect, useState, useCallback } from 'react';
+import { useEffect, useState, useCallback, useRef } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import Card from '../components/Card';
 import Loading from '../components/Loading';
@@ -15,6 +15,7 @@ export default function LearningPlan() {
   const [plan, setPlan] = useState<LearningPlan | null>(null);
   const [currentSession, setCurrentSession] = useState<PlanSessionItem | null>(null);
   const [completedCount, setCompletedCount] = useState(0);
+  const completedCountRef = useRef(0);
   const [loading, setLoading] = useState(true);
   const [generating, setGenerating] = useState(false);
   const [completing, setCompleting] = useState(false);
@@ -27,19 +28,20 @@ export default function LearningPlan() {
     try {
       const [bookData, currentData] = await Promise.allSettled([
         getBook(bookId),
-        getCurrentSession(bookId, completedCount),
+        getCurrentSession(bookId, completedCountRef.current),
       ]);
       if (bookData.status === 'fulfilled') setBook(bookData.value);
       if (currentData.status === 'fulfilled') {
         setCurrentSession(currentData.value.session);
         setCompletedCount(currentData.value.completed_sessions);
+        completedCountRef.current = currentData.value.completed_sessions;
       }
     } catch (error) {
       console.error('加载失败:', error);
     } finally {
       setLoading(false);
     }
-  }, [bookId, completedCount]);
+  }, [bookId]);
 
   useEffect(() => { loadData(); }, [loadData]);
 
@@ -50,6 +52,7 @@ export default function LearningPlan() {
       const result = await generatePlan(bookId!, dailyGoal);
       setPlan(result);
       setCompletedCount(0);
+      completedCountRef.current = 0;
       setCurrentSession(result.sessions[0] || null);
       setFeedback({ type: 'success', message: '学习方案已生成！' });
     } catch (error: unknown) {
@@ -87,6 +90,7 @@ export default function LearningPlan() {
 
       const nextCount = completedCount + 1;
       setCompletedCount(nextCount);
+      completedCountRef.current = nextCount;
       setCurrentSession(update.next_session);
     } catch (error: unknown) {
       const msg = error instanceof Error ? error.message : '操作失败';
@@ -273,15 +277,6 @@ export default function LearningPlan() {
                         {session.estimated_minutes} 分钟 · {session.unit_ids.length} 单元
                       </p>
                     </div>
-                    {isCurrent && !isCompleted && (
-                      <button
-                        onClick={() => handleCompleteSession(session, 0.85)}
-                        disabled={completing}
-                        className="px-3 py-1.5 rounded-lg bg-blue-500 text-white text-xs font-medium hover:bg-blue-600 transition-colors disabled:opacity-50"
-                      >
-                        {completing ? '处理中...' : '模拟完成'}
-                      </button>
-                    )}
                   </div>
                 );
               })}

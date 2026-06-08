@@ -1,6 +1,7 @@
 """用户与存储模块的REST端点"""
+import json
+import logging
 from fastapi import APIRouter, Depends, UploadFile, File, Form, HTTPException
-from pydantic import BaseModel
 from typing import Optional
 from uuid import uuid4
 from sqlalchemy import select
@@ -8,65 +9,51 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.db.database import get_db
 from app.db.models import UserModel, MasteryRecordModel
-from app.deps import get_user_service, get_book_service, get_record_service, get_file_storage, get_current_user
+from app.deps import get_user_service, get_book_service, get_record_service, get_file_storage
 from app.modules.user_storage.services import UserService, BookService, LearningRecordService, FileStorage
-from app.modules.user_storage.auth import create_token
 from app.modules.user_storage.schemas import (
     UserUpdate, User, UserProfile,
-    Book, BookStatusUpdate,
+    Book, BookStatusUpdate, BookMotivationUpdate,
     LearningRecordCreate, LearningRecordComplete, LearningRecord,
     DailyStats,
 )
 
-router = APIRouter()
+logger = logging.getLogger(__name__)
+
+# 文件头魔数校验表
+_MAGIC_BYTES = {
+    b'%PDF': 'pdf',
+    b'PK': 'epub',  # EPUB 是 ZIP 格式
+}
+
+router = APIRouter(prefix="/api/v1", tags=["user_storage"])
 
 
-# ========== 认证端点 ==========
-
-class LoginRequest(BaseModel):
-    username: str
-
-
-class LoginResponse(BaseModel):
-    token: str
-    user: User
-
-
-@router.post("/auth/login", response_model=LoginResponse)
-async def login(body: LoginRequest, db: AsyncSession = Depends(get_db)):
-    """
-    登录/注册二合一：用户存在则登录，不存在则自动创建。
-    返回 JWT token + 用户信息。
-    """
-    result = await db.execute(select(UserModel).where(UserModel.username == body.username))
-    user = result.scalar_one_or_none()
-    if user is None:
-        svc = UserService(db)
-        user = await svc.create_user(username=body.username)
-
-    token = create_token(user.id)
-    return LoginResponse(token=token, user=User.model_validate(user))
+def _safe_json_list(raw: str | None) -> list:
+    """安全解析 JSON 字符串为列表，失败返回空列表"""
+    if not raw:
+        return []
+    try:
+        result = json.loads(raw)
+        return result if isinstance(result, list) else []
+    except (json.JSONDecodeError, TypeError):
+        return []
 
 
 # ========== 用户端点 ==========
 
 @router.get("/users/{user_id}", response_model=User)
-async def get_user(user_id: str, current_user: str = Depends(get_current_user),
-                   svc: UserService = Depends(get_user_service)):
+async def get_user(user_id: str, svc: UserService = Depends(get_user_service)):
     """获取用户"""
-    if current_user != "anonymous" and current_user != user_id:
-        raise HTTPException(status_code=403, detail="无权查看其他用户信息")
     return await svc.get_user(user_id)
 
 
 @router.put("/users/preferences", response_model=User)
-async def update_preferences(body: UserUpdate, current_user: str = Depends(get_current_user),
+async def update_preferences(body: UserUpdate,
                              svc: UserService = Depends(get_user_service)):
-    """更新当前用户偏好（需登录）"""
-    if current_user == "anonymous":
-        raise HTTPException(status_code=401, detail="请先登录")
+    """更新当前用户偏好"""
     return await svc.update_preferences(
-        current_user,
+        "anonymous",
         daily_goal_minutes=body.daily_goal_minutes,
         preferred_language=body.preferred_language,
         learning_style_json=body.learning_style_json,
@@ -74,12 +61,9 @@ async def update_preferences(body: UserUpdate, current_user: str = Depends(get_c
 
 
 @router.get("/users/profile", response_model=UserProfile)
-async def get_profile(current_user: str = Depends(get_current_user),
-                      svc: UserService = Depends(get_user_service)):
-    """获取当前用户画像（需登录）"""
-    if current_user == "anonymous":
-        raise HTTPException(status_code=401, detail="请先登录")
-    profile = await svc.get_profile(current_user)
+async def get_profile(svc: UserService = Depends(get_user_service)):
+    """获取当前用户画像"""
+    profile = await svc.get_profile("anonymous")
     return UserProfile(
         user=User.model_validate(profile["user"]),
         total_books=profile["total_books"],
@@ -91,6 +75,9 @@ async def get_profile(current_user: str = Depends(get_current_user),
 
 # ========== 书籍端点 ==========
 
+MAX_FILE_SIZE = 100 * 1024 * 1024
+
+
 @router.post("/books", response_model=Book, status_code=201)
 async def upload_book(
     title: str = Form(...),
@@ -98,35 +85,48 @@ async def upload_book(
     file_type: str = Form(...),
     file_size_bytes: int = Form(...),
     file: UploadFile = File(...),
-    current_user: str = Depends(get_current_user),
     svc: BookService = Depends(get_book_service),
     storage: FileStorage = Depends(get_file_storage),
+    db: AsyncSession = Depends(get_db),
 ):
-    """上传书籍（需登录）"""
-    if current_user == "anonymous":
-        raise HTTPException(status_code=401, detail="请先登录")
+    """上传书籍"""
     content = await file.read()
-    file_path = await storage.store(current_user, file.filename or f"{uuid4()}.{file_type}", content)
+    if len(content) > MAX_FILE_SIZE:
+        raise HTTPException(status_code=413, detail="文件大小超过100MB限制")
+
+    # 魔数校验：验证实际文件内容与声明的 file_type 一致
+    if file_type.lower() != "txt":  # TXT 无固定魔数，跳过
+        header = content[:8]
+        expected_type = None
+        for magic, fmt in _MAGIC_BYTES.items():
+            if header.startswith(magic):
+                expected_type = fmt
+                break
+        if expected_type and file_type.lower() != expected_type:
+            raise HTTPException(
+                status_code=400,
+                detail=f"文件类型不匹配：声明为 {file_type}，实际为 {expected_type}",
+            )
+
+    file_path = await storage.store("anonymous", file.filename or f"{uuid4()}.{file_type}", content)
 
     book = await svc.upload_book(
-        user_id=current_user,
+        user_id="anonymous",
         title=title,
         file_path=file_path,
         file_type=file_type,
-        file_size_bytes=file_size_bytes,
+        file_size_bytes=len(content),  # 使用实际文件大小，不信任客户端
         author=author,
     )
+    await db.flush()
     return book
 
 
 @router.get("/books")
 async def list_books(page: int = 1, page_size: int = 20,
-                     current_user: str = Depends(get_current_user),
                      svc: BookService = Depends(get_book_service)):
-    """列出当前用户的书籍（需登录）"""
-    if current_user == "anonymous":
-        raise HTTPException(status_code=401, detail="请先登录")
-    result = await svc.list_books(current_user, page=page, page_size=page_size)
+    """列出当前用户的书籍"""
+    result = await svc.list_books("anonymous", page=page, page_size=page_size)
     return {
         "items": [
             {
@@ -135,6 +135,12 @@ async def list_books(page: int = 1, page_size: int = 20,
                 "author": b.author,
                 "file_type": b.file_type,
                 "total_chapters": b.total_chapters,
+                "total_units": b.total_units,
+                "learned_units": b.learned_units,
+                "parse_status": b.parse_status,
+                "split_status": b.split_status,
+                "learn_status": b.learn_status,
+                "reading_motivation": b.reading_motivation,
                 "created_at": b.created_at,
             }
             for b in result["items"]
@@ -155,13 +161,29 @@ async def get_book(book_id: str, svc: BookService = Depends(get_book_service)):
 @router.delete("/books/{book_id}", status_code=204)
 async def delete_book(book_id: str, svc: BookService = Depends(get_book_service)):
     """删除书籍（级联删除关联数据）"""
-    await svc.delete_book(book_id)
+    import os
+    file_path = await svc.delete_book(book_id)
+    # commit 由 get_db() 统一管理
+    # 物理文件删除在 commit 后执行（失败只打 warning）
+    if file_path and os.path.exists(file_path):
+        try:
+            os.remove(file_path)
+        except OSError as e:
+            import logging
+            logging.getLogger(__name__).warning(f"文件删除失败: {file_path}, 原因: {e}")
 
 
 @router.get("/books/{book_id}/chapters")
 async def get_book_chapters(book_id: str, db: AsyncSession = Depends(get_db)):
-    """获取书籍章节列表"""
-    from app.db.models import ChapterModel, KnowledgeUnitModel
+    """获取书籍章节列表（支持多级层级）"""
+    from app.db.models import ChapterModel, KnowledgeUnitModel, BookModel
+
+    # 检查书籍是否存在
+    book_result = await db.execute(
+        select(BookModel).where(BookModel.id == book_id)
+    )
+    if book_result.scalar_one_or_none() is None:
+        raise HTTPException(status_code=404, detail=f"书籍 {book_id} 不存在")
 
     chapters_result = await db.execute(
         select(ChapterModel)
@@ -177,27 +199,40 @@ async def get_book_chapters(book_id: str, db: AsyncSession = Depends(get_db)):
     )
     units = list(units_result.scalars().all())
 
+    # 按 chapter_id 分组知识单元
+    units_by_chapter = {}
+    for u in units:
+        if u.chapter_id not in units_by_chapter:
+            units_by_chapter[u.chapter_id] = []
+        units_by_chapter[u.chapter_id].append({
+            "id": u.id,
+            "book_id": u.book_id,
+            "chapter_id": u.chapter_id,
+            "title": u.title,
+            "content": u.content,
+            "summary": u.summary,
+            "explanation": u.explanation or "",
+            "difficulty_level": u.difficulty_level,
+            "importance_score": u.importance_score if u.importance_score is not None else 0.5,
+            "key_points": _safe_json_list(u.key_points),
+            "concepts": _safe_json_list(u.concepts),
+        })
+
+    # 计算哪些章节是容器节点（有子节点）
+    parent_ids = {ch.parent_id for ch in chapters if ch.parent_id}
+
+    # 构建响应，包含 level 和 parent_id 用于前端构建树形结构
     result = []
     for chapter in chapters:
-        chapter_units = [u for u in units if u.chapter_id == chapter.id]
         result.append({
             "id": chapter.id,
             "book_id": chapter.book_id,
             "title": chapter.title,
-            "order_num": chapter.order_index,
-            "knowledge_units": [
-                {
-                    "id": u.id,
-                    "book_id": u.book_id,
-                    "chapter_id": u.chapter_id,
-                    "title": u.title,
-                    "content": u.content,
-                    "summary": u.summary,
-                    "difficulty_level": u.difficulty_level,
-                    "concepts": u.concepts.split(",") if u.concepts else [],
-                }
-                for u in chapter_units
-            ],
+            "level": chapter.level,
+            "parent_id": chapter.parent_id,
+            "order_index": chapter.order_index,
+            "is_container": chapter.id in parent_ids,
+            "knowledge_units": units_by_chapter.get(chapter.id, []),
         })
 
     return result
@@ -218,13 +253,20 @@ async def update_book_status(book_id: str, body: BookStatusUpdate,
     )
 
 
+@router.put("/books/{book_id}/motivation", response_model=Book)
+async def update_book_motivation(book_id: str, body: BookMotivationUpdate,
+                                 svc: BookService = Depends(get_book_service)):
+    """更新阅读动机"""
+    return await svc.update_status(book_id, reading_motivation=body.reading_motivation)
+
+
 # ========== 学习记录端点 ==========
 
 @router.post("/records", response_model=LearningRecord, status_code=201)
 async def create_record(body: LearningRecordCreate, svc: LearningRecordService = Depends(get_record_service)):
     """创建学习记录"""
     record = await svc.create_record(
-        user_id=body.user_id,
+        user_id="anonymous",
         book_id=body.book_id,
         session_id=body.session_id,
     )
@@ -249,34 +291,27 @@ async def complete_record(record_id: str, body: LearningRecordComplete,
 
 @router.get("/stats/daily/{date}", response_model=Optional[DailyStats])
 async def get_daily_stats(date: str,
-                          current_user: str = Depends(get_current_user),
                           svc: LearningRecordService = Depends(get_record_service)):
-    """获取当前用户每日统计（需登录）"""
-    if current_user == "anonymous":
-        raise HTTPException(status_code=401, detail="请先登录")
-    stats = await svc.get_daily_stats(current_user, date)
+    """获取当前用户每日统计"""
+    stats = await svc.get_daily_stats("anonymous", date)
     if stats is None:
-        return DailyStats(user_id=current_user, date=date)
+        return DailyStats(user_id="anonymous", date=date)
     return stats
 
 
 @router.get("/stats/streak")
-async def get_streak(current_user: str = Depends(get_current_user),
-                     svc: LearningRecordService = Depends(get_record_service)):
-    """获取当前用户连续学习天数（需登录）"""
-    if current_user == "anonymous":
-        raise HTTPException(status_code=401, detail="请先登录")
-    streak = await svc.get_streak(current_user)
-    return {"user_id": current_user, "streak": streak}
+async def get_streak(svc: LearningRecordService = Depends(get_record_service)):
+    """获取当前用户连续学习天数"""
+    streak = await svc.get_streak("anonymous")
+    return {"user_id": "anonymous", "streak": streak}
 
 
 @router.get("/books/{book_id}/mastery")
-async def get_book_mastery(book_id: str, current_user: str = Depends(get_current_user),
-                           db: AsyncSession = Depends(get_db)):
+async def get_book_mastery(book_id: str, db: AsyncSession = Depends(get_db)):
     """获取书籍的掌握度记录"""
     result = await db.execute(
         select(MasteryRecordModel)
-        .where(MasteryRecordModel.user_id == current_user)
+        .where(MasteryRecordModel.user_id == "anonymous", MasteryRecordModel.book_id == book_id)
     )
     records = list(result.scalars().all())
 

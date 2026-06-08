@@ -68,6 +68,10 @@ class BookStatusUpdate(BaseModel):
     learned_units: Optional[int] = None
 
 
+class BookMotivationUpdate(BaseModel):
+    reading_motivation: Optional[str] = None
+
+
 class Book(BaseModel):
     id: str
     user_id: str
@@ -82,8 +86,9 @@ class Book(BaseModel):
     total_chapters: int = 0
     total_units: int = 0
     learned_units: int = 0
-    created_at: str
-    updated_at: str
+    reading_motivation: Optional[str] = None
+    created_at: datetime
+    updated_at: datetime
 
     model_config = {"from_attributes": True}
 
@@ -91,7 +96,6 @@ class Book(BaseModel):
 # ========== 学习记录相关 ==========
 
 class LearningRecordCreate(BaseModel):
-    user_id: str
     book_id: str
     session_id: str
 

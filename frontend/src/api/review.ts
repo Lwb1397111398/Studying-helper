@@ -1,5 +1,5 @@
 import client from './client';
-import type { ReviewSession, ReviewQuestion, MasteryRecord, ExamResult, ReviewFeedback } from '../types';
+import type { ReviewSession, ReviewQuestion, MasteryRecord, ExamResult, ReviewFeedback, FreeRecallResult } from '../types';
 
 // 开始复习会话（间隔重复）
 export const startReviewSession = (bookId: string, unitIds: string[] = [], reviewType: string = 'spaced'): Promise<ReviewSession> => {
@@ -46,4 +46,36 @@ export const exportReview = (
   format: string
 ): Promise<{ format: string; content: string; filename: string; size_bytes: number }> => {
   return client.get(`/v1/review/export/${bookId}`, { params: { book_title: bookTitle, format } });
+};
+
+// 评估单元掌握度
+export const assessMastery = (
+  unitId: string,
+): Promise<{
+  unit_id: string;
+  score: number;
+  level: string;
+  dimensions: Record<string, number>;
+  weak_points: string[];
+  recommended_review_at: string;
+}> => {
+  return client.get(`/v1/review/mastery/${unitId}`);
+};
+
+// 开始自由回忆
+export const startFreeRecall = (
+  bookId: string, unitIds: string[],
+): Promise<ReviewSession> => {
+  return client.post('/v1/review/free-recall/start', {
+    book_id: bookId, unit_ids: unitIds,
+  });
+};
+
+// 提交自由回忆答案
+export const submitFreeRecallAnswer = (
+  sessionId: string, questionId: string, answer: string,
+): Promise<FreeRecallResult> => {
+  return client.post('/v1/review/free-recall/answer', {
+    session_id: sessionId, question_id: questionId, answer,
+  });
 };

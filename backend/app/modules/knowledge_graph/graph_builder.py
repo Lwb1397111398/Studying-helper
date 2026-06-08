@@ -1,5 +1,6 @@
 """知识图谱构建器 - 从知识单元和章节数据构建图谱"""
 
+import re
 from typing import List, Optional
 from collections import Counter
 
@@ -7,6 +8,35 @@ from app.modules.knowledge_graph.schemas import (
     KGNode, KGEdge, KnowledgeGraph, GraphStats,
 )
 from app.modules.knowledge_graph.relation_detector import RelationDetector
+
+
+def _make_short_label(label: str, node_type: str, max_len: int = 12) -> str:
+    """生成适合图谱显示的短标签。
+
+    - chapter: 取最后一级标题（如 "第一编 总则 第二章 …… 第三节 X" → "第三节 X"）
+    - unit: 截断到 max_len
+    - concept: 通常较短，保持原样
+    """
+    if not label:
+        return label
+
+    if node_type == "chapter":
+        # 按 "第X编/章/节" 分割，取最后一段
+        parts = re.split(r'(?=第[一二三四五六七八九十百千\d]+[编章节回])', label)
+        last = parts[-1].strip() if parts else label
+        if len(last) > max_len:
+            return last[:max_len - 1] + "…"
+        return last
+
+    if node_type == "unit":
+        if len(label) > max_len:
+            return label[:max_len - 1] + "…"
+        return label
+
+    # concept 等：保持原样，仅在过长时截断
+    if len(label) > max_len:
+        return label[:max_len - 1] + "…"
+    return label
 
 
 class GraphBuilder:
@@ -109,10 +139,12 @@ class GraphBuilder:
         unit_id = _get_attr(unit, "id", "")
         mastery = (mastery_map or {}).get(unit_id, {})
         importance = _get_attr(unit, "importance_score")
+        label = _get_attr(unit, "title", "未命名单元")
         return KGNode(
             id=unit_id,
             node_type="unit",
-            label=_get_attr(unit, "title", "未命名单元"),
+            label=label,
+            short_label=_make_short_label(label, "unit"),
             book_id=book_id,
             content_summary=_get_attr(unit, "summary"),
             difficulty_level=_get_attr(unit, "difficulty_level"),
@@ -127,32 +159,37 @@ class GraphBuilder:
         return KGNode(
             node_type="concept",
             label=concept,
+            short_label=_make_short_label(concept, "concept"),
             book_id=book_id,
             size=0.8,
         )
 
     def _create_chapter_node(self, chapter, book_id: str) -> KGNode:
         """创建章节节点"""
+        label = _get_attr(chapter, "title", "未命名章节")
         return KGNode(
             id=_get_attr(chapter, "id", ""),
             node_type="chapter",
-            label=_get_attr(chapter, "title", "未命名章节"),
+            label=label,
+            short_label=_make_short_label(label, "chapter"),
             book_id=book_id,
             size=1.5,
         )
 
     def _calc_node_color(self, mastery_score: Optional[float]) -> str:
-        """根据掌握度计算颜色：红(低) → 黄(中) → 绿(高)"""
+        """根据掌握度计算颜色：红(低) → 黄(中) → 绿(高)，对齐5级掌握度体系"""
         if mastery_score is None:
             return "#999999"  # 灰色表示无数据
-        if mastery_score < 0.3:
-            return "#FF4444"  # 红色
-        elif mastery_score < 0.6:
-            return "#FFAA00"  # 橙黄
-        elif mastery_score < 0.8:
-            return "#AADD00"  # 黄绿
+        if mastery_score < 0.20:
+            return "#FF4444"  # 红色 - beginner
+        elif mastery_score < 0.40:
+            return "#FF8800"  # 橙色 - learning
+        elif mastery_score < 0.65:
+            return "#FFAA00"  # 橙黄 - familiar
+        elif mastery_score < 0.85:
+            return "#AADD00"  # 黄绿 - proficient
         else:
-            return "#44BB44"  # 绿色
+            return "#44BB44"  # 绿色 - mastered
 
     def _calc_node_size(self, importance: Optional[float]) -> float:
         """根据重要度计算节点大小"""
@@ -196,16 +233,25 @@ def _get_id(obj) -> str:
 
 
 def _get_concepts(unit) -> list:
-    """从单元中提取概念列表"""
+    """从单元中提取概念名称列表（字符串）"""
     concepts = _get_attr(unit, "concepts")
     if concepts is None:
         return []
     if isinstance(concepts, str):
         try:
             import json
-            return json.loads(concepts)
+            concepts = json.loads(concepts)
         except (json.JSONDecodeError, TypeError):
             return [c.strip() for c in concepts.split(",") if c.strip()]
     if isinstance(concepts, list):
-        return concepts
+        # 兼容两种格式：纯字符串列表 或 结构化对象列表
+        result = []
+        for c in concepts:
+            if isinstance(c, dict):
+                name = c.get("name", "")
+                if name:
+                    result.append(name)
+            elif isinstance(c, str) and c.strip():
+                result.append(c.strip())
+        return result
     return []

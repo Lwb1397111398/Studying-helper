@@ -5,3 +5,7 @@ export * from './books';
 export * from './learning';
 export * from './review';
 export * from './knowledgeGraph';
+export * from './teaching';
+export * from './plans';
+export * from './settings';
+export * from './sync';

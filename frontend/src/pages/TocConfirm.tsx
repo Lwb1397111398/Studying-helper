@@ -9,6 +9,17 @@ interface EditableTocItem extends TocItem {
   children: EditableTocItem[];
 }
 
+// 层级颜色
+const getLevelColor = (level: number): string => {
+  const colors = [
+    'from-blue-500 to-purple-500',
+    'from-indigo-500 to-blue-500',
+    'from-violet-500 to-indigo-500',
+    'from-gray-400 to-gray-500',
+  ];
+  return colors[Math.min(level, colors.length - 1)];
+};
+
 export default function TocConfirm() {
   const { bookId } = useParams<{ bookId: string }>();
   const navigate = useNavigate();
@@ -19,14 +30,32 @@ export default function TocConfirm() {
   const [selectedId, setSelectedId] = useState<string | null>(null);
 
   useEffect(() => {
-    if (bookId) loadToc();
+    let cancelled = false;
+    if (bookId) {
+      (async () => {
+        try {
+          setLoading(true);
+          const response = await getTocPreview(bookId);
+          if (cancelled) return;
+          const flatItems = flattenTocTree(response.toc);
+          setTocItems(flatItems);
+          if (flatItems.length > 0) {
+            setSelectedId(flatItems[0].id);
+          }
+        } catch (err: any) {
+          if (!cancelled) setError(err.message || '加载目录失败');
+        } finally {
+          if (!cancelled) setLoading(false);
+        }
+      })();
+    }
+    return () => { cancelled = true; };
   }, [bookId]);
 
   const loadToc = async () => {
     try {
       setLoading(true);
       const response = await getTocPreview(bookId!);
-      // 扁平化树形结构
       const flatItems = flattenTocTree(response.toc);
       setTocItems(flatItems);
       if (flatItems.length > 0) {
@@ -74,10 +103,16 @@ export default function TocConfirm() {
 
   // 删除节点
   const deleteItem = (id: string) => {
-    setTocItems((prev) => prev.filter((item) => item.id !== id));
-    if (selectedId === id) {
-      setSelectedId(tocItems.length > 1 ? tocItems[0].id : null);
-    }
+    setTocItems((prev) => {
+      const next = prev.filter((item) => item.id !== id);
+      return next;
+    });
+    setSelectedId((prev) => {
+      if (prev === id) {
+        return null;
+      }
+      return prev;
+    });
   };
 
   // 添加节点
@@ -167,7 +202,7 @@ export default function TocConfirm() {
         <div>
           <h1 className="text-2xl font-bold text-gray-800 mb-1">编辑目录</h1>
           <p className="text-sm text-gray-400">
-            共 {tocItems.length} 个章节，{tocItems.filter((i) => i.level === 0).length} 个顶级章节
+            共 {tocItems.length} 个章节，{tocItems.filter((i) => i.level === 0).length} 个编
           </p>
         </div>
         <div className="flex gap-2">
@@ -223,14 +258,14 @@ export default function TocConfirm() {
             {tocItems.map((item, index) => (
               <div
                 key={item.id}
-                className={`flex items-center gap-3 p-3 rounded-xl border transition-all ${
-                  selectedId === item.id
-                    ? 'border-blue-300 bg-blue-50/50'
-                    : 'border-gray-100 hover:border-gray-200'
-                }`}
+                className={`flex items-center gap-3 p-3 rounded-xl border transition-all ${selectedId === item.id
+                  ? 'border-blue-300 bg-blue-50/50'
+                  : 'border-gray-100 hover:border-gray-200'
+                  }`}
+                style={{ marginLeft: item.level * 24 }}
                 onClick={() => setSelectedId(item.id)}
               >
-                {/* 层级缩进指示 */}
+                {/* 层级选择 */}
                 <div className="flex items-center gap-1 w-16">
                   <select
                     value={item.level}
@@ -238,14 +273,15 @@ export default function TocConfirm() {
                     onClick={(e) => e.stopPropagation()}
                     className="px-2 py-1 bg-white border border-gray-200 rounded-lg text-xs focus:outline-none focus:border-blue-300"
                   >
-                    <option value={0}>Level 0</option>
-                    <option value={1}>Level 1</option>
-                    <option value={2}>Level 2</option>
+                    <option value={0}>编</option>
+                    <option value={1}>章</option>
+                    <option value={2}>节</option>
+                    <option value={3}>小节</option>
                   </select>
                 </div>
 
                 {/* 序号 */}
-                <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-blue-500 to-purple-500 flex items-center justify-center text-white text-xs font-bold shrink-0">
+                <div className={`w-8 h-8 rounded-lg bg-gradient-to-br ${getLevelColor(item.level)} flex items-center justify-center text-white text-xs font-bold shrink-0`}>
                   {index + 1}
                 </div>
 
@@ -284,9 +320,10 @@ export default function TocConfirm() {
           <div className="text-sm text-amber-700">
             <p className="font-medium mb-1">编辑说明</p>
             <ul className="list-disc list-inside space-y-1 text-amber-600">
-              <li>Level 0 = 顶级章节（第X章、第X部分等）</li>
-              <li>Level 1 = 节（第X节、X.X 格式等）</li>
-              <li>Level 2 = 小节（X.X.X 格式）</li>
+              <li>编 = 顶级大分组（第X编、第X部分等）</li>
+              <li>章 = 章节（第X章等）</li>
+              <li>节 = 小节（第X节、X.X 格式等）</li>
+              <li>小节 = 更细粒度的分节（X.X.X 格式）</li>
               <li>确认后将根据目录重新拆分知识单元</li>
             </ul>
           </div>

@@ -1,7 +1,7 @@
 """错题集导出器"""
 
 from typing import List, Dict
-from datetime import datetime
+from datetime import datetime, timezone
 
 from app.modules.review.schemas import ExportResult, ExportFormat
 
@@ -25,7 +25,7 @@ def export_wrong_answers(
     """
     lines = []
     lines.append(f"# {book_title} - 错题集")
-    lines.append(f"\n导出时间：{datetime.now().strftime('%Y-%m-%d %H:%M')}")
+    lines.append(f"\n导出时间：{datetime.now(timezone.utc).strftime('%Y-%m-%d %H:%M')}")
     lines.append(f"共 {len(wrong_questions)} 道错题\n")
     lines.append("---\n")
 

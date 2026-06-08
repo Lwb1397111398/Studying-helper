@@ -15,6 +15,13 @@ class LearningStatus(str, Enum):
     FAILED = "failed"
 
 
+class KeyPoint(BaseModel):
+    """结构化要点"""
+    title: str
+    explanation: str = ""
+    examples: List[str] = []
+
+
 class Concept(BaseModel):
     """核心概念"""
     name: str
@@ -26,10 +33,16 @@ class Concept(BaseModel):
 class TestQuestion(BaseModel):
     """测试题"""
     question: str
-    question_type: str  # 'choice' | 'fill_blank' | 'short_answer'
+    question_type: str  # 'choice' | 'fill_blank' | 'short_answer' | 'matching' | 'ordering' | 'true_false'
     options: Optional[List[str]] = None
     correct_answer: str
     explanation: str
+    # 连线题: 概念与定义配对
+    pairs: Optional[List[dict]] = None
+    # 排序题: 正确顺序
+    sequence: Optional[List[str]] = None
+    # 判断题: 陈述内容
+    statement: Optional[str] = None
 
 
 class SelfAssessment(BaseModel):
@@ -46,7 +59,8 @@ class LearnedUnit(BaseModel):
     unit_id: str
     book_id: str
     summary: str
-    key_points: List[str]
+    explanation: str = ""  # AI 教学讲解
+    key_points: List[KeyPoint]
     concepts: List[Concept]
     difficulty_level: int  # 1-5
     importance_score: float  # 0-1

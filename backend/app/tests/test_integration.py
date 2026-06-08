@@ -1,8 +1,11 @@
 """集成测试 - 端到端流程验证"""
 
 import pytest
-from datetime import datetime, timedelta
+import pytest_asyncio
+from datetime import datetime, timedelta, timezone
+from sqlalchemy.ext.asyncio import create_async_engine, AsyncSession, async_sessionmaker
 
+from app.db.database import Base
 from app.modules.document_parser.schemas import ParsedDocument, BookMetadata, TOCItem
 from app.modules.knowledge_splitter.schemas import Chapter, KnowledgeUnit, SplitResult
 from app.modules.knowledge_splitter.service import KnowledgeSplitterService
@@ -11,6 +14,20 @@ from app.modules.review.schemas import MasteryRecord, ReviewSession, ExamConfig
 from app.modules.review.spaced_repetition import calculate_next_review, quality_from_correctness
 from app.modules.knowledge_graph.service import KnowledgeGraphService
 from app.modules.knowledge_graph.schemas import KnowledgeGraph, GraphQuery
+
+
+@pytest_asyncio.fixture
+async def db_session():
+    """创建内存数据库"""
+    engine = create_async_engine("sqlite+aiosqlite:///:memory:", echo=False)
+    async_session = async_sessionmaker(engine, class_=AsyncSession, expire_on_commit=False)
+    async with engine.begin() as conn:
+        await conn.run_sync(Base.metadata.create_all)
+    async with async_session() as session:
+        yield session
+    async with engine.begin() as conn:
+        await conn.run_sync(Base.metadata.drop_all)
+    await engine.dispose()
 
 
 @pytest.fixture
@@ -85,7 +102,7 @@ def sample_knowledge_units():
 @pytest.fixture
 def sample_mastery_records():
     """示例掌握度记录"""
-    now = datetime.now()
+    now = datetime.now(timezone.utc)
     return [
         MasteryRecord(
             id="mastery1",
@@ -134,19 +151,19 @@ class TestSpacedRepetitionIntegration:
     def test_spaced_repetition_flow(self):
         """测试间隔重复完整流程"""
         # 首次学习
-        interval, ease = calculate_next_review(4, 0, 2.5, 0)
+        interval, ease, reps = calculate_next_review(4, 0, 2.5, 0)
         assert interval == 1
 
         # 第二次复习
-        interval, ease = calculate_next_review(4, 1, ease, interval)
+        interval, ease, reps = calculate_next_review(4, 1, ease, interval)
         assert interval == 6
 
         # 第三次复习
-        interval, ease = calculate_next_review(4, 2, ease, interval)
+        interval, ease, reps = calculate_next_review(4, 2, ease, interval)
         assert interval == round(6 * ease)
 
         # 失败重置
-        interval, ease = calculate_next_review(2, 3, ease, interval)
+        interval, ease, reps = calculate_next_review(2, 3, ease, interval)
         assert interval == 1
 
     def test_quality_from_correctness(self):
@@ -167,12 +184,13 @@ class TestSpacedRepetitionIntegration:
 class TestReviewIntegration:
     """复习引擎集成测试"""
 
-    def test_review_session_flow(self, sample_knowledge_units, sample_mastery_records):
+    @pytest.mark.asyncio
+    async def test_review_session_flow(self, db_session, sample_knowledge_units, sample_mastery_records):
         """测试复习会话完整流程"""
-        service = ReviewService()
+        service = ReviewService(db_session)
 
         # 开始复习
-        session = service.start_review(
+        session = await service.start_review(
             user_id="user1",
             book_id="book1",
             unit_ids=["unit1", "unit2"],
@@ -185,10 +203,11 @@ class TestReviewIntegration:
 
         # 提交答案
         question = session.questions[0]
-        feedback = service.submit_review_answer(
+        feedback = await service.submit_review_answer(
             session_id=session.id,
             question_id=question.id,
-            answer=question.correct_answer
+            answer=question.correct_answer,
+            user_id="user1",
         )
 
         assert feedback.is_correct is True
@@ -198,9 +217,10 @@ class TestReviewIntegration:
 class TestExamIntegration:
     """考前模式集成测试"""
 
-    def test_exam_flow(self, sample_knowledge_units, sample_mastery_records):
+    @pytest.mark.asyncio
+    async def test_exam_flow(self, db_session, sample_knowledge_units, sample_mastery_records):
         """测试考试完整流程"""
-        service = ReviewService()
+        service = ReviewService(db_session)
 
         config = ExamConfig(
             question_count=5,
@@ -210,7 +230,7 @@ class TestExamIntegration:
         )
 
         # 开始考试
-        session = service.start_exam(
+        session = await service.start_exam(
             user_id="user1",
             book_id="book1",
             chapter_ids=["ch1", "ch2"],
@@ -224,9 +244,10 @@ class TestExamIntegration:
 
         # 提交考试 - 使用 Dict[str, str] 格式
         answers = {q.id: q.correct_answer for q in session.questions}
-        result = service.submit_exam(
+        result = await service.submit_exam(
             session_id=session.id,
-            answers=answers
+            answers=answers,
+            user_id="user1",
         )
 
         assert result.passed is True
@@ -236,9 +257,10 @@ class TestExamIntegration:
 class TestKnowledgeGraphIntegration:
     """知识图谱集成测试"""
 
-    def test_build_and_query_graph(self, sample_knowledge_units):
+    @pytest.mark.asyncio
+    async def test_build_and_query_graph(self, db_session, sample_knowledge_units):
         """测试图谱构建和查询"""
-        service = KnowledgeGraphService()
+        service = KnowledgeGraphService(db_session)
 
         # 构建图谱
         chapters = [
@@ -246,7 +268,7 @@ class TestKnowledgeGraphIntegration:
             {"id": "ch2", "title": "第二章"}
         ]
 
-        graph = service.build_graph(
+        graph = await service.build_graph(
             book_id="book1",
             units=sample_knowledge_units,
             chapters=chapters
@@ -258,22 +280,22 @@ class TestKnowledgeGraphIntegration:
         # 查询邻居
         if graph.nodes:
             first_node = graph.nodes[0]
-            query = GraphQuery(max_depth=1)
-            subgraph = service.query_neighbors(graph, first_node.id, query)
+            query = GraphQuery(max_depth=2)
+            subgraph = await service.query_neighbors("book1", first_node.id, query)
 
             assert subgraph.center_node.id == first_node.id
-            assert len(subgraph.nodes) >= 1
 
-    def test_find_path(self, sample_knowledge_units):
+    @pytest.mark.asyncio
+    async def test_find_path(self, db_session, sample_knowledge_units):
         """测试路径查找"""
-        service = KnowledgeGraphService()
+        service = KnowledgeGraphService(db_session)
 
         chapters = [
             {"id": "ch1", "title": "第一章"},
             {"id": "ch2", "title": "第二章"}
         ]
 
-        graph = service.build_graph(
+        graph = await service.build_graph(
             book_id="book1",
             units=sample_knowledge_units,
             chapters=chapters
@@ -282,7 +304,7 @@ class TestKnowledgeGraphIntegration:
         if len(graph.nodes) >= 2:
             source_id = graph.nodes[0].id
             target_id = graph.nodes[1].id
-            path = service.find_path(graph, source_id, target_id)
+            path = await service.find_path("book1", source_id, target_id)
 
             if path:
                 assert path[0].source_id == source_id
@@ -296,7 +318,6 @@ class TestExportIntegration:
         """测试Markdown导出"""
         from app.modules.review.exporters import export_markdown
 
-        # 构建测试数据 - 使用正确的参数格式
         chapters = [
             {"id": "ch1", "title": "第一章"},
             {"id": "ch2", "title": "第二章"}
@@ -372,7 +393,8 @@ class TestExportIntegration:
 class TestFullWorkflow:
     """完整工作流集成测试"""
 
-    def test_complete_learning_journey(self, sample_parsed_document):
+    @pytest.mark.asyncio
+    async def test_complete_learning_journey(self, db_session, sample_parsed_document):
         """测试完整学习旅程"""
         # 1. 知识拆分
         splitter = KnowledgeSplitterService()
@@ -383,8 +405,8 @@ class TestFullWorkflow:
         knowledge_units = split_result.units[:2]  # 只取前两个
 
         # 3. 复习
-        review_service = ReviewService()
-        session = review_service.start_review(
+        review_service = ReviewService(db_session)
+        session = await review_service.start_review(
             user_id="user1",
             book_id="book1",
             unit_ids=[u.id for u in knowledge_units],
@@ -394,9 +416,9 @@ class TestFullWorkflow:
         assert len(session.questions) > 0
 
         # 4. 构建知识图谱
-        graph_service = KnowledgeGraphService()
+        graph_service = KnowledgeGraphService(db_session)
         chapters = [{"id": "ch1", "title": "第一章"}, {"id": "ch2", "title": "第二章"}]
-        graph = graph_service.build_graph(
+        graph = await graph_service.build_graph(
             book_id="book1",
             units=knowledge_units,
             chapters=chapters

@@ -3,6 +3,7 @@
 import pytest
 from unittest.mock import MagicMock, patch
 
+from app.modules.ai_learning.tests.mock_llm import MockLLMClient
 from app.modules.document_parser.parsers.pdf_parser import PDFParser
 from app.common.errors import ServiceError, ErrorCode
 
@@ -77,6 +78,27 @@ class TestPDFParser:
         assert "第二页" in result.full_text
         assert result.page_map is not None
         assert len(result.page_map) == 2
+
+    @patch('app.modules.document_parser.parsers.pdf_parser.pdfplumber')
+    def test_llm_fallback_when_rules_fail(self, mock_pdfplumber, tmp_path):
+        """规则识别不足时使用 LLM fallback"""
+        pdf_file = tmp_path / "test.pdf"
+        pdf_file.write_bytes(b"%PDF-1.4 fake content")
+        llm_client = MockLLMClient()
+
+        mock_pdf = MagicMock()
+        mock_pdf.metadata = {'Title': '测试'}
+        mock_pdf.pages = [MagicMock()]
+        mock_pdf.pages[0].extract_text.return_value = "没有明显章节格式的正文\n只是普通段落"
+        mock_pdf.outline = []
+        mock_pdfplumber.open.return_value = mock_pdf
+
+        parser = PDFParser()
+        result = parser.parse(str(pdf_file), llm_client=llm_client)
+
+        assert llm_client.call_count == 1
+        assert len(result.toc) >= 3
+        assert result.toc[0].title == "第一章 测试章"
 
     @patch('app.modules.document_parser.parsers.pdf_parser.pdfplumber')
     def test_parse_empty_pdf_raises_error(self, mock_pdfplumber, tmp_path):

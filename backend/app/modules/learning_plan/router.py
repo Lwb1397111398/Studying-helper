@@ -5,6 +5,7 @@ from typing import Optional
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.db.database import get_db
+from app.deps import get_current_user
 from app.common.errors import ServiceError, ErrorCode, ERROR_STATUS_MAP
 from app.modules.learning_plan.service import LearningPlanService
 from app.modules.learning_plan.style_analyzer import LearningStyleAnalyzer
@@ -32,7 +33,8 @@ def _get_service(db: AsyncSession) -> LearningPlanService:
 
 @router.post("/{book_id}/generate")
 async def generate_plan(book_id: str, request: GeneratePlanRequest,
-                        db: AsyncSession = Depends(get_db)):
+                        db: AsyncSession = Depends(get_db),
+                        current_user: str = Depends(get_current_user)):
     """生成学习方案"""
     try:
         svc = _get_service(db)
@@ -43,7 +45,7 @@ async def generate_plan(book_id: str, request: GeneratePlanRequest,
                 f"书籍 {book_id} 没有可用的知识单元，请先完成知识拆分"
             )
         plan = await svc.generate_plan(
-            user_id="anonymous",
+            user_id=current_user,
             book_id=book_id,
             units=units,
             daily_goal_minutes=request.daily_goal_minutes,
@@ -58,7 +60,8 @@ async def generate_plan(book_id: str, request: GeneratePlanRequest,
 @router.get("/{book_id}/current-session")
 async def get_current_session(book_id: str,
                               completed_sessions: int = 0,
-                              db: AsyncSession = Depends(get_db)):
+                              db: AsyncSession = Depends(get_db),
+                              current_user: str = Depends(get_current_user)):
     """获取当前会话"""
     try:
         svc = _get_service(db)
@@ -69,7 +72,7 @@ async def get_current_session(book_id: str,
                 f"书籍 {book_id} 没有可用的知识单元"
             )
         plan = await svc.generate_plan(
-            user_id="anonymous",
+            user_id=current_user,
             book_id=book_id,
             units=units,
         )
@@ -96,13 +99,14 @@ async def get_current_session(book_id: str,
 @router.post("/{book_id}/sessions/{session_id}/complete")
 async def complete_session(book_id: str, session_id: str,
                            request: CompleteSessionRequest,
-                           db: AsyncSession = Depends(get_db)):
+                           db: AsyncSession = Depends(get_db),
+                           current_user: str = Depends(get_current_user)):
     """完成会话"""
     try:
         svc = _get_service(db)
         units = await svc.load_units_from_db(db, book_id)
         plan = await svc.generate_plan(
-            user_id="anonymous",
+            user_id=current_user,
             book_id=book_id,
             units=units,
         )

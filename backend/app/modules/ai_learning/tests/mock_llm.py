@@ -69,9 +69,10 @@ class MockLLMClient:
             # 增量更新响应：补充新内容
             content = {
                 "summary": "补充后的摘要，增加了更多细节和示例说明。",
+                "explanation": "这是增量更新后的讲解内容，补充了新的细节和示例。",
                 "key_points": [
-                    "补充要点1：实际应用案例",
-                    "补充要点2：与其他概念的关联",
+                    {"title": "补充要点1：实际应用案例", "explanation": "实际应用案例的详细说明", "examples": ["案例示例"]},
+                    {"title": "补充要点2：与其他概念的关联", "explanation": "与其他概念关联的说明", "examples": []},
                 ],
                 "concepts": [
                     {
@@ -88,10 +89,11 @@ class MockLLMClient:
         else:
             content = {
                 "summary": "这是一个测试摘要，包含了核心概念的解释和应用。",
+                "explanation": "这是AI对该知识点的详细讲解，包括核心思想和实际联系。",
                 "key_points": [
-                    "要点1：基本概念",
-                    "要点2：核心原理",
-                    "要点3：实际应用",
+                    {"title": "要点1：基本概念", "explanation": "基本概念的详细解释", "examples": ["示例说明"]},
+                    {"title": "要点2：核心原理", "explanation": "核心原理的详细解释", "examples": []},
+                    {"title": "要点3：实际应用", "explanation": "实际应用的详细解释", "examples": ["应用场景"]},
                 ],
                 "concepts": [
                     {

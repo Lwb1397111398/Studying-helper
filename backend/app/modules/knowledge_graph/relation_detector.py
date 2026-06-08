@@ -183,17 +183,25 @@ def _get_id(obj) -> str:
 
 
 def _get_concepts(unit) -> list:
-    """从单元中提取概念列表"""
+    """从单元中提取概念名称列表（字符串）"""
     concepts = _get_attr(unit, "concepts")
     if concepts is None:
         return []
     if isinstance(concepts, str):
         try:
-            return json.loads(concepts)
+            concepts = json.loads(concepts)
         except (json.JSONDecodeError, TypeError):
             return [c.strip() for c in concepts.split(",") if c.strip()]
     if isinstance(concepts, list):
-        return concepts
+        result = []
+        for c in concepts:
+            if isinstance(c, dict):
+                name = c.get("name", "")
+                if name:
+                    result.append(name)
+            elif isinstance(c, str) and c.strip():
+                result.append(c.strip())
+        return result
     return []
 
 

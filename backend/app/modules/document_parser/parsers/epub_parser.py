@@ -1,16 +1,18 @@
 """EPUB解析器"""
 
+import asyncio
 import re
 from pathlib import Path
-from typing import List
+from typing import List, Optional
 
 import ebooklib
 from ebooklib import epub
 from bs4 import BeautifulSoup
 
 from app.common.errors import ServiceError, ErrorCode
+from app.common.llm_client import LLMClient
 from app.modules.document_parser.schemas import ParsedDocument, BookMetadata, TOCItem
-from app.modules.document_parser.toc_detector import identify_toc_items
+from app.modules.document_parser.toc_detector import identify_toc_items, identify_toc_items_enhanced
 
 
 class EPUBParser:
@@ -22,7 +24,7 @@ class EPUBParser:
         """识别EPUB文件"""
         return file_path.lower().endswith('.epub')
 
-    def parse(self, file_path: str) -> ParsedDocument:
+    def parse(self, file_path: str, llm_client: Optional[LLMClient] = None) -> ParsedDocument:
         """
         解析EPUB文件。
 
@@ -53,8 +55,16 @@ class EPUBParser:
                 message="EPUB文件无文本内容"
             )
 
+        # 内容清洗（在目录检测之前，确保偏移量一致）
+        try:
+            from app.modules.document_parser.noise_cleaner import clean_full_text
+            full_text, _ = clean_full_text(full_text)
+        except Exception as e:
+            import logging
+            logging.getLogger(__name__).warning(f"内容清洗失败，使用原始文本: {e}")
+
         # 提取目录（多层降级）
-        toc = self._extract_toc_with_fallback(book, full_text)
+        toc = self._extract_toc_with_fallback(book, full_text, llm_client)
 
         return ParsedDocument(
             metadata=metadata,
@@ -98,7 +108,7 @@ class EPUBParser:
             file_size_bytes=file_size
         )
 
-    def _extract_toc_with_fallback(self, book, full_text: str) -> List[TOCItem]:
+    def _extract_toc_with_fallback(self, book, full_text: str, llm_client: Optional[LLMClient] = None) -> List[TOCItem]:
         """
         多层降级目录提取：NCX → spine文件名 → 文本规则
         """
@@ -113,7 +123,7 @@ class EPUBParser:
             return toc
 
         # 第三层：文本规则兜底
-        toc = self._identify_toc_from_text(full_text)
+        toc = self._identify_toc_from_text(full_text, llm_client)
         return toc
 
     def _extract_toc_from_ncx(self, book) -> List[TOCItem]:
@@ -173,14 +183,15 @@ class EPUBParser:
 
         return toc_items
 
-    def _identify_toc_from_text(self, full_text: str) -> List[TOCItem]:
-        """
-        文本规则兜底：调用 toc_detector 的启发式识别。
-
-        注意：这里使用同步版本，因为 EPUB 解析是同步的。
-        异步增强版（含 LLM fallback）在 knowledge_splitter 层调用。
-        """
-        return identify_toc_items(full_text)
+    def _identify_toc_from_text(self, full_text: str, llm_client: Optional[LLMClient] = None) -> List[TOCItem]:
+        """文本兜底：规则不足时可使用 LLM fallback。"""
+        toc = identify_toc_items(full_text)
+        if not toc and llm_client:
+            try:
+                asyncio.get_running_loop()
+            except RuntimeError:
+                toc = asyncio.run(identify_toc_items_enhanced(full_text, "epub", llm_client))
+        return toc
 
     def _process_toc_items(self, items, toc_items: List[TOCItem], level: int):
         """递归处理目录项"""

@@ -51,7 +51,7 @@ class TextSplitter:
 
         # 步骤1：优先按子标题边界切分（base_offset 在步骤5中追踪）
         if sub_titles:
-            chunks = self._split_by_sub_titles(text, sub_titles, base_offset=0)
+            chunks = self._split_by_sub_titles(text, sub_titles, base_offset=base_offset)
         else:
             # 步骤2：按双换行符分割段落
             paragraphs = self._SPLIT_PARAGRAPHS.split(text)

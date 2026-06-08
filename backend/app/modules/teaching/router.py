@@ -11,12 +11,14 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.common.errors import ServiceError, ErrorCode, ERROR_STATUS_MAP
 from app.db.database import get_db
 from app.db.models import KnowledgeUnitModel, TeachingSessionModel
-from app.deps import get_llm_client, get_current_user
-from app.modules.ai_learning.schemas import LearnedUnit
+from app.deps import get_teaching_llm_client
+from app.modules.ai_learning.schemas import LearnedUnit, Concept, KeyPoint
 from app.modules.teaching.service import TeachingService
 from app.modules.teaching.schemas import TeachingMessage, UserQuestion, Annotation, SessionTest
 
 router = APIRouter(prefix="/api/v1/teaching", tags=["teaching"])
+
+DEFAULT_USER_ID = "anonymous"
 
 
 class StartSessionRequest(BaseModel):
@@ -29,10 +31,22 @@ class AskQuestionRequest(BaseModel):
     question: str
 
 
+class SubmitAnswerRequest(BaseModel):
+    answer: str
+
+
+class JumpToUnitRequest(BaseModel):
+    unit_id: str
+
+
 class AnnotationRequest(BaseModel):
     unit_id: str
     annotation_type: str
     content: Optional[str] = None
+    related_concepts: List[str] = []
+    example: Optional[str] = None
+    cornell_cues: Optional[List[str]] = None
+    cornell_summary: Optional[str] = None
 
 
 class SubmitTestRequest(BaseModel):
@@ -47,18 +61,52 @@ async def _load_learned_units(db: AsyncSession, unit_ids: List[str]) -> List[Lea
         select(KnowledgeUnitModel).where(KnowledgeUnitModel.id.in_(unit_ids))
     )
     db_units = result.scalars().all()
-    return [
-        LearnedUnit(
+    units = []
+    for u in db_units:
+        concepts = []
+        if u.concepts:
+            try:
+                raw = json.loads(u.concepts)
+                for c in raw:
+                    if isinstance(c, dict):
+                        concepts.append(Concept(
+                            name=c.get("name", ""),
+                            definition=c.get("definition", ""),
+                            examples=c.get("examples", []),
+                            related_concepts=c.get("related_concepts", []),
+                        ))
+                    else:
+                        concepts.append(Concept(name=str(c), definition=""))
+            except (json.JSONDecodeError, TypeError):
+                pass
+        # 解析 key_points（兼容字符串列表和对象列表两种格式）
+        key_points = []
+        if u.key_points:
+            try:
+                raw_kps = json.loads(u.key_points)
+                for kp in raw_kps:
+                    if isinstance(kp, dict):
+                        key_points.append(KeyPoint(
+                            title=kp.get("title", ""),
+                            explanation=kp.get("explanation", ""),
+                            examples=kp.get("examples", []),
+                        ))
+                    else:
+                        key_points.append(KeyPoint(title=str(kp)))
+            except (json.JSONDecodeError, TypeError):
+                pass
+
+        units.append(LearnedUnit(
             unit_id=u.id,
+            book_id=u.book_id,
             summary=u.summary or "",
-            key_points=u.key_points.split(",") if u.key_points else [],
-            concepts=[],
+            key_points=key_points,
+            concepts=concepts,
             difficulty_level=u.difficulty_level or 1,
             importance_score=u.importance_score or 0.5,
             prerequisites=[],
-        )
-        for u in db_units
-    ]
+        ))
+    return units
 
 
 async def _get_units_for_session(db: AsyncSession, session_id: str) -> List[LearnedUnit]:
@@ -76,7 +124,7 @@ async def _get_units_for_session(db: AsyncSession, session_id: str) -> List[Lear
 
 def _get_service(
     db: AsyncSession = Depends(get_db),
-    llm_client=Depends(lambda: get_llm_client("teaching")),
+    llm_client=Depends(get_teaching_llm_client),
 ) -> TeachingService:
     return TeachingService(llm_client=llm_client, db=db)
 
@@ -84,20 +132,35 @@ def _get_service(
 @router.post("/sessions/start")
 async def start_session(
     request: StartSessionRequest,
-    current_user: str = Depends(get_current_user),
     svc: TeachingService = Depends(_get_service),
     db: AsyncSession = Depends(get_db),
 ):
-    """开始教学会话"""
-    if current_user == "anonymous":
-        raise HTTPException(status_code=401, detail="请先登录")
+    """开始教学会话（自动排序）"""
     try:
-        units = await _load_learned_units(db, request.unit_ids)
+        # 尝试使用知识图谱拓扑排序
+        unit_ids = request.unit_ids
+        try:
+            from app.modules.knowledge_graph.service import KnowledgeGraphService
+            kg_service = KnowledgeGraphService(db)
+            ordered_unit_ids = await kg_service.get_topological_order(request.book_id)
+
+            # 过滤出请求的单元并保持顺序
+            if ordered_unit_ids:
+                unit_ids = [uid for uid in ordered_unit_ids if uid in request.unit_ids]
+                # 如果有未在图谱中的单元，追加到末尾
+                remaining = [uid for uid in request.unit_ids if uid not in unit_ids]
+                unit_ids.extend(remaining)
+        except Exception as e:
+            # 知识图谱不存在或出错时，使用原始顺序
+            print(f"拓扑排序失败，使用原始顺序: {e}")
+            unit_ids = request.unit_ids
+
+        units = await _load_learned_units(db, unit_ids)
         session = await svc.start_session(
-            user_id=current_user,
+            user_id=DEFAULT_USER_ID,
             plan_session_id=request.plan_session_id,
             book_id=request.book_id,
-            unit_ids=request.unit_ids,
+            unit_ids=unit_ids,
             units=units,
         )
         return session.model_dump()
@@ -105,16 +168,25 @@ async def start_session(
         raise HTTPException(status_code=ERROR_STATUS_MAP.get(e.code, 500), detail=e.message)
 
 
+@router.get("/sessions/active")
+async def get_active_session(
+    book_id: str,
+    svc: TeachingService = Depends(_get_service),
+):
+    """获取某本书的活跃教学会话"""
+    session = await svc.get_active_session(DEFAULT_USER_ID, book_id)
+    if not session:
+        raise HTTPException(status_code=404, detail="没有活跃会话")
+    return session.model_dump()
+
+
 @router.get("/sessions/{session_id}/next-message")
 async def get_next_message(
     session_id: str,
-    current_user: str = Depends(get_current_user),
     svc: TeachingService = Depends(_get_service),
     db: AsyncSession = Depends(get_db),
 ):
     """获取下一条教学消息"""
-    if current_user == "anonymous":
-        raise HTTPException(status_code=401, detail="请先登录")
     try:
         units = await _get_units_for_session(db, session_id)
         message = await svc.get_next_message(session_id, units)
@@ -127,13 +199,10 @@ async def get_next_message(
 async def ask_question(
     session_id: str,
     request: AskQuestionRequest,
-    current_user: str = Depends(get_current_user),
     svc: TeachingService = Depends(_get_service),
     db: AsyncSession = Depends(get_db),
 ):
     """提问"""
-    if current_user == "anonymous":
-        raise HTTPException(status_code=401, detail="请先登录")
     try:
         units = await _get_units_for_session(db, session_id)
         answer = await svc.answer_question(session_id, request.question, units)
@@ -142,15 +211,68 @@ async def ask_question(
         raise HTTPException(status_code=ERROR_STATUS_MAP.get(e.code, 500), detail=e.message)
 
 
+@router.post("/sessions/{session_id}/answer")
+async def submit_answer(
+    session_id: str,
+    request: SubmitAnswerRequest,
+    svc: TeachingService = Depends(_get_service),
+    db: AsyncSession = Depends(get_db),
+):
+    """学生提交回答，AI 评估掌握程度"""
+    try:
+        units = await _get_units_for_session(db, session_id)
+        result = await svc.submit_answer(session_id, request.answer, units)
+        return result.model_dump()
+    except ServiceError as e:
+        raise HTTPException(status_code=ERROR_STATUS_MAP.get(e.code, 500), detail=e.message)
+
+
+@router.post("/sessions/{session_id}/continue")
+async def continue_to_next_phase(
+    session_id: str,
+    svc: TeachingService = Depends(_get_service),
+):
+    """手动推进到下一教学阶段"""
+    try:
+        session = await svc.continue_to_next_phase(session_id)
+        return session.model_dump()
+    except ServiceError as e:
+        raise HTTPException(status_code=ERROR_STATUS_MAP.get(e.code, 500), detail=e.message)
+
+
+@router.post("/sessions/{session_id}/jump-to-unit")
+async def jump_to_unit(
+    session_id: str,
+    request: JumpToUnitRequest,
+    svc: TeachingService = Depends(_get_service),
+):
+    """跳转到指定知识单元"""
+    try:
+        session = await svc.jump_to_unit(session_id, request.unit_id)
+        return session.model_dump()
+    except ServiceError as e:
+        raise HTTPException(status_code=ERROR_STATUS_MAP.get(e.code, 500), detail=e.message)
+
+
+@router.post("/sessions/{session_id}/clear")
+async def clear_messages(
+    session_id: str,
+    svc: TeachingService = Depends(_get_service),
+):
+    """清空会话消息，重置到当前单元起始阶段"""
+    try:
+        session = await svc.clear_messages(session_id)
+        return session.model_dump()
+    except ServiceError as e:
+        raise HTTPException(status_code=ERROR_STATUS_MAP.get(e.code, 500), detail=e.message)
+
+
 @router.get("/sessions/{session_id}/messages")
 async def get_session_messages(
     session_id: str,
-    current_user: str = Depends(get_current_user),
     svc: TeachingService = Depends(_get_service),
 ):
     """获取会话所有消息"""
-    if current_user == "anonymous":
-        raise HTTPException(status_code=401, detail="请先登录")
     try:
         messages = await svc.get_session_messages(session_id)
         return [m.model_dump() for m in messages]
@@ -161,37 +283,41 @@ async def get_session_messages(
 @router.post("/annotations")
 async def add_annotation(
     request: AnnotationRequest,
-    current_user: str = Depends(get_current_user),
     svc: TeachingService = Depends(_get_service),
 ):
     """添加笔记/标记"""
-    if current_user == "anonymous":
-        raise HTTPException(status_code=401, detail="请先登录")
     try:
         annotation = await svc.add_annotation(
-            user_id=current_user,
+            user_id=DEFAULT_USER_ID,
             unit_id=request.unit_id,
             annotation_type=request.annotation_type,
             content=request.content,
+            related_concepts=request.related_concepts,
+            example=request.example,
+            cornell_cues=request.cornell_cues,
+            cornell_summary=request.cornell_summary,
         )
         return annotation.model_dump()
     except ServiceError as e:
         raise HTTPException(status_code=ERROR_STATUS_MAP.get(e.code, 500), detail=e.message)
 
 
+class RunTestRequest(BaseModel):
+    weak_points: List[str] = []
+
+
 @router.post("/sessions/{session_id}/test")
 async def run_test(
     session_id: str,
-    current_user: str = Depends(get_current_user),
+    request: Optional[RunTestRequest] = None,
     svc: TeachingService = Depends(_get_service),
     db: AsyncSession = Depends(get_db),
 ):
-    """运行测试"""
-    if current_user == "anonymous":
-        raise HTTPException(status_code=401, detail="请先登录")
+    """运行测试（支持薄弱点聚焦）"""
     try:
         units = await _get_units_for_session(db, session_id)
-        test = await svc.run_session_test(session_id, units)
+        weak_points = request.weak_points if request else []
+        test = await svc.run_session_test(session_id, units, weak_points)
         return test.model_dump()
     except ServiceError as e:
         raise HTTPException(status_code=ERROR_STATUS_MAP.get(e.code, 500), detail=e.message)
@@ -201,12 +327,9 @@ async def run_test(
 async def submit_test(
     test_id: str,
     request: SubmitTestRequest,
-    current_user: str = Depends(get_current_user),
     svc: TeachingService = Depends(_get_service),
 ):
     """提交测试答案"""
-    if current_user == "anonymous":
-        raise HTTPException(status_code=401, detail="请先登录")
     try:
         test = await svc.submit_test_answers(test_id, request.answers)
         return test.model_dump()
@@ -217,14 +340,103 @@ async def submit_test(
 @router.post("/sessions/{session_id}/complete")
 async def complete_session(
     session_id: str,
-    current_user: str = Depends(get_current_user),
     svc: TeachingService = Depends(_get_service),
 ):
     """完成会话"""
-    if current_user == "anonymous":
-        raise HTTPException(status_code=401, detail="请先登录")
     try:
         summary = await svc.complete_session(session_id)
         return summary.model_dump()
     except ServiceError as e:
         raise HTTPException(status_code=ERROR_STATUS_MAP.get(e.code, 500), detail=e.message)
+
+
+class AdaptStrategyRequest(BaseModel):
+    questions_asked: int = 0
+    correct_rate: float = 0.0
+    confusing_marks: int = 0
+    avg_response_time: float = 0.0
+
+
+@router.post("/sessions/{session_id}/adapt-strategy")
+async def adapt_strategy(
+    session_id: str,
+    request: AdaptStrategyRequest,
+    svc: TeachingService = Depends(_get_service),
+):
+    """根据学生互动调整教学策略"""
+    try:
+        strategy = await svc.adapt_strategy(session_id, request.model_dump())
+        return strategy.model_dump()
+    except ServiceError as e:
+        raise HTTPException(status_code=ERROR_STATUS_MAP.get(e.code, 500), detail=e.message)
+
+
+class CornellNotesRequest(BaseModel):
+    unit_id: str
+    notes_content: str
+
+
+class CornellSummaryRequest(BaseModel):
+    unit_id: str
+    notes_content: str
+
+
+@router.post("/annotations/cornell/cues")
+async def generate_cornell_cues(
+    request: CornellNotesRequest,
+    svc: TeachingService = Depends(_get_service),
+):
+    """AI 生成康奈尔笔记线索栏"""
+    try:
+        result = await svc.generate_cornell_cues(
+            unit_id=request.unit_id,
+            notes_content=request.notes_content,
+        )
+        return result
+    except ServiceError as e:
+        raise HTTPException(status_code=ERROR_STATUS_MAP.get(e.code, 500), detail=e.message)
+
+
+@router.post("/annotations/cornell/summary")
+async def generate_cornell_summary(
+    request: CornellSummaryRequest,
+    svc: TeachingService = Depends(_get_service),
+):
+    """AI 生成康奈尔笔记总结栏"""
+    try:
+        result = await svc.generate_cornell_summary(
+            unit_id=request.unit_id,
+            notes_content=request.notes_content,
+        )
+        return result
+    except ServiceError as e:
+        raise HTTPException(status_code=ERROR_STATUS_MAP.get(e.code, 500), detail=e.message)
+
+
+@router.get("/annotations/cornell/{unit_id}")
+async def get_cornell_notes(
+    unit_id: str,
+    svc: TeachingService = Depends(_get_service),
+):
+    """获取知识单元的康奈尔笔记"""
+    try:
+        result = await svc.get_cornell_notes(unit_id=unit_id)
+        return result
+    except ServiceError as e:
+        raise HTTPException(status_code=ERROR_STATUS_MAP.get(e.code, 500), detail=e.message)
+
+
+@router.get("/stats")
+async def get_teaching_stats(
+    book_id: Optional[str] = None,
+    days: int = 7,
+    svc: TeachingService = Depends(_get_service),
+):
+    """获取教学统计"""
+    try:
+        stats = await svc.get_teaching_stats(book_id=book_id, days=days)
+        return stats
+    except Exception as e:
+        import logging
+        logging.getLogger(__name__).error(f"教学统计异常: {e}", exc_info=True)
+        raise HTTPException(status_code=500, detail="获取教学统计失败")

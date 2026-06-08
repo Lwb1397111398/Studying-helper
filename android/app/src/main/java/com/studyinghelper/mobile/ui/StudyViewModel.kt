@@ -48,6 +48,32 @@ class StudyViewModel(application: Application) : AndroidViewModel(application) {
     private val teachingRepository = TeachingRepository(database, aiRepository)
     private val json = Json { prettyPrint = false }
     private val analyzingUnitIds = mutableSetOf<String>()
+
+    // 手动序列化 KeyPoint 列表为 JSON 字符串
+    private fun serializeKeyPoints(keyPoints: List<com.studyinghelper.mobile.data.repository.KeyPoint>): String {
+        val elements = keyPoints.map { kp ->
+            buildString {
+                append("""{"title":${json.encodeToString(kp.title)}""")
+                if (kp.explanation != null) append(""","explanation":${json.encodeToString(kp.explanation)}""")
+                if (kp.examples.isNotEmpty()) append(""","examples":${json.encodeToString(kp.examples)}""")
+                append("}")
+            }
+        }
+        return "[${elements.joinToString(",")}]"
+    }
+
+    // 手动序列化 Concept 列表为 JSON 字符串
+    private fun serializeConcepts(concepts: List<com.studyinghelper.mobile.data.repository.Concept>): String {
+        val elements = concepts.map { c ->
+            buildString {
+                append("""{"name":${json.encodeToString(c.name)}""")
+                if (c.definition != null) append(""","definition":${json.encodeToString(c.definition)}""")
+                if (c.examples.isNotEmpty()) append(""","examples":${json.encodeToString(c.examples)}""")
+                append("}")
+            }
+        }
+        return "[${elements.joinToString(",")}]"
+    }
     private var teachingBusy = false
     private var examSaving = false
     private var examRequestId = 0
@@ -472,12 +498,15 @@ class StudyViewModel(application: Application) : AndroidViewModel(application) {
             runCatching {
                 val unit = dao.getUnit(unitId) ?: error("未找到知识单元")
                 val result = aiRepository.analyzeUnit(unit)
+                // 序列化结构化数据为 JSON 字符串
+                val keyPointsJson = serializeKeyPoints(result.keyPoints)
+                val conceptsJson = serializeConcepts(result.concepts)
                 dao.updateUnitAnalysis(
                     unitId = unitId,
                     summary = result.summary,
                     explanation = result.explanation,
-                    keyPoints = json.encodeToString(result.keyPoints),
-                    concepts = json.encodeToString(result.concepts),
+                    keyPoints = keyPointsJson,
+                    concepts = conceptsJson,
                 )
             }.onSuccess {
                 _status.value = "AI 分析已完成"

@@ -5,6 +5,7 @@ import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.encodeToString
 import kotlinx.serialization.json.Json
+import kotlinx.serialization.json.JsonElement
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.jsonArray
 import kotlinx.serialization.json.jsonObject
@@ -24,8 +25,12 @@ class AiRepository(private val configRepository: AiConfigRepository) {
                 {
                   "summary": "100字以内摘要",
                   "explanation": "面向初学者的详细讲解",
-                  "key_points": ["关键点1", "关键点2"],
-                  "concepts": ["概念1", "概念2"]
+                  "key_points": [
+                    {"title": "要点标题", "explanation": "详细说明", "examples": ["示例1", "示例2"]}
+                  ],
+                  "concepts": [
+                    {"name": "概念名称", "definition": "定义说明", "examples": ["示例1"]}
+                  ]
                 }
 
                 标题：${unit.title}
@@ -132,8 +137,8 @@ class AiRepository(private val configRepository: AiConfigRepository) {
         return AiAnalysisResult(
             summary = root.stringValue("summary"),
             explanation = root.stringValue("explanation"),
-            keyPoints = root.stringList("key_points"),
-            concepts = root.stringList("concepts"),
+            keyPoints = root.keyPointList("key_points"),
+            concepts = root.conceptList("concepts"),
         )
     }
 
@@ -155,6 +160,30 @@ class AiRepository(private val configRepository: AiConfigRepository) {
     private fun JsonObject.stringList(name: String): List<String> {
         return this[name]?.jsonArray?.mapNotNull { item -> item.jsonPrimitive.content.trim().takeIf { it.isNotEmpty() } }.orEmpty()
     }
+
+    private fun JsonObject.keyPointList(name: String): List<KeyPoint> {
+        return this[name]?.jsonArray?.mapNotNull { element ->
+            val obj = element.jsonObject
+            val title = obj.stringValue("title")
+            if (title.isBlank()) null else KeyPoint(
+                title = title,
+                explanation = obj.stringValue("explanation").takeIf { it.isNotBlank() },
+                examples = obj.stringList("examples"),
+            )
+        } ?: emptyList()
+    }
+
+    private fun JsonObject.conceptList(name: String): List<Concept> {
+        return this[name]?.jsonArray?.mapNotNull { element ->
+            val obj = element.jsonObject
+            val name = obj.stringValue("name")
+            if (name.isBlank()) null else Concept(
+                name = name,
+                definition = obj.stringValue("definition").takeIf { it.isNotBlank() },
+                examples = obj.stringList("examples"),
+            )
+        } ?: emptyList()
+    }
 }
 
 @Serializable
@@ -174,6 +203,18 @@ private data class ChatMessage(
 data class AiAnalysisResult(
     val summary: String,
     val explanation: String,
-    @SerialName("key_points") val keyPoints: List<String>,
-    val concepts: List<String>,
+    @SerialName("key_points") val keyPoints: List<KeyPoint>,
+    val concepts: List<Concept>,
+)
+
+data class KeyPoint(
+    val title: String,
+    val explanation: String? = null,
+    val examples: List<String> = emptyList(),
+)
+
+data class Concept(
+    val name: String,
+    val definition: String? = null,
+    val examples: List<String> = emptyList(),
 )

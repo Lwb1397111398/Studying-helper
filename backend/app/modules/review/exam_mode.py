@@ -2,7 +2,7 @@
 
 import random
 from typing import List, Dict, Optional
-from datetime import datetime
+from datetime import datetime, timezone
 from uuid import uuid4
 
 from app.modules.review.schemas import (
@@ -140,10 +140,10 @@ def evaluate_exam(
     for question in session.questions:
         user_answer = answers.get(question.id, "")
         question.user_answer = user_answer
-        question.answered_at = datetime.now()
+        question.answered_at = datetime.now(timezone.utc)
 
         # 判断正确性
-        is_correct = check_answer(question.correct_answer, user_answer)
+        is_correct = check_answer(question.correct_answer, user_answer, question.question_type)
         question.is_correct = is_correct
 
         if is_correct:

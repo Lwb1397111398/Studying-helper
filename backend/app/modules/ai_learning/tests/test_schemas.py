@@ -1,7 +1,7 @@
 """LearnedUnit schemas 测试"""
 
 import pytest
-from app.modules.ai_learning.schemas import LearnedUnit, SelfAssessment
+from app.modules.ai_learning.schemas import LearnedUnit, KeyPoint, SelfAssessment
 
 
 def test_learned_unit_self_assessment_optional():
@@ -10,7 +10,7 @@ def test_learned_unit_self_assessment_optional():
         unit_id="u1",
         book_id="b1",
         summary="摘要",
-        key_points=["要点1"],
+        key_points=[KeyPoint(title="要点1")],
         concepts=[],
         difficulty_level=3,
         importance_score=0.5,
@@ -25,7 +25,7 @@ def test_learned_unit_with_calibration_fields():
         unit_id="u1",
         book_id="b1",
         summary="摘要",
-        key_points=["要点1"],
+        key_points=[KeyPoint(title="要点1")],
         concepts=[],
         difficulty_level=3,
         importance_score=0.5,
@@ -43,7 +43,7 @@ def test_learned_unit_calibration_defaults():
         unit_id="u1",
         book_id="b1",
         summary="摘要",
-        key_points=["要点1"],
+        key_points=[KeyPoint(title="要点1")],
         concepts=[],
         difficulty_level=3,
         importance_score=0.5,

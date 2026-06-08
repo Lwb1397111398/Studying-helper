@@ -8,7 +8,6 @@ from app.common.llm_client import OpenAIClient
 from app.modules.user_storage.services import (
     UserService, BookService, LearningRecordService, CacheService, FileStorage,
 )
-from app.modules.user_storage.auth import get_current_user_id
 
 # 模块级 LLM 客户端缓存 {module_name: OpenAIClient}
 _module_clients: dict[str, OpenAIClient] = {}
@@ -37,6 +36,43 @@ async def get_llm_client(module: str = "default") -> OpenAIClient:
         return client
 
 
+async def get_default_llm_client() -> OpenAIClient:
+    """获取默认 LLM 客户端。"""
+    return await get_llm_client("default")
+
+
+async def get_teaching_llm_client() -> OpenAIClient:
+    """获取教学模块的 LLM 客户端。"""
+    return await get_llm_client("teaching")
+
+
+async def get_ai_analysis_llm_client() -> OpenAIClient:
+    """获取 AI 分析模块的 LLM 客户端。"""
+    return await get_llm_client("ai_analysis")
+
+
+async def get_parser_llm_client() -> OpenAIClient:
+    """获取文档解析模块的 LLM 客户端。"""
+    return await get_llm_client("parser")
+
+
+async def clear_llm_client_cache(module: str | None = None) -> None:
+    """清除 LLM 客户端缓存，下次请求时用新配置重建。
+
+    Args:
+        module: 指定模块名，None 表示清除所有
+    """
+    async with _llm_lock:
+        if module:
+            client = _module_clients.pop(module, None)
+            if client:
+                await client.close()
+        else:
+            for client in _module_clients.values():
+                await client.close()
+            _module_clients.clear()
+
+
 async def get_user_service(db: AsyncSession = Depends(get_db)) -> UserService:
     return UserService(db)
 
@@ -57,16 +93,6 @@ async def get_file_storage() -> FileStorage:
     return FileStorage(settings.FILE_STORAGE_DIR)
 
 
-async def get_current_user(
-    user_id: str = Depends(get_current_user_id),
-    db: AsyncSession = Depends(get_db),
-) -> str:
-    """
-    验证 user_id 对应的用户存在，返回 user_id。
-    anonymous 直接放行（向后兼容）。
-    """
-    if user_id == "anonymous":
-        return user_id
-    from app.modules.user_storage.services.user_service import UserService
-    await UserService(db).get_user(user_id)
-    return user_id
+async def get_current_user() -> str:
+    """单机模式下固定返回 anonymous"""
+    return "anonymous"

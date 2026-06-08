@@ -3,8 +3,9 @@
 import pytest
 from pathlib import Path
 
+from app.modules.ai_learning.tests.mock_llm import MockLLMClient
 from app.modules.document_parser.service import DocumentParserService
-from app.modules.document_parser.parsers import TXTParser
+from app.modules.document_parser.parsers import TXTParser, PDFParser, EPUBParser
 from app.common.errors import ServiceError, ErrorCode
 
 
@@ -13,7 +14,7 @@ class TestDocumentParserService:
 
     def _create_service(self):
         """创建服务实例"""
-        parsers = [TXTParser()]
+        parsers = [TXTParser(), PDFParser(), EPUBParser()]
         return DocumentParserService(
             parsers=parsers,
             storage_dir="/tmp/test_storage"
@@ -83,6 +84,23 @@ class TestDocumentParserService:
 
         assert exc_info.value.code == ErrorCode.VALIDATION_ERROR
         assert "文件内容为空" in exc_info.value.message
+
+    def test_txt_parser_uses_service_llm_fallback(self, tmp_path):
+        """规则识别不足时应使用服务注入的 LLM fallback 识别目录"""
+        file_path = tmp_path / "test.txt"
+        file_path.write_text("没有明显章节格式的正文\n只是普通段落\n更多普通内容", encoding='utf-8')
+        llm_client = MockLLMClient()
+        service = DocumentParserService(
+            parsers=[TXTParser()],
+            storage_dir="/tmp/test_storage",
+            llm_client=llm_client,
+        )
+
+        result = service.parse_and_store(str(file_path), "test_user")
+
+        assert llm_client.call_count == 1
+        assert len(result.toc) >= 3
+        assert result.toc[0].title == "第一章 测试章"
 
     def test_get_supported_formats(self):
         """返回支持的格式列表"""

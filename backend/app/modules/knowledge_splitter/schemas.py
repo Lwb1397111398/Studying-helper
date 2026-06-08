@@ -32,7 +32,7 @@ class KnowledgeUnit(BaseModel):
 
 
 class Chapter(BaseModel):
-    """章节"""
+    """章节 — 支持多级层级（编>章>节）"""
     id: str = Field(default_factory=lambda: str(uuid4()))
     book_id: str
     title: str
@@ -41,6 +41,7 @@ class Chapter(BaseModel):
     level: int = 0
     order_index: int
     summary: Optional[str] = None
+    text: Optional[str] = None  # 叶子节点的文本内容
 
     def __repr__(self) -> str:
         return (

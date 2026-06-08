@@ -5,6 +5,7 @@ export type TeachingPhase =
   | 'activate'
   | 'intro'
   | 'core'
+  | 'feynman'
   | 'check'
   | 'reflect'
   | 'connect';
@@ -25,6 +26,7 @@ export interface TeachingStrategy {
   cognitive_level: CognitiveLevel;
   scaffold_level: string;
   feedback_style: string;
+  phases: TeachingPhase[];
 }
 
 /** 用户教学画像 */
@@ -44,6 +46,23 @@ export interface TeachingMessage {
   phase: TeachingPhase;
   content: string;
   content_type: string;
+  next_phase?: TeachingPhase;  // 下一个待进行的阶段
+  requires_answer?: boolean;   // 是否需要学生回答
+  assessment?: {               // AI 评估结果
+    score: number;
+    mastery_level: string;
+    feedback: string;
+    should_advance: boolean;
+    suggestion: string;
+    // 费曼评估特有字段
+    completeness?: number;
+    accuracy?: number;
+    depth?: number;
+    overall_score?: number;
+    covered_points?: string[];
+    missed_points?: string[];
+    inaccurate_points?: string[];
+  };
   created_at: string;
 }
 
@@ -66,15 +85,33 @@ export interface Annotation {
   annotation_type: string;
   content?: string;
   created_at: string;
+  cornell_cues?: string[];
+  cornell_summary?: string;
+}
+
+/** 康奈尔笔记 */
+export interface CornellNote {
+  annotation_id: string;
+  knowledge_unit_id: string;
+  notes: string;
+  cues: string[];
+  summary?: string;
+  ai_generated: boolean;
 }
 
 /** 测试题目 */
 export interface TestQuestion {
   question: string;
-  question_type: 'choice' | 'fill_blank' | 'short_answer';
+  question_type: 'choice' | 'fill_blank' | 'short_answer' | 'matching' | 'ordering' | 'true_false';
   options?: string[];
   correct_answer: string;
   explanation: string;
+  // 连线题: 概念与定义配对
+  pairs?: { left: string; right: string }[];
+  // 排序题: 正确顺序
+  sequence?: string[];
+  // 判断题: 陈述内容
+  statement?: string;
 }
 
 /** 测试结果 */
@@ -111,6 +148,7 @@ export interface SessionSummary {
   questions_asked: number;
   test_score: number | null;
   annotations_created: number;
+  ai_summary?: string;
 }
 
 /** 阶段显示配置 */
@@ -118,6 +156,7 @@ export const PHASE_CONFIG: Record<TeachingPhase, { label: string; icon: string; 
   activate: { label: '激活旧知', icon: '💡', color: 'amber' },
   intro:    { label: '引入',     icon: '📖', color: 'blue' },
   core:     { label: '核心讲解', icon: '🎯', color: 'purple' },
+  feynman:  { label: '费曼解释', icon: '🧠', color: 'rose' },
   check:    { label: '检验理解', icon: '✅', color: 'green' },
   reflect:  { label: '反思',     icon: '🤔', color: 'orange' },
   connect:  { label: '串联',     icon: '🔗', color: 'indigo' },

@@ -15,6 +15,7 @@ from app.modules.knowledge_graph.schemas import (
     VisNode, VisEdge,
 )
 from app.modules.knowledge_graph.graph_builder import GraphBuilder
+from app.modules.knowledge_graph.relation_detector import RelationDetector
 
 
 class KnowledgeGraphService:
@@ -203,10 +204,16 @@ class KnowledgeGraphService:
         if source_id == target_id:
             return []
 
+        # 有向边（depends_on, part_of）只沿正向遍历，无向边双向遍历
+        _DIRECTED_TYPES = {"depends_on", "part_of"}
         adj: Dict[str, List[KGEdge]] = {}
         for edge in graph.edges:
-            adj.setdefault(edge.source_id, []).append(edge)
-            adj.setdefault(edge.target_id, []).append(edge)
+            if edge.relation_type in _DIRECTED_TYPES:
+                # depends_on: source depends on target → 只从 source 走到 target
+                adj.setdefault(edge.source_id, []).append(edge)
+            else:
+                adj.setdefault(edge.source_id, []).append(edge)
+                adj.setdefault(edge.target_id, []).append(edge)
 
         visited = {source_id}
         queue = deque([(source_id, [])])
@@ -214,7 +221,11 @@ class KnowledgeGraphService:
         while queue:
             current_id, path = queue.popleft()
             for edge in adj.get(current_id, []):
-                neighbor_id = edge.target_id if edge.source_id == current_id else edge.source_id
+                # 有向边只正向：source→target；无向边双向
+                if edge.relation_type in _DIRECTED_TYPES:
+                    neighbor_id = edge.target_id
+                else:
+                    neighbor_id = edge.target_id if edge.source_id == current_id else edge.source_id
                 if neighbor_id in visited:
                     continue
                 new_path = path + [edge]
@@ -549,15 +560,21 @@ class KnowledgeGraphService:
         return manual_edges
 
     async def get_topological_order(self, book_id: str) -> List[str]:
-        """返回知识单元的拓扑排序（前置在前）。基于 prerequisite 边 BFS。"""
+        """返回知识单元的拓扑排序（前置在前）。基于 depends_on 边 BFS。
+
+        depends_on 语义：source depends on target（source 依赖 target），
+        即 target 是 source 的前置，target 应排在 source 前面。
+        """
         graph = await self.get_graph(book_id)
         unit_ids = {n.id for n in graph.nodes if n.node_type == "unit"}
         in_degree = {uid: 0 for uid in unit_ids}
         adj = {uid: [] for uid in unit_ids}
         for edge in graph.edges:
-            if edge.relation_type == "prerequisite" and edge.source_id in unit_ids and edge.target_id in unit_ids:
-                adj[edge.source_id].append(edge.target_id)
-                in_degree[edge.target_id] += 1
+            # depends_on: source depends on target → target 是前置
+            # adj[target].append(source): target 完成后 source 入度减 1
+            if edge.relation_type == "depends_on" and edge.source_id in unit_ids and edge.target_id in unit_ids:
+                adj[edge.target_id].append(edge.source_id)
+                in_degree[edge.source_id] += 1
         queue = [uid for uid, deg in in_degree.items() if deg == 0]
         order = []
         while queue:
@@ -571,6 +588,35 @@ class KnowledgeGraphService:
             if uid not in order:
                 order.append(uid)
         return order
+
+    async def get_topological_layers(self, book_id: str) -> List[List[str]]:
+        """返回拓扑分层：同一层内的单元无依赖关系，可并行处理。"""
+        graph = await self.get_graph(book_id)
+        unit_ids = {n.id for n in graph.nodes if n.node_type == "unit"}
+        in_degree = {uid: 0 for uid in unit_ids}
+        adj: dict[str, list[str]] = {uid: [] for uid in unit_ids}
+        for edge in graph.edges:
+            # depends_on: source depends on target → target 是前置
+            if edge.relation_type == "depends_on" and edge.source_id in unit_ids and edge.target_id in unit_ids:
+                adj[edge.target_id].append(edge.source_id)
+                in_degree[edge.source_id] += 1
+        queue = [uid for uid, deg in in_degree.items() if deg == 0]
+        layers: list[list[str]] = []
+        while queue:
+            layers.append(list(queue))
+            next_queue = []
+            for node in queue:
+                for neighbor in adj[node]:
+                    in_degree[neighbor] -= 1
+                    if in_degree[neighbor] == 0:
+                        next_queue.append(neighbor)
+            queue = next_queue
+        # 未被拓扑排序覆盖的节点（存在环）放到最后一层
+        ordered = {uid for layer in layers for uid in layer}
+        remaining = [uid for uid in unit_ids if uid not in ordered]
+        if remaining:
+            layers.append(remaining)
+        return layers
 
 
 # ---- 辅助函数 ----

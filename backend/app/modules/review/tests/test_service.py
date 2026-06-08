@@ -2,7 +2,7 @@
 
 import json
 import pytest
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from unittest.mock import AsyncMock, MagicMock, patch
 from app.modules.review.service import ReviewService
 from app.modules.review.schemas import (
@@ -17,11 +17,14 @@ def _make_session_row(session, book_id="book-1"):
     row = MagicMock()
     row.book_id = book_id
     row.user_id = "user-1"
+    row.review_type = session.review_type
+    row.started_at = session.started_at
     row.questions_json = json.dumps(
         [{"id": q.id, "unit_id": q.unit_id, "question": q.question,
           "question_type": q.question_type, "options": q.options,
           "correct_answer": q.correct_answer, "user_answer": q.user_answer,
-          "is_correct": q.is_correct}
+          "is_correct": q.is_correct, "pairs": q.pairs,
+          "sequence": q.sequence, "statement": q.statement}
          for q in session.questions],
         ensure_ascii=False,
     )
@@ -103,7 +106,7 @@ def sample_units():
 
 @pytest.fixture
 def sample_mastery():
-    now = datetime.now()
+    now = datetime.now(timezone.utc)
     return [
         MasteryRecord(
             id="mr-1", user_id="user-1", knowledge_unit_id="unit-1",
@@ -133,7 +136,7 @@ class TestGetDueReviews:
 
     def test_empty_when_none_due(self, service):
         """无到期记录时返回空列表"""
-        now = datetime.now()
+        now = datetime.now(timezone.utc)
         records = [
             MasteryRecord(
                 id="mr-1", user_id="user-1", knowledge_unit_id="unit-1",
@@ -147,7 +150,7 @@ class TestGetDueReviews:
 
     def test_sorted_by_due_time(self, service):
         """按到期时间排序"""
-        now = datetime.now()
+        now = datetime.now(timezone.utc)
         records = [
             MasteryRecord(
                 id="mr-1", user_id="user-1", knowledge_unit_id="unit-1",
@@ -167,7 +170,7 @@ class TestGetDueReviews:
 
     def test_filters_by_book_id(self, service):
         """按 book_id 过滤"""
-        now = datetime.now()
+        now = datetime.now(timezone.utc)
         records = [
             MasteryRecord(
                 id="mr-1", user_id="user-1", knowledge_unit_id="unit-1",
@@ -202,7 +205,10 @@ class TestStartReview:
     async def test_multiple_units(self, service, sample_units):
         """多单元复习"""
         session = await service.start_review("user-1", "book-1", ["unit-1", "unit-2"], sample_units)
-        assert len(session.questions) == 2
+        # 每单元生成多道不同题型
+        unit_ids = {q.unit_id for q in session.questions}
+        assert "unit-1" in unit_ids
+        assert "unit-2" in unit_ids
 
     @pytest.mark.asyncio
     async def test_empty_units_error(self, service):
@@ -217,7 +223,9 @@ class TestStartReview:
         session = await service.start_review(
             "user-1", "book-1", ["unit-1", "nonexistent"], sample_units
         )
-        assert len(session.questions) == 1
+        # 只有 unit-1 生成了题目，nonexistent 被跳过
+        unit_ids = {q.unit_id for q in session.questions}
+        assert unit_ids == {"unit-1"}
 
 
 class TestSubmitReviewAnswer:
@@ -291,7 +299,7 @@ class TestAssessMastery:
         ]
         result = service.assess_mastery("user-1", "unit-1", history)
         assert 0.0 <= result.score <= 1.0
-        assert result.level in ['beginner', 'familiar', 'proficient', 'mastered']
+        assert result.level in ['beginner', 'learning', 'familiar', 'proficient', 'mastered']
 
     def test_without_history(self, service):
         """无复习历史的评估"""

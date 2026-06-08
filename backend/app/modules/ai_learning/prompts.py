@@ -1,7 +1,41 @@
 """AI学习提示词模板"""
 
 # 最大内容长度（字符），防止超长输入
-MAX_CONTENT_LENGTH = 3000
+MAX_CONTENT_LENGTH = 8000
+
+# 增量更新聚焦方向
+FOCUS_DIRECTIONS = {
+    "examples": {
+        "label": "补充例子",
+        "instruction": "为以下知识补充具体示例，特别是实际应用中的例子",
+        "fields": ["concepts"],
+    },
+    "explanations": {
+        "label": "深入解释",
+        "instruction": "对以下知识给出更深入、更易懂的解释，补充原理细节",
+        "fields": ["explanation"],
+    },
+    "connections": {
+        "label": "关联拓展",
+        "instruction": "补充以下知识与其他概念之间的关联和区别",
+        "fields": ["concepts"],
+    },
+    "applications": {
+        "label": "实践应用",
+        "instruction": "补充这个知识在实际工作和生活中的应用场景和案例",
+        "fields": ["explanation"],
+    },
+    "mistakes": {
+        "label": "易错点",
+        "instruction": "总结学习这个知识点时常见的错误理解，每条含标题和详细解释",
+        "fields": ["key_points"],
+    },
+    "simplify": {
+        "label": "简化总结",
+        "instruction": "用更简洁通俗的语言重新总结这个知识点的核心要义",
+        "fields": ["summary"],
+    },
+}
 
 # 注入检测模式：用户内容中如果包含这些指令模式，进行清洗
 _INJECTION_PATTERNS = [
@@ -27,43 +61,26 @@ def _sanitize_content(content: str) -> str:
 def build_understand_prompt(content: str, context_info: str) -> str:
     """构建理解 prompt（带注入防护）"""
     safe_content = _sanitize_content(content[:MAX_CONTENT_LENGTH])
-    return f"""你是一位专业的知识分析专家。请仔细阅读以下学习材料，完成以下任务：
+    return f"""分析以下学习材料，返回JSON。
 
-## 学习材料
+## 材料
 {safe_content}
 
 ## 上下文
 {context_info}
 
-## 任务
-1. **摘要**（200-500字）：概括本段内容的核心要义
-2. **核心要点**（3-7条）：提取最重要的知识点，每条一句话
-3. **核心概念**：提取关键概念，每个概念包含：
-   - 名称
-   - 一句话定义
-   - 1-2个示例
-   - 相关概念
-4. **难度评估**（1-5分）：
-   - 1=入门级，无需前置知识
-   - 2=基础，需要少量背景
-   - 3=中等，需要一定基础
-   - 4=进阶，需要扎实基础
-   - 5=高级，需要深入理解前置概念
-5. **重要程度**（0-1分）：在整本书中的重要性
-6. **前置知识**：学习本段内容前需要掌握的知识。
-   格式：可以是 unit_id（如果你能推断出对应单元的ID）或概念名称字符串。
-   优先输出 unit_id，无法确定时输出概念名称。
+## 要求
+1. summary: 200-500字核心概括
+2. explanation: 用通俗易懂的语言讲解这个知识点，包括：① 核心思想是什么 ② 为什么重要 ③ 与现实的联系 ④ 举例说明。300-600字。像一位耐心的老师在给学生上课。
+3. key_points: 3-7条结构化要点（每条含 title/explanation/examples）
+4. concepts: 关键概念（含name/definition/examples/related_concepts）
+5. difficulty_level: 1-5分（1=入门 5=高级），无法判断时返回 null
+6. importance_score: 0-1分（在书中的重要性），无法判断时返回 null
+7. prerequisites: 前置知识（优先unit_id，其次概念名）
 
-请以JSON格式返回：
+返回纯JSON：
 ```json
-{{
-  "summary": "...",
-  "key_points": ["...", "..."],
-  "concepts": [{{"name": "...", "definition": "...", "examples": ["..."], "related_concepts": ["..."]}}],
-  "difficulty_level": 3,
-  "importance_score": 0.7,
-  "prerequisites": ["unit_id_1", "概念A"]
-}}
+{{"summary":"...","explanation":"...","key_points":[{{"title":"...","explanation":"...","examples":["..."]}}],"concepts":[{{"name":"...","definition":"...","examples":["..."],"related_concepts":["..."]}}],"difficulty_level":3,"importance_score":0.7,"prerequisites":["unit_id_1","概念A"]}}
 ```"""
 
 
@@ -72,42 +89,58 @@ def build_merge_prompt(
     sub_results: list[dict],
     context_info: str,
 ) -> str:
-    """构建整合 prompt —— 将多个子块的分析结果合并为整体"""
-    # 拼合各子块结果
+    """构建整合 prompt —— 将多个子块的分析结果合并为整体。
+    传入完整的 key_points 和 concepts 数据，避免整合时丢失细节。"""
+    import json as _json
     parts = []
     for i, r in enumerate(sub_results):
-        parts.append(f"## 子块 {i+1}\n摘要: {r.get('summary', '')}\n"
-                      f"核心概念: {', '.join(c.get('name','') for c in r.get('concepts', []))}\n"
-                      f"核心要点: {'; '.join(r.get('key_points', []))}")
+        kp_list = r.get('key_points', [])
+        kp_items = []
+        for kp in kp_list[:7]:
+            if isinstance(kp, dict):
+                kp_items.append(_json.dumps(kp, ensure_ascii=False))
+            else:
+                kp_items.append(_json.dumps({"title": str(kp)}, ensure_ascii=False))
+        kp_text = ", ".join(kp_items)
+
+        concepts_list = r.get('concepts', [])
+        c_items = []
+        for c in concepts_list[:5]:
+            if isinstance(c, dict):
+                c_items.append(_json.dumps(c, ensure_ascii=False))
+            else:
+                c_items.append(_json.dumps({"name": str(c)}, ensure_ascii=False))
+        concepts_text = ", ".join(c_items)
+
+        explanation = r.get('explanation', '')[:400]
+        parts.append(
+            f"[子块{i+1}] 摘要: {r.get('summary', '')[:500]}\n"
+            f"讲解: {explanation}\n"
+            f"要点: [{kp_text}]\n"
+            f"概念: [{concepts_text}]"
+        )
     sub_text = "\n\n".join(parts)
 
-    return f"""你是一位专业的知识分析专家。以下是对「{unit_title}」这个知识单元
-按段落分块后各块的分析结果。请将这些分散的分析整合为一份统一的整体分析。
+    return f"""整合「{unit_title}」的各子块分析结果为统一整体，返回JSON。
 
-## 各子块分析结果
+## 子块结果
 {sub_text}
 
 ## 上下文
 {context_info}
 
-## 整合任务
-1. **综合摘要**（300-600字）：站在整体角度概括本单元核心要义，不是各子块摘要的拼接
-2. **核心要点**（5-10条）：合并去重后的最重要知识点
-3. **核心概念**：合并去重，每个概念包含名称、一句话定义、1-2个示例、相关概念
-4. **难度评估**（1-5分）
-5. **重要程度**（0-1分）
-6. **前置知识**：学习本单元前需要掌握的知识（优先输出 unit_id，其次概念名称）
+## 要求
+1. summary: 300-600字整体概括（非拼接）
+2. explanation: 用通俗易懂的语言讲解这个知识点，包括：① 核心思想是什么 ② 为什么重要 ③ 与现实的联系 ④ 举例说明。300-600字。像一位耐心的老师在给学生上课。
+3. key_points: 5-10条结构化要点（合并去重，每条含 title/explanation/examples）
+4. concepts: 合并去重（含name/definition/examples/related_concepts）
+5. difficulty_level: 1-5分（1=入门 5=高级），无法判断时返回 null
+6. importance_score: 0-1分，无法判断时返回 null
+7. prerequisites: 前置知识（优先unit_id，其次概念名）
 
-请以JSON格式返回：
+返回纯JSON：
 ```json
-{{
-  "summary": "...",
-  "key_points": ["...", "..."],
-  "concepts": [{{"name": "...", "definition": "...", "examples": ["..."], "related_concepts": ["..."]}}],
-  "difficulty_level": 3,
-  "importance_score": 0.7,
-  "prerequisites": ["unit_id_1", "概念A"]
-}}
+{{"summary":"...","explanation":"...","key_points":[{{"title":"...","explanation":"...","examples":["..."]}}],"concepts":[{{"name":"...","definition":"...","examples":["..."],"related_concepts":["..."]}}],"difficulty_level":3,"importance_score":0.7,"prerequisites":[]}}
 ```"""
 
 
@@ -118,21 +151,83 @@ def build_enrich_prompt(
     existing_key_points: list,
     existing_concepts: list,
     instruction: str,
+    focus: str | None = None,
 ) -> str:
-    """构建增量更新 prompt — 在原有分析基础上补充细节，不覆盖"""
-    points_text = "\n".join(f"- {p}" for p in existing_key_points) if existing_key_points else "（无）"
+    """构建增量更新 prompt — 在原有分析基础上补充细节，不覆盖。
+
+    focus 有值时，prompt 只要求返回该方向对应的字段，LLM 输出更聚焦。
+    focus 无值时，返回全部字段（通用补充模式）。
+    """
+    points_text = "\n".join(
+        f"- {p.get('title', p) if isinstance(p, dict) else p}"
+        for p in existing_key_points
+    ) if existing_key_points else "（无）"
     concepts_text = "\n".join(
         f"- {c.get('name', c) if isinstance(c, dict) else c}"
         for c in existing_concepts
     ) if existing_concepts else "（无）"
 
+    safe_content = _sanitize_content(content[:4000])
+
+    # 聚焦模式：只请求特定字段
+    if focus and focus in FOCUS_DIRECTIONS:
+        focus_info = FOCUS_DIRECTIONS[focus]
+        target_fields = focus_info["fields"]
+
+        # 根据目标字段构建具体任务描述
+        field_tasks = {
+            "summary": "用更简洁通俗的语言重新总结这个知识点（200-500字）",
+            "explanation": "用通俗易懂的语言深入讲解这个知识点（300-600字），包括核心思想、为什么重要、实际联系",
+            "key_points": "总结 3-5 条新的结构化要点（每条含标题和详细解释），与已有要点不重复",
+            "concepts": "补充或更新关键概念（含 name/definition/examples/related_concepts）",
+        }
+        task_text = "\n".join(f"- {field_tasks[f]}" for f in target_fields if f in field_tasks)
+
+        # 构建聚焦的 JSON 示例
+        field_examples = {
+            "summary": '"summary": "..."',
+            "explanation": '"explanation": "..."',
+            "key_points": '"key_points": [{"title": "...", "explanation": "...", "examples": ["..."]}]',
+            "concepts": '"concepts": [{"name": "...", "definition": "...", "examples": ["..."], "related_concepts": ["..."]}]',
+        }
+        json_fields = ", ".join(field_examples[f] for f in target_fields if f in field_examples)
+
+        return f"""你是一位专业的知识分析专家。以下是一个知识单元的原文和已有分析结果。
+请根据补充方向，只返回指定的字段内容。
+
+## 知识单元：{title}
+
+## 原文（节选）
+{safe_content}
+
+## 已有摘要
+{existing_summary[:500] or "（无）"}
+
+## 已有核心要点
+{points_text}
+
+## 已有概念
+{concepts_text}
+
+## 补充方向：{focus_info["label"]}
+{instruction}
+
+## 任务
+{task_text}
+
+注意：只返回指定的字段，不要返回其他字段。返回纯JSON：
+```json
+{{ {json_fields} }}
+```"""
+
+    # 通用模式：返回全部字段
     return f"""你是一位专业的知识分析专家。以下是一个知识单元的已有分析结果和原文。
 请根据补充指令，在原有基础上增加细节。
 
 ## 知识单元：{title}
 
 ## 原文（节选）
-{content[:2000]}
+{safe_content}
 
 ## 已有摘要
 {existing_summary[:500] or "（无）"}
@@ -148,14 +243,16 @@ def build_enrich_prompt(
 
 ## 任务
 1. **补充摘要**：在原有摘要基础上补充缺失的细节（300-800字）
-2. **补充要点**：新增 2-5 条原分析遗漏的核心要点
-3. **补充概念**：新增概念或补充已有概念的定义/示例/关联
+2. **补充讲解**：用通俗易懂的语言讲解这个知识点（300-600字），像一位耐心的老师在给学生上课
+3. **补充要点**：新增 2-5 条原分析遗漏的核心要点
+4. **补充概念**：新增概念或补充已有概念的定义/示例/关联
 
 请以JSON格式返回：
 ```json
 {{
   "summary": "...",
-  "key_points": ["...", "..."],
+  "explanation": "...",
+  "key_points": [{{"title": "...", "explanation": "...", "examples": ["..."]}}],
   "concepts": [{{"name": "...", "definition": "...", "examples": ["..."], "related_concepts": ["..."]}}],
   "difficulty_level": 3,
   "importance_score": 0.7,

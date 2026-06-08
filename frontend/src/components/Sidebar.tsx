@@ -1,11 +1,25 @@
-import { NavLink, useNavigate } from 'react-router-dom';
-import { useAppState } from '../contexts/AppContext';
+import { NavLink, useLocation } from 'react-router-dom';
 
 const navItems = [
   { path: '/', label: '首页', icon: HomeIcon },
   { path: '/upload', label: '上传书籍', icon: UploadIcon },
   { path: '/report', label: '学习报告', icon: ReportIcon },
   { path: '/settings', label: '设置', icon: SettingsIcon },
+];
+
+// 书籍相关功能入口
+const bookActions = [
+  { path: '/plan', label: '学习方案', icon: '📋' },
+  { path: '/learn', label: '学习模式', icon: '📚' },
+  { path: '/teach', label: '教学模式', icon: '🎓' },
+  { path: '/review', label: '复习模式', icon: '🔄' },
+  { path: '/exam', label: '考试模式', icon: '📝' },
+];
+
+const bookManageActions = [
+  { path: '/graph', label: '知识图谱', icon: '🕸️' },
+  { path: '/export', label: '导出笔记', icon: '📦' },
+  { path: '/toc', label: '编辑目录', icon: '📝' },
 ];
 
 function HomeIcon({ className }: { className?: string }) {
@@ -42,13 +56,11 @@ function SettingsIcon({ className }: { className?: string }) {
 }
 
 export default function Sidebar() {
-  const navigate = useNavigate();
-  const { isLoggedIn, user, logout } = useAppState();
-
-  const handleLogout = () => {
-    logout();
-    navigate('/login');
-  };
+  const location = useLocation();
+  // 从 URL 中提取 bookId
+  const bookMatch = location.pathname.match(/^\/books\/([^/]+)/);
+  const currentBookId = bookMatch ? bookMatch[1] : null;
+  const isBookRoot = location.pathname.match(/^\/books\/[^/]+$/);
 
   return (
     <aside className="w-60 bg-white/80 backdrop-blur-xl border-r border-gray-100/80 flex flex-col shrink-0">
@@ -68,9 +80,9 @@ export default function Sidebar() {
       </div>
 
       {/* Navigation */}
-      <nav className="flex-1 px-3 py-4">
+      <nav className="flex-1 px-3 py-4 overflow-y-auto">
         <p className="px-3 mb-2 text-[10px] font-semibold text-gray-400 uppercase tracking-wider">菜单</p>
-        <ul className="space-y-1">
+        <ul className="space-y-1 mb-4">
           {navItems.map((item) => (
             <li key={item.path}>
               <NavLink
@@ -94,48 +106,82 @@ export default function Sidebar() {
             </li>
           ))}
         </ul>
+
+        {/* 当前书籍功能入口 */}
+        {currentBookId && (
+          <div className="mt-2">
+            <p className="px-3 mb-2 text-[10px] font-semibold text-gray-400 uppercase tracking-wider">当前书籍</p>
+
+            {/* 返回书籍详情 */}
+            {!isBookRoot && (
+              <NavLink
+                to={`/books/${currentBookId}`}
+                className="flex items-center gap-2 px-3 py-2 rounded-xl text-[13px] font-medium text-gray-500 hover:text-gray-700 hover:bg-gray-50 transition-all mb-1"
+              >
+                <span className="text-sm">📖</span>
+                <span>书籍详情</span>
+              </NavLink>
+            )}
+
+            {/* 学习相关 */}
+            <ul className="space-y-0.5">
+              {bookActions.map((action) => (
+                <li key={action.path}>
+                  <NavLink
+                    to={`/books/${currentBookId}${action.path}`}
+                    className={({ isActive }) =>
+                      `flex items-center gap-2 px-3 py-2 rounded-xl text-[12px] transition-all ${
+                        isActive
+                          ? 'bg-blue-50 text-blue-600 font-medium'
+                          : 'text-gray-500 hover:text-gray-700 hover:bg-gray-50'
+                      }`
+                    }
+                  >
+                    <span className="text-sm">{action.icon}</span>
+                    <span>{action.label}</span>
+                  </NavLink>
+                </li>
+              ))}
+            </ul>
+
+            {/* 分隔线 */}
+            <div className="mx-3 my-2 border-t border-gray-100" />
+
+            {/* 管理相关 */}
+            <ul className="space-y-0.5">
+              {bookManageActions.map((action) => (
+                <li key={action.path}>
+                  <NavLink
+                    to={`/books/${currentBookId}${action.path}`}
+                    className={({ isActive }) =>
+                      `flex items-center gap-2 px-3 py-2 rounded-xl text-[12px] transition-all ${
+                        isActive
+                          ? 'bg-blue-50 text-blue-600 font-medium'
+                          : 'text-gray-500 hover:text-gray-700 hover:bg-gray-50'
+                      }`
+                    }
+                  >
+                    <span className="text-sm">{action.icon}</span>
+                    <span>{action.label}</span>
+                  </NavLink>
+                </li>
+              ))}
+            </ul>
+          </div>
+        )}
       </nav>
 
       {/* 用户信息 */}
       <div className="px-4 py-4 border-t border-gray-100/60">
-        {isLoggedIn && user ? (
-          <div className="flex items-center gap-3 px-2">
-            <NavLink to="/profile" className="flex items-center gap-3 flex-1 min-w-0">
-              <div className="w-8 h-8 rounded-full bg-gradient-to-br from-purple-400 to-pink-400 flex items-center justify-center text-white text-xs font-bold shrink-0">
-                {user.username.charAt(0).toUpperCase()}
-              </div>
-              <div className="flex-1 min-w-0">
-                <p className="text-xs font-medium text-gray-700 truncate">{user.username}</p>
-                <p className="text-[10px] text-gray-400">已登录</p>
-              </div>
-            </NavLink>
-            <button
-              onClick={handleLogout}
-              className="p-1.5 text-gray-400 hover:text-red-500 hover:bg-red-50 rounded-lg transition-colors"
-              title="退出登录"
-            >
-              <svg className="w-4 h-4" viewBox="0 0 20 20" fill="currentColor">
-                <path fillRule="evenodd" d="M3 3a1 1 0 00-1 1v12a1 1 0 102 0V4a1 1 0 00-1-1zm10.293 9.293a1 1 0 001.414 1.414l3-3a1 1 0 000-1.414l-3-3a1 1 0 10-1.414 1.414L14.586 9H7a1 1 0 100 2h7.586l-1.293 1.293z" clipRule="evenodd" />
-              </svg>
-            </button>
+        <NavLink to="/profile" className="flex items-center gap-3 px-2 py-1.5 rounded-xl hover:bg-gray-50 transition-colors">
+          <div className="w-8 h-8 rounded-full bg-gradient-to-br from-purple-400 to-pink-400 flex items-center justify-center text-white text-xs font-bold shrink-0">
+            本
           </div>
-        ) : (
-          <NavLink
-            to="/login"
-            className="flex items-center gap-3 px-2 py-1.5 rounded-xl hover:bg-gray-50 transition-colors"
-          >
-            <div className="w-8 h-8 rounded-full bg-gray-200 flex items-center justify-center text-gray-500 text-xs font-bold">
-              ?
-            </div>
-            <div className="flex-1 min-w-0">
-              <p className="text-xs font-medium text-gray-700">点击登录</p>
-              <p className="text-[10px] text-gray-400">登录后同步学习数据</p>
-            </div>
-            <svg className="w-4 h-4 text-gray-400" viewBox="0 0 20 20" fill="currentColor">
-              <path fillRule="evenodd" d="M7.293 14.707a1 1 0 010-1.414L10.586 10 7.293 6.707a1 1 0 011.414-1.414l4 4a1 1 0 010 1.414l-4 4a1 1 0 01-1.414 0z" clipRule="evenodd" />
-            </svg>
-          </NavLink>
-        )}
+          <div className="flex-1 min-w-0">
+            <p className="text-xs font-medium text-gray-700">本地用户</p>
+            <p className="text-[10px] text-gray-400">单机模式</p>
+          </div>
+        </NavLink>
       </div>
     </aside>
   );

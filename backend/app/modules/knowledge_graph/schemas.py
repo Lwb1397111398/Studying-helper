@@ -10,6 +10,7 @@ class KGNode(BaseModel):
     id: str = Field(default_factory=lambda: str(uuid4()))
     node_type: str              # 'unit' | 'concept' | 'chapter'
     label: str
+    short_label: Optional[str] = None  # 图谱上显示的短标签
     book_id: str
     content_summary: Optional[str] = None
     difficulty_level: Optional[int] = None

@@ -15,9 +15,10 @@ const Export = lazy(() => import('../pages/Export'));
 const KnowledgeGraph = lazy(() => import('../pages/KnowledgeGraph'));
 const LearningReport = lazy(() => import('../pages/LearningReport'));
 const Settings = lazy(() => import('../pages/Settings'));
+const SyncCenter = lazy(() => import('../pages/SyncCenter'));
 const LearningPlan = lazy(() => import('../pages/LearningPlan'));
-const Login = lazy(() => import('../pages/Login'));
 const Profile = lazy(() => import('../pages/Profile'));
+const TocConfirm = lazy(() => import('../pages/TocConfirm'));
 
 const PageLoading = () => (
   <div className="flex items-center justify-center py-20">
@@ -43,8 +44,6 @@ function page(LazyComponent: ComponentType) {
 }
 
 export const router = createBrowserRouter([
-  // 登录页不用 Layout（独立全屏）
-  { path: '/login', element: page(Login) },
   {
     path: '/',
     element: <Layout />,
@@ -54,6 +53,7 @@ export const router = createBrowserRouter([
       { path: 'upload', element: page(BookUpload) },
       { path: 'profile', element: page(Profile) },
       { path: 'books/:bookId', element: page(BookOverview) },
+      { path: 'books/:bookId/toc', element: page(TocConfirm) },
       { path: 'books/:bookId/learn', element: page(LearningSession) },
       { path: 'books/:bookId/teach', element: page(TeachingSession) },
       { path: 'books/:bookId/review', element: page(ReviewSession) },
@@ -62,7 +62,9 @@ export const router = createBrowserRouter([
       { path: 'books/:bookId/plan', element: page(LearningPlan) },
       { path: 'books/:bookId/graph', element: page(KnowledgeGraph) },
       { path: 'report', element: page(LearningReport) },
+      { path: 'sync', element: page(SyncCenter) },
       { path: 'settings', element: page(Settings) },
+      { path: '*', element: page(NotFound) },
     ],
   },
 ]);

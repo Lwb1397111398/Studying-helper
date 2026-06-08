@@ -1,17 +1,39 @@
 """知识图谱路由测试"""
 
 import pytest
+import pytest_asyncio
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
+from sqlalchemy.ext.asyncio import create_async_engine, AsyncSession, async_sessionmaker
 
-from app.modules.knowledge_graph.router import router, kg_service
+from app.db.database import Base, get_db
+from app.modules.knowledge_graph.router import router
+
+
+@pytest_asyncio.fixture
+async def db_session():
+    """创建内存数据库"""
+    engine = create_async_engine("sqlite+aiosqlite:///:memory:", echo=False)
+    async_session = async_sessionmaker(engine, class_=AsyncSession, expire_on_commit=False)
+    async with engine.begin() as conn:
+        await conn.run_sync(Base.metadata.create_all)
+    async with async_session() as session:
+        yield session
+    async with engine.begin() as conn:
+        await conn.run_sync(Base.metadata.drop_all)
+    await engine.dispose()
 
 
 @pytest.fixture
-def client():
-    """创建测试客户端"""
+def client(db_session):
+    """创建测试客户端，覆盖 get_db 依赖"""
     app = FastAPI()
     app.include_router(router)
+
+    async def override_get_db():
+        yield db_session
+
+    app.dependency_overrides[get_db] = override_get_db
     return TestClient(app)
 
 
@@ -64,9 +86,10 @@ class TestGetGraphAPI:
         assert resp.json()["book_id"] == "book-1"
 
     def test_get_nonexistent(self, client):
-        """获取不存在的图谱"""
+        """获取不存在的图谱（自动构建返回空图）"""
         resp = client.get("/api/v1/knowledge-graph/nonexistent")
-        assert resp.status_code == 404
+        assert resp.status_code == 200
+        assert resp.json()["nodes"] == []
 
 
 class TestQueryNeighborsAPI:
@@ -187,11 +210,16 @@ class TestRemoveEdgeAPI:
     def test_basic_remove(self, client, built_graph_payload):
         """基本删除边"""
         client.post("/api/v1/knowledge-graph/book-1/build", json=built_graph_payload)
-        # 先获取图谱找到一个边ID
-        graph_resp = client.get("/api/v1/knowledge-graph/book-1")
-        edges = graph_resp.json()["edges"]
-        assert len(edges) > 0
-        edge_id = edges[0]["id"]
+        # 先添加一个手动边
+        add_resp = client.post(
+            "/api/v1/knowledge-graph/book-1/edges",
+            json={
+                "source_id": "unit-1",
+                "target_id": "unit-2",
+                "relation_type": "related",
+            },
+        )
+        edge_id = add_resp.json()["id"]
 
         resp = client.delete(f"/api/v1/knowledge-graph/book-1/edges/{edge_id}")
         assert resp.status_code == 200

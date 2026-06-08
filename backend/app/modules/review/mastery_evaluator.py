@@ -1,6 +1,6 @@
 """掌握度评估器 - 5维度评估模型"""
 
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from typing import List, Dict, Optional
 
 from app.modules.review.schemas import MasteryAssessment
@@ -15,12 +15,13 @@ DIMENSION_WEIGHTS = {
     'application': 0.15,      # 应用能力
 }
 
-# 掌握度等级阈值
+# 掌握度等级阈值（5级体系）
 LEVEL_THRESHOLDS = [
-    (0.9, 'mastered'),
-    (0.7, 'proficient'),
-    (0.4, 'familiar'),
-    (0.0, 'beginner'),
+    (0.85, 'mastered'),
+    (0.65, 'proficient'),
+    (0.40, 'familiar'),
+    (0.20, 'learning'),
+    (0.00, 'beginner'),
 ]
 
 
@@ -135,17 +136,19 @@ def evaluate_mastery(
     if confused_count > 0:
         weak_points.append(f"有{confused_count}个'不懂'标记")
 
-    # 根据掌握度推荐复习时间
-    if score >= 0.9:
+    # 根据掌握度推荐复习时间（5级体系）
+    if score >= 0.85:
         days = 30
-    elif score >= 0.7:
+    elif score >= 0.65:
         days = 14
-    elif score >= 0.4:
+    elif score >= 0.40:
         days = 7
-    else:
+    elif score >= 0.20:
         days = 3
+    else:
+        days = 1
 
-    recommended_review_at = datetime.now() + timedelta(days=days)
+    recommended_review_at = datetime.now(timezone.utc) + timedelta(days=days)
 
     return MasteryAssessment(
         unit_id=unit_id,

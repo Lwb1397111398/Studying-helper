@@ -1,6 +1,6 @@
 """教学模块测试 fixtures"""
 import pytest
-from app.modules.ai_learning.schemas import LearnedUnit, Concept, SelfAssessment, TestQuestion
+from app.modules.ai_learning.schemas import LearnedUnit, Concept, KeyPoint, SelfAssessment, TestQuestion
 from app.modules.ai_learning.tests.mock_llm import MockLLMClient
 from app.modules.teaching.schemas import UserTeachingProfile
 
@@ -16,7 +16,7 @@ def sample_unit():
         unit_id="unit-1",
         book_id="book-1",
         summary="数组是一种线性表数据结构，它用连续的存储空间存储相同类型的元素。",
-        key_points=["数组是线性表", "连续存储", "相同类型"],
+        key_points=[KeyPoint(title="数组是线性表"), KeyPoint(title="连续存储"), KeyPoint(title="相同类型")],
         concepts=[
             Concept(name="数组", definition="用连续存储空间存储相同类型元素的数据结构",
                    examples=["int arr[10]"], related_concepts=["链表"])
@@ -48,7 +48,7 @@ def sample_unit_hard():
         unit_id="unit-hard",
         book_id="book-1",
         summary="B+树是一种多路平衡查找树，所有叶子节点通过链表相连，支持高效的范围查询。",
-        key_points=["多路平衡", "叶子链表", "范围查询", "磁盘友好"],
+        key_points=[KeyPoint(title="多路平衡"), KeyPoint(title="叶子链表"), KeyPoint(title="范围查询"), KeyPoint(title="磁盘友好")],
         concepts=[
             Concept(name="B+树", definition="多路平衡查找树，数据全在叶子节点，叶子通过链表连接",
                    examples=["数据库索引"], related_concepts=["B树", "红黑树"])
@@ -80,7 +80,7 @@ def sample_unit_procedure():
         unit_id="unit-proc",
         book_id="book-1",
         summary="如何使用二分查找算法在有序数组中查找目标元素。",
-        key_points=["步骤：确定左右边界", "步骤：计算中间位置", "步骤：比较并缩小范围", "步骤：重复直到找到或边界交叉"],
+        key_points=[KeyPoint(title="步骤：确定左右边界"), KeyPoint(title="步骤：计算中间位置"), KeyPoint(title="步骤：比较并缩小范围"), KeyPoint(title="步骤：重复直到找到或边界交叉")],
         concepts=[
             Concept(name="二分查找", definition="在有序数组中通过不断折半缩小搜索范围的算法",
                    examples=["在电话簿中查号码"], related_concepts=["线性查找"])

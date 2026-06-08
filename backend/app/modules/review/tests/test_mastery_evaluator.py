@@ -19,11 +19,11 @@ class TestEvaluateMastery:
             consistency_scores=[0.7, 0.8, 0.6],
         )
         assert 0.0 <= result.score <= 1.0
-        assert result.level in ['beginner', 'familiar', 'proficient', 'mastered']
+        assert result.level in ['beginner', 'learning', 'familiar', 'proficient', 'mastered']
         assert result.unit_id == "unit-1"
 
     def test_mastered_level(self):
-        """高分评估：mastered等级"""
+        """高分评估：mastered等级（5级体系：>= 0.85）"""
         result = evaluate_mastery(
             unit_id="unit-1",
             correct_count=10,
@@ -34,22 +34,38 @@ class TestEvaluateMastery:
             explanation_score=0.95,
             application_score=0.9,
         )
-        assert result.score >= 0.9
+        assert result.score >= 0.85
         assert result.level == 'mastered'
 
-    def test_beginner_level(self):
-        """低分评估：beginner等级"""
+    def test_learning_level(self):
+        """低中分评估：learning等级（5级体系：0.20-0.40）"""
         result = evaluate_mastery(
             unit_id="unit-1",
-            correct_count=1,
+            correct_count=2,
             total_count=10,
-            response_times=[60.0, 55.0, 70.0],
+            response_times=[50.0, 55.0],
             avg_response_time=30.0,
-            consistency_scores=[0.2, 0.1, 0.15],
-            explanation_score=0.1,
-            application_score=0.1,
+            consistency_scores=[0.2, 0.25],
+            explanation_score=0.2,
+            application_score=0.15,
         )
-        assert result.score < 0.4
+        assert 0.20 <= result.score < 0.40
+        assert result.level == 'learning'
+
+    def test_beginner_level(self):
+        """低分评估：beginner等级（5级体系：< 0.20）"""
+        result = evaluate_mastery(
+            unit_id="unit-1",
+            correct_count=0,
+            total_count=10,
+            response_times=[90.0, 85.0, 100.0],
+            avg_response_time=30.0,
+            consistency_scores=[0.05, 0.02, 0.03],
+            explanation_score=0.0,
+            application_score=0.0,
+            confused_count=5,
+        )
+        assert result.score < 0.20
         assert result.level == 'beginner'
 
     def test_proficient_level(self):

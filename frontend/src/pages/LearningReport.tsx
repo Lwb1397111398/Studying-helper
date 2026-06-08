@@ -3,6 +3,7 @@ import Card from '../components/Card';
 import Loading from '../components/Loading';
 import ProgressBar from '../components/ProgressBar';
 import { getLearningReport } from '../api/learning';
+import { getTeachingStats } from '../api/teaching';
 import type { LearningReport as ReportType } from '../types';
 
 const PERIOD_OPTIONS = [
@@ -11,24 +12,55 @@ const PERIOD_OPTIONS = [
   { value: 'year', label: '本年', icon: '📊' },
 ];
 
+interface TeachingStats {
+  total_sessions: number;
+  total_minutes: number;
+  questions_asked: number;
+  avg_test_score: number;
+  units_covered: number;
+}
+
 export default function LearningReport() {
   const [report, setReport] = useState<ReportType | null>(null);
   const [period, setPeriod] = useState('week');
   const [loading, setLoading] = useState(true);
+  const [teachingStats, setTeachingStats] = useState<TeachingStats>({
+    total_sessions: 0,
+    total_minutes: 0,
+    questions_asked: 0,
+    avg_test_score: 0,
+    units_covered: 0,
+  });
 
-  useEffect(() => { loadReport(); }, [period]);
-
-  const loadReport = async () => {
+  useEffect(() => {
+    let cancelled = false;
     setLoading(true);
-    try {
-      const data = await getLearningReport(period);
-      setReport(data);
-    } catch (error) {
-      console.error('加载学习报告失败:', error);
-    } finally {
-      setLoading(false);
-    }
-  };
+
+    const days = period === 'week' ? 7 : (period === 'month' ? 30 : 365);
+
+    Promise.all([
+      getLearningReport(period),
+      getTeachingStats(undefined, days).catch(() => ({
+        total_sessions: 0,
+        total_minutes: 0,
+        questions_asked: 0,
+        avg_test_score: 0,
+        units_covered: 0,
+      })),
+    ])
+      .then(([reportData, stats]) => {
+        if (!cancelled) {
+          setReport(reportData);
+          setTeachingStats(stats);
+        }
+      })
+      .catch((error) => {
+        if (!cancelled) console.error('加载学习报告失败:', error);
+      })
+      .finally(() => { if (!cancelled) setLoading(false); });
+
+    return () => { cancelled = true; };
+  }, [period]);
 
   if (loading) return <Loading />;
 
@@ -84,6 +116,29 @@ export default function LearningReport() {
               </div>
             </Card>
           </div>
+
+          {/* 教学统计 */}
+          <Card className="mb-6">
+            <h3 className="text-lg font-bold text-gray-800 mb-4">📚 教学统计</h3>
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+              <div className="text-center p-4 bg-blue-50 rounded-xl">
+                <p className="text-2xl font-bold text-blue-600">{teachingStats.total_sessions}</p>
+                <p className="text-sm text-gray-500">教学会话</p>
+              </div>
+              <div className="text-center p-4 bg-green-50 rounded-xl">
+                <p className="text-2xl font-bold text-green-600">{teachingStats.total_minutes}</p>
+                <p className="text-sm text-gray-500">学习分钟</p>
+              </div>
+              <div className="text-center p-4 bg-purple-50 rounded-xl">
+                <p className="text-2xl font-bold text-purple-600">{teachingStats.questions_asked}</p>
+                <p className="text-sm text-gray-500">提问次数</p>
+              </div>
+              <div className="text-center p-4 bg-amber-50 rounded-xl">
+                <p className="text-2xl font-bold text-amber-600">{teachingStats.avg_test_score}</p>
+                <p className="text-sm text-gray-500">平均测试分</p>
+              </div>
+            </div>
+          </Card>
 
           {/* 掌握度分布 */}
           {report.mastery_distribution && Object.keys(report.mastery_distribution).length > 0 && (

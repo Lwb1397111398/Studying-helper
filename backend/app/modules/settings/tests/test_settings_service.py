@@ -28,20 +28,22 @@ def test_read_env_ignores_comments_and_blanks(tmp_path, monkeypatch):
     assert result == {"KEY": "val"}
 
 
-def test_write_env_creates_file(tmp_path, monkeypatch):
+@pytest.mark.asyncio
+async def test_write_env_creates_file(tmp_path, monkeypatch):
     """写入应创建文件"""
     env_file = tmp_path / ".env"
     monkeypatch.setattr(
         "app.modules.settings.settings_service.ENV_FILE",
         env_file,
     )
-    write_env({"NEW_KEY": "new_val"})
+    await write_env({"NEW_KEY": "new_val"})
     assert env_file.exists()
     content = env_file.read_text(encoding="utf-8")
     assert 'NEW_KEY="new_val"' in content
 
 
-def test_write_env_merges_with_existing(tmp_path, monkeypatch):
+@pytest.mark.asyncio
+async def test_write_env_merges_with_existing(tmp_path, monkeypatch):
     """写入应合并到现有配置"""
     env_file = tmp_path / ".env"
     env_file.write_text('EXISTING="old"\n', encoding="utf-8")
@@ -49,13 +51,14 @@ def test_write_env_merges_with_existing(tmp_path, monkeypatch):
         "app.modules.settings.settings_service.ENV_FILE",
         env_file,
     )
-    write_env({"NEW_KEY": "new_val"})
+    await write_env({"NEW_KEY": "new_val"})
     result = read_env()
     assert result["EXISTING"] == "old"
     assert result["NEW_KEY"] == "new_val"
 
 
-def test_write_env_skip_none_values(tmp_path, monkeypatch):
+@pytest.mark.asyncio
+async def test_write_env_skip_none_values(tmp_path, monkeypatch):
     """None 值应跳过不写"""
     env_file = tmp_path / ".env"
     env_file.write_text('KEEP="yes"\n', encoding="utf-8")
@@ -63,7 +66,7 @@ def test_write_env_skip_none_values(tmp_path, monkeypatch):
         "app.modules.settings.settings_service.ENV_FILE",
         env_file,
     )
-    write_env({"KEEP": None, "ADD": "new"})
+    await write_env({"KEEP": None, "ADD": "new"})
     result = read_env()
     assert result["KEEP"] == "yes"
     assert result["ADD"] == "new"
@@ -102,7 +105,7 @@ def _override_deps():
 
 
 def test_get_preferences():
-    """GET /api/settings/preferences 应返回用户偏好"""
+    """GET /api/v1/settings/preferences 应返回用户偏好"""
     with patch("app.modules.settings.router.read_env") as mock_read:
         mock_read.return_value = {
             "DAILY_GOAL_MINUTES": "45",
@@ -111,7 +114,7 @@ def test_get_preferences():
             "REMINDER_TIME": "21:00",
         }
         client = TestClient(app)
-        resp = client.get("/api/settings/preferences")
+        resp = client.get("/api/v1/settings/preferences")
         assert resp.status_code == 200
         data = resp.json()
         assert data["daily_goal_minutes"] == 45
@@ -121,9 +124,9 @@ def test_get_preferences():
 
 
 def test_update_preferences():
-    """PUT /api/settings/preferences 应更新用户偏好"""
+    """PUT /api/v1/settings/preferences 应更新用户偏好"""
     with patch("app.modules.settings.router.read_env") as mock_read, \
-         patch("app.modules.settings.router.write_env") as mock_write:
+         patch("app.modules.settings.router.write_env", new_callable=AsyncMock) as mock_write:
         mock_read.return_value = {
             "DAILY_GOAL_MINUTES": "60",
             "DAILY_GOAL_UNITS": "10",
@@ -131,7 +134,7 @@ def test_update_preferences():
             "REMINDER_TIME": "19:00",
         }
         client = TestClient(app)
-        resp = client.put("/api/settings/preferences", json={
+        resp = client.put("/api/v1/settings/preferences", json={
             "daily_goal_minutes": 60,
             "daily_goal_units": 10,
             "review_reminder": False,
@@ -144,14 +147,14 @@ def test_update_preferences():
 def test_update_preferences_validation():
     """无效输入应返回 422"""
     client = TestClient(app)
-    resp = client.put("/api/settings/preferences", json={
+    resp = client.put("/api/v1/settings/preferences", json={
         "daily_goal_minutes": -1,
     })
     assert resp.status_code == 422
 
 
 def test_get_ai_config():
-    """GET /api/settings/ai-config 应返回 AI 配置（只读）"""
+    """GET /api/v1/settings/ai-config 应返回 AI 配置（只读）"""
     with patch("app.config.settings") as mock_settings:
         mock_settings.get_llm_config.return_value = {
             "api_key": "sk-test",
@@ -165,7 +168,7 @@ def test_get_ai_config():
         mock_settings.LLM_PARSER_API_KEY = ""
 
         client = TestClient(app)
-        resp = client.get("/api/settings/ai-config")
+        resp = client.get("/api/v1/settings/ai-config")
         assert resp.status_code == 200
         data = resp.json()
         assert "default_model" in data

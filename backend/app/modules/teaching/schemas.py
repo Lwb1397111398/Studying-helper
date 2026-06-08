@@ -11,6 +11,8 @@ class TeachingPhase(str, Enum):
     ACTIVATE = "activate"
     INTRO = "intro"
     CORE = "core"
+    FEYNMAN = "feynman"      # 费曼学习法：用自己的话解释
+    RETRIEVAL = "retrieval"  # 检索练习：回忆前置单元
     CHECK = "check"
     REFLECT = "reflect"
     CONNECT = "connect"
@@ -40,6 +42,10 @@ class TeachingStrategy(BaseModel):
     cognitive_level: str = "understand"  # CognitiveLevel
     scaffold_level: str = "full"  # 'full' | 'partial' | 'minimal'
     feedback_style: str = "immediate"  # 'immediate' | 'delayed' | 'guided'
+    phases: List[TeachingPhase] = Field(default_factory=lambda: [
+        TeachingPhase.ACTIVATE, TeachingPhase.INTRO, TeachingPhase.CORE,
+        TeachingPhase.FEYNMAN, TeachingPhase.CHECK, TeachingPhase.REFLECT, TeachingPhase.CONNECT,
+    ])
 
 
 class UserTeachingProfile(BaseModel):
@@ -59,6 +65,9 @@ class TeachingMessage(BaseModel):
     phase: TeachingPhase
     content: str
     content_type: str = "text"  # 'text' | 'diagram' | 'code' | 'formula'
+    next_phase: Optional[TeachingPhase] = None  # 下一个待进行的阶段
+    requires_answer: bool = False  # 是否需要学生回答（CHECK/REFLECT 阶段）
+    assessment: Optional[dict] = None  # AI 评估结果（学生回答后填充）
     created_at: datetime = Field(default_factory=datetime.now)
 
 
@@ -74,13 +83,27 @@ class UserQuestion(BaseModel):
 
 
 class Annotation(BaseModel):
-    """笔记/标记"""
+    """笔记/标记（支持康奈尔笔记）"""
     id: str = Field(default_factory=lambda: str(uuid4()))
     user_id: str
     knowledge_unit_id: str
-    annotation_type: str  # 'important' | 'confusing' | 'note' | 'todo'
+    annotation_type: str  # 'concept' | 'question' | ... | 'cornell_note'
     content: Optional[str] = None
+    related_concepts: List[str] = []
+    example: Optional[str] = None
+    cornell_cues: List[str] = []          # 线索栏
+    cornell_summary: Optional[str] = None # 总结栏
     created_at: datetime = Field(default_factory=datetime.now)
+
+
+class CornellNote(BaseModel):
+    """康奈尔笔记响应"""
+    annotation_id: str
+    knowledge_unit_id: str
+    notes: str
+    cues: List[str] = []
+    summary: Optional[str] = None
+    ai_generated: bool = False
 
 
 class SessionTest(BaseModel):
@@ -109,6 +132,20 @@ class TeachingSession(BaseModel):
     strategy: TeachingStrategy = Field(default_factory=TeachingStrategy)
 
 
+class FeynmanAssessment(BaseModel):
+    """费曼解释评估结果"""
+    completeness: float = 0.5    # 覆盖率 0-1
+    accuracy: float = 0.5        # 准确性 0-1
+    depth: float = 0.5           # 深度 0-1
+    overall_score: float = 50    # 综合分 0-100
+    covered_points: List[str] = []
+    missed_points: List[str] = []
+    inaccurate_points: List[str] = []
+    feedback: str = ""
+    suggestion: str = ""
+    should_advance: bool = True
+
+
 class SessionSummary(BaseModel):
     """会话总结"""
     session_id: str
@@ -117,3 +154,4 @@ class SessionSummary(BaseModel):
     questions_asked: int
     test_score: Optional[float]
     annotations_created: int
+    ai_summary: Optional[str] = None  # AI 生成的学习总结

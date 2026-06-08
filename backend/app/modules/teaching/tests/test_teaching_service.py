@@ -40,10 +40,30 @@ def _make_db_session_model(session_id, unit_ids, current_phase="activate", curre
 
 
 def _setup_mock_db_for_session(mock_db, session_model):
-    """配置 mock_db.execute 返回 session_model"""
-    mock_result = MagicMock()
-    mock_result.scalar_one_or_none = MagicMock(return_value=session_model)
-    mock_db.execute = AsyncMock(return_value=mock_result)
+    """配置 mock_db.execute 根据查询类型返回不同结果，并捕获 start_session 写入的策略"""
+    session_model.current_unit_index = 0
+    session_model.current_phase = "activate"
+
+    # 捕获 db.add 的参数，更新 session_model 中的关键字段
+    original_add = mock_db.add
+    def capturing_add(model_instance):
+        if hasattr(model_instance, 'strategy_json'):
+            session_model.strategy_json = model_instance.strategy_json
+        if hasattr(model_instance, 'current_phase'):
+            session_model.current_phase = model_instance.current_phase
+        if hasattr(model_instance, 'unit_ids'):
+            session_model.unit_ids = model_instance.unit_ids
+    mock_db.add = MagicMock(side_effect=capturing_add)
+
+    async def smart_execute(query, *args, **kwargs):
+        query_str = str(query)
+        mock_result = MagicMock()
+        if "teaching_sessions" in query_str:
+            mock_result.scalar_one_or_none = MagicMock(return_value=session_model)
+        else:
+            mock_result.scalar_one_or_none = MagicMock(return_value=None)
+        return mock_result
+    mock_db.execute = AsyncMock(side_effect=smart_execute)
 
 
 # ---- 策略选择测试 ----
@@ -51,10 +71,11 @@ def _setup_mock_db_for_session(mock_db, session_model):
 class TestStrategySelection:
 
     def _make_unit(self, summary, key_points, concepts, difficulty, importance=0.5, prerequisites=None):
-        from app.modules.ai_learning.schemas import LearnedUnit, Concept as LConcept, SelfAssessment, TestQuestion
+        from app.modules.ai_learning.schemas import LearnedUnit, Concept as LConcept, KeyPoint, SelfAssessment, TestQuestion
+        kp_objects = [KeyPoint(title=kp) if isinstance(kp, str) else kp for kp in key_points]
         return LearnedUnit(
             unit_id="u1", book_id="b1", summary=summary,
-            key_points=key_points, concepts=concepts,
+            key_points=kp_objects, concepts=concepts,
             difficulty_level=difficulty, importance_score=importance,
             prerequisites=prerequisites or [],
             self_assessment=SelfAssessment(
@@ -197,7 +218,7 @@ class TestTeachingService:
 
     @pytest.mark.asyncio
     async def test_teaching_phases_sequence(self, mock_llm, sample_units_basic):
-        """六阶段顺序：ACTIVATE → INTRO → CORE → CHECK → REFLECT → CONNECT"""
+        """中等难度阶段顺序：ACTIVATE → CORE → RETRIEVAL → CHECK → REFLECT → CONNECT"""
         mock_db = _make_mock_db_session()
         session_model = _make_db_session_model("session-1", ["unit-1"])
         _setup_mock_db_for_session(mock_db, session_model)
@@ -222,19 +243,16 @@ class TestTeachingService:
         )
         session_model.id = session.id
 
+        # select_phases 对 difficulty=2, mastery=0.5 返回 6 阶段（含 RETRIEVAL，无 INTRO）
+        expected_phases = session.strategy.phases
         phases = []
-        for _ in range(6):
+        for _ in range(len(expected_phases)):
             msg = await service.get_next_message(session.id, sample_units_basic)
             phases.append(msg.phase)
+            await service.continue_to_next_phase(session.id)
 
-        assert phases == [
-            TeachingPhase.ACTIVATE,
-            TeachingPhase.INTRO,
-            TeachingPhase.CORE,
-            TeachingPhase.CHECK,
-            TeachingPhase.REFLECT,
-            TeachingPhase.CONNECT,
-        ]
+        assert phases == expected_phases
+        assert TeachingPhase.RETRIEVAL in phases
 
     @pytest.mark.asyncio
     async def test_activate_phase_content(self, mock_llm, sample_units_basic):
@@ -284,9 +302,11 @@ class TestTeachingService:
         )
         session_model.id = session.id
 
-        # 推进到 REFLECT 阶段（跳过 ACTIVATE, INTRO, CORE, CHECK）
-        for _ in range(4):
+        # 推进到 REFLECT 阶段
+        reflect_idx = session.strategy.phases.index(TeachingPhase.REFLECT)
+        for _ in range(reflect_idx):
             await service.get_next_message(session.id, sample_units_basic)
+            await service.continue_to_next_phase(session.id)
 
         msg = await service.get_next_message(session.id, sample_units_basic)
         assert msg.phase == TeachingPhase.REFLECT
@@ -493,11 +513,11 @@ class TestQuestionGeneration:
 
     @pytest.mark.asyncio
     async def test_principle_generates_explanation(self, mock_llm):
-        from app.modules.ai_learning.schemas import LearnedUnit, Concept as LConcept, SelfAssessment
+        from app.modules.ai_learning.schemas import LearnedUnit, Concept as LConcept, KeyPoint, SelfAssessment
 
         unit = LearnedUnit(
             unit_id="u1", book_id="b1", summary="B+树的原理",
-            key_points=["多路平衡机制", "为什么叶子链表能加速范围查询"],
+            key_points=[KeyPoint(title="多路平衡机制"), KeyPoint(title="为什么叶子链表能加速范围查询")],
             concepts=[LConcept(name="B+树原理", definition="多路平衡查找树")],
             difficulty_level=4, importance_score=0.9, prerequisites=[],
             self_assessment=SelfAssessment(
@@ -513,11 +533,11 @@ class TestQuestionGeneration:
 
     @pytest.mark.asyncio
     async def test_fact_generates_fill_blank(self, mock_llm):
-        from app.modules.ai_learning.schemas import LearnedUnit, Concept as LConcept, SelfAssessment
+        from app.modules.ai_learning.schemas import LearnedUnit, Concept as LConcept, KeyPoint, SelfAssessment
 
         unit = LearnedUnit(
             unit_id="u1", book_id="b1", summary="Python 之父是 Guido van Rossum",
-            key_points=["Guido van Rossum 于1991年发布 Python"],
+            key_points=[KeyPoint(title="Guido van Rossum 于1991年发布 Python")],
             concepts=[LConcept(name="Python", definition="一种编程语言")],
             difficulty_level=1, importance_score=0.3, prerequisites=[],
             self_assessment=SelfAssessment(

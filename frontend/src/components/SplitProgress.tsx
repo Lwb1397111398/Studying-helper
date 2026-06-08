@@ -22,7 +22,7 @@ const STAGE_CONFIG: Record<string, { icon: string; label: string; color: string 
 const STAGES_ORDER = ['pending', 'reading', 'parsing', 'splitting_chapters', 'splitting_units', 'saving', 'done'];
 
 // 判断是否为 NoTOCError（书本导入模块问题）
-const isNoTOCEror = (message: string): boolean => {
+const isNoTOCError = (message: string): boolean => {
   return message.includes('书本导入模块') || message.includes('未能识别目录');
 };
 
@@ -125,7 +125,7 @@ export default function SplitProgress({ bookId, onComplete, onError }: SplitProg
     return 'pending';
   };
 
-  const noTOCError = isNoTOCEror(error);
+  const noTOCError = isNoTOCError(error);
 
   return (
     <div className="animate-scale-in">

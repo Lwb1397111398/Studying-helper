@@ -3,8 +3,8 @@ import { useParams, useNavigate } from 'react-router-dom';
 import Card from '../components/Card';
 import Loading from '../components/Loading';
 import ProgressBar from '../components/ProgressBar';
-import { startReviewSession, submitAnswer } from '../api/review';
-import type { ReviewSession as ReviewSessionType, ReviewQuestion, ReviewFeedback } from '../types';
+import { startReviewSession, submitAnswer, submitFreeRecallAnswer } from '../api/review';
+import type { ReviewSession as ReviewSessionType, ReviewQuestion, ReviewFeedback, FreeRecallResult } from '../types';
 
 export default function ReviewSession() {
   const { bookId } = useParams<{ bookId: string }>();
@@ -14,33 +14,43 @@ export default function ReviewSession() {
   const [currentIndex, setCurrentIndex] = useState(0);
   const [selectedAnswer, setSelectedAnswer] = useState('');
   const [feedback, setFeedback] = useState<ReviewFeedback | null>(null);
+  const [freeRecallResult, setFreeRecallResult] = useState<FreeRecallResult | null>(null);
   const [loading, setLoading] = useState(true);
   const [score, setScore] = useState(0);
 
   useEffect(() => {
-    if (bookId) loadSession();
+    let cancelled = false;
+    (async () => {
+      try {
+        const data = await startReviewSession(bookId!);
+        if (cancelled) return;
+        setSession(data);
+        if (data.questions && data.questions.length > 0) {
+          setCurrentQuestion(data.questions[0]);
+        }
+      } catch (error) {
+        if (!cancelled) console.error('加载复习会话失败:', error);
+      } finally {
+        if (!cancelled) setLoading(false);
+      }
+    })();
+    return () => { cancelled = true; };
   }, [bookId]);
 
-  const loadSession = async () => {
-    try {
-      const data = await startReviewSession(bookId!);
-      setSession(data);
-      if (data.questions && data.questions.length > 0) {
-        setCurrentQuestion(data.questions[0]);
-      }
-    } catch (error) {
-      console.error('加载复习会话失败:', error);
-    } finally {
-      setLoading(false);
-    }
-  };
+  const isFreeRecall = session?.review_type === 'free_recall';
 
   const handleSubmit = async () => {
     if (!currentQuestion || !selectedAnswer) return;
     try {
-      const result = await submitAnswer(session!.id, currentQuestion.id, selectedAnswer);
-      setFeedback(result);
-      if (result.is_correct) setScore((prev) => prev + 1);
+      if (isFreeRecall) {
+        const result = await submitFreeRecallAnswer(session!.id, currentQuestion.id, selectedAnswer);
+        setFreeRecallResult(result);
+        if (result.overall_score >= 60) setScore((prev) => prev + 1);
+      } else {
+        const result = await submitAnswer(session!.id, currentQuestion.id, selectedAnswer);
+        setFeedback(result);
+        if (result.is_correct) setScore((prev) => prev + 1);
+      }
     } catch (error) {
       console.error('提交答案失败:', error);
     }
@@ -54,6 +64,7 @@ export default function ReviewSession() {
       setCurrentQuestion(session.questions[nextIndex]);
       setSelectedAnswer('');
       setFeedback(null);
+      setFreeRecallResult(null);
     } else {
       navigate(`/books/${bookId}`);
     }
@@ -82,7 +93,7 @@ export default function ReviewSession() {
       {/* 顶部 */}
       <div className="flex items-center justify-between mb-6">
         <div>
-          <h1 className="text-xl font-bold text-gray-800">复习模式</h1>
+          <h1 className="text-xl font-bold text-gray-800">{isFreeRecall ? '自由回忆' : '复习模式'}</h1>
           <p className="text-xs text-gray-400 mt-0.5">第 {currentIndex + 1} 题 / 共 {total} 题</p>
         </div>
         <div className="flex items-center gap-4">
@@ -90,7 +101,7 @@ export default function ReviewSession() {
             <span className="text-xs text-emerald-600 font-semibold">✓ {score}</span>
           </div>
           <div className="flex items-center gap-2 px-3 py-1.5 bg-gray-50 rounded-full">
-            <span className="text-xs text-gray-500 font-semibold">✗ {currentIndex - score}</span>
+            <span className="text-xs text-gray-500 font-semibold">✗ {currentIndex + 1 - score}</span>
           </div>
         </div>
       </div>
@@ -107,7 +118,12 @@ export default function ReviewSession() {
           <p className="text-[15px] text-gray-800 leading-relaxed font-medium">{currentQuestion.question}</p>
         </div>
 
-        {currentQuestion.options ? (
+        {isFreeRecall ? (
+          <textarea value={selectedAnswer} onChange={(e) => setSelectedAnswer(e.target.value)}
+            placeholder="闭卷回忆：写出你记得的所有内容，不要看任何提示..." disabled={!!freeRecallResult}
+            rows={6}
+            className="w-full p-4 border-2 border-gray-100 rounded-xl text-sm focus:outline-none focus:border-purple-300 focus:ring-2 focus:ring-purple-50 bg-gray-50/50 disabled:opacity-50 transition-all resize-none" />
+        ) : currentQuestion.options ? (
           <div className="space-y-2.5">
             {currentQuestion.options.map((option, i) => {
               const isSelected = selectedAnswer === option;
@@ -162,21 +178,96 @@ export default function ReviewSession() {
         </Card>
       )}
 
+      {/* 自由回忆差距报告 */}
+      {freeRecallResult && (
+        <Card className="mb-6 animate-scale-in border-purple-200 bg-purple-50/30">
+          <h3 className="text-sm font-semibold text-purple-700 mb-4">📊 回忆差距报告</h3>
+
+          {/* 三维评分 */}
+          <div className="grid grid-cols-3 gap-3 mb-4">
+            {[
+              { label: '覆盖率', value: freeRecallResult.coverage, color: 'blue' },
+              { label: '准确性', value: freeRecallResult.accuracy, color: 'green' },
+              { label: '深度', value: freeRecallResult.depth, color: 'purple' },
+            ].map(({ label, value, color }) => (
+              <div key={label} className="text-center">
+                <div className={`text-2xl font-bold text-${color}-600`}>{Math.round(value * 100)}%</div>
+                <div className="text-xs text-gray-500">{label}</div>
+              </div>
+            ))}
+          </div>
+
+          {/* 综合分 */}
+          <div className="text-center mb-4">
+            <span className="text-3xl font-bold text-gray-800">{freeRecallResult.overall_score.toFixed(0)}</span>
+            <span className="text-sm text-gray-400">/100</span>
+          </div>
+
+          {/* 记住的要点 */}
+          {freeRecallResult.recalled_points.length > 0 && (
+            <div className="mb-3">
+              <p className="text-xs font-semibold text-emerald-600 mb-1">✅ 记住的要点</p>
+              {freeRecallResult.recalled_points.map((p, i) => (
+                <p key={i} className="text-sm text-emerald-700">
+                  {p.is_accurate ? '🟢' : '🟡'} {p.content}
+                </p>
+              ))}
+            </div>
+          )}
+
+          {/* 遗漏的要点 */}
+          {freeRecallResult.missed_points.length > 0 && (
+            <div className="mb-3">
+              <p className="text-xs font-semibold text-red-600 mb-1">❌ 遗漏的要点</p>
+              {freeRecallResult.missed_points.map((p, i) => (
+                <p key={i} className="text-sm text-red-700">{p}</p>
+              ))}
+            </div>
+          )}
+
+          {/* 记错的内容 */}
+          {freeRecallResult.incorrect_points.length > 0 && (
+            <div className="mb-3">
+              <p className="text-xs font-semibold text-amber-600 mb-1">⚠️ 记错的内容</p>
+              {freeRecallResult.incorrect_points.map((p, i) => (
+                <p key={i} className="text-sm text-amber-700">{p}</p>
+              ))}
+            </div>
+          )}
+
+          {/* 差距报告 */}
+          {freeRecallResult.gap_report && (
+            <div className="bg-white/60 rounded-xl p-3 mt-3">
+              <p className="text-sm text-gray-700 leading-relaxed">{freeRecallResult.gap_report}</p>
+            </div>
+          )}
+
+          {/* 掌握度变化 */}
+          <p className={`text-xs mt-3 font-medium ${freeRecallResult.mastery_change > 0 ? 'text-emerald-500' : 'text-red-500'}`}>
+            {freeRecallResult.mastery_change > 0 ? '📈' : '📉'} 掌握度 {freeRecallResult.mastery_change > 0 ? '+' : ''}{Math.round(freeRecallResult.mastery_change * 100)}%
+          </p>
+        </Card>
+      )}
+
       {/* 操作按钮 */}
       <div className="flex justify-between items-center">
         <button onClick={() => navigate(`/books/${bookId}`)}
           className="px-4 py-2.5 text-gray-500 rounded-xl text-sm font-medium hover:bg-gray-100 transition-colors">
           退出复习
         </button>
-        {feedback ? (
+        {(feedback || freeRecallResult) ? (
           <button onClick={handleNext}
             className="flex items-center gap-2 px-6 py-2.5 bg-gradient-to-r from-blue-500 to-blue-600 text-white rounded-xl text-sm font-medium hover:shadow-lg hover:shadow-blue-500/25 transition-all">
             {currentIndex + 1 < total ? '下一题 →' : '✓ 完成复习'}
           </button>
         ) : (
           <button onClick={handleSubmit} disabled={!selectedAnswer}
-            className="flex items-center gap-2 px-6 py-2.5 bg-gradient-to-r from-emerald-500 to-green-500 text-white rounded-xl text-sm font-medium hover:shadow-lg hover:shadow-emerald-500/25 disabled:opacity-40 disabled:cursor-not-allowed transition-all">
-            提交答案
+            className={`flex items-center gap-2 px-6 py-2.5 text-white rounded-xl text-sm font-medium hover:shadow-lg disabled:opacity-40 disabled:cursor-not-allowed transition-all ${
+              isFreeRecall
+                ? 'bg-gradient-to-r from-purple-500 to-violet-500 hover:shadow-purple-500/25'
+                : 'bg-gradient-to-r from-emerald-500 to-green-500 hover:shadow-emerald-500/25'
+            }`}>
+            {isFreeRecall ? '提交回忆' : '提交答案'}
           </button>
         )}
       </div>

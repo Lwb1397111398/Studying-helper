@@ -82,7 +82,7 @@ class DocumentParserService:
 
         # 调用解析器
         try:
-            return parser.parse(file_path)
+            return parser.parse(file_path, llm_client=self.llm_client)
         except ServiceError:
             raise
         except Exception as e:

@@ -1,13 +1,15 @@
 """PDF解析器"""
 
+import asyncio
 from pathlib import Path
 from typing import List, Optional
 
 import pdfplumber
 
 from app.common.errors import ServiceError, ErrorCode
-from app.modules.document_parser.schemas import ParsedDocument, BookMetadata, TOCItem, PageInfo
-from app.modules.document_parser.toc_detector import identify_toc_items
+from app.common.llm_client import LLMClient
+from app.modules.document_parser.schemas import ParsedDocument, BookMetadata, TOCItem, PageInfo, PageTextInfo
+from app.modules.document_parser.toc_detector import identify_toc_items, identify_toc_items_enhanced
 
 
 class PDFParser:
@@ -19,7 +21,7 @@ class PDFParser:
         """识别PDF文件"""
         return file_path.lower().endswith('.pdf')
 
-    def parse(self, file_path: str) -> ParsedDocument:
+    def parse(self, file_path: str, llm_client: Optional[LLMClient] = None) -> ParsedDocument:
         """
         解析PDF文件。
 
@@ -45,8 +47,17 @@ class PDFParser:
             # 提取元数据
             metadata = self._extract_metadata(pdf, file_path)
 
-            # 提取文本和page_map
-            full_text, page_map = self._extract_text_and_page_map(pdf)
+            # 提取原始页面文本
+            raw_pages = self._extract_raw_pages(pdf)
+
+            # 内容清洗（在目录检测之前，确保偏移量一致）
+            try:
+                from app.modules.document_parser.noise_cleaner import clean_with_pages
+                full_text, page_map, _ = clean_with_pages(raw_pages)
+            except Exception as e:
+                import logging
+                logging.getLogger(__name__).warning(f"内容清洗失败，使用原始文本: {e}")
+                full_text, page_map = self._extract_text_and_page_map(pdf)
 
             # 验证文本不为空
             if not full_text.strip():
@@ -55,8 +66,8 @@ class PDFParser:
                     message="PDF文件无文本内容，可能是扫描版PDF"
                 )
 
-            # 提取目录
-            toc = self._extract_toc(pdf, full_text)
+            # 提取目录（基于清洗后的文本）
+            toc = self._extract_toc(pdf, full_text, llm_client)
 
             return ParsedDocument(
                 metadata=metadata,
@@ -95,8 +106,20 @@ class PDFParser:
             file_size_bytes=file_size
         )
 
+    def _extract_raw_pages(self, pdf) -> List[PageTextInfo]:
+        """提取逐页原始文本（清洗前）"""
+        pages = []
+        for i, page in enumerate(pdf.pages):
+            text = page.extract_text() or ""
+            pages.append(PageTextInfo(
+                page_number=i + 1,
+                text=text,
+                height=page.height or 0,
+            ))
+        return pages
+
     def _extract_text_and_page_map(self, pdf) -> tuple:
-        """提取全文和页面映射"""
+        """提取全文和页面映射（降级方案）"""
         page_map: List[PageInfo] = []
         full_text_parts: List[str] = []
         current_offset = 0
@@ -118,12 +141,18 @@ class PDFParser:
         full_text = "\n".join(full_text_parts)
         return full_text, page_map
 
-    def _extract_toc(self, pdf, full_text: str) -> List[TOCItem]:
-        """提取目录：优先使用书签，否则启发式识别"""
+    def _extract_toc(self, pdf, full_text: str, llm_client: Optional[LLMClient] = None) -> List[TOCItem]:
+        """提取目录：优先使用书签，否则规则识别，最后可用 LLM fallback。"""
         toc = self._extract_toc_from_outline(pdf)
 
         if not toc:
             toc = identify_toc_items(full_text)
+
+        if not toc and llm_client:
+            try:
+                asyncio.get_running_loop()
+            except RuntimeError:
+                toc = asyncio.run(identify_toc_items_enhanced(full_text, "pdf", llm_client))
 
         return toc
 

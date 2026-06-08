@@ -40,6 +40,7 @@ class BookModel(Base):
     total_chapters = Column(Integer, default=0)
     total_units = Column(Integer, default=0)
     learned_units = Column(Integer, default=0)
+    reading_motivation = Column(Text, nullable=True)
     created_at = Column(DateTime, nullable=False, default=_utc_now)
     updated_at = Column(DateTime, nullable=False, default=_utc_now, onupdate=_utc_now)
 
@@ -76,6 +77,7 @@ class KnowledgeUnitModel(Base):
     char_offset_start = Column(Integer, nullable=False)
     char_offset_end = Column(Integer, nullable=False)
     summary = Column(Text)
+    explanation = Column(Text)  # AI 生成的教学讲解
     key_points = Column(Text)
     concepts = Column(Text)            # JSON 数组，支持字符串或 Concept 对象
     prerequisites = Column(Text)       # JSON 数组：存 unit_id 列表或概念名字符串列表
@@ -94,7 +96,7 @@ class MasteryRecordModel(Base):
     id = Column(String, primary_key=True, default=lambda: str(uuid4()))
     user_id = Column(String, ForeignKey("users.id"), nullable=False)
     knowledge_unit_id = Column(String, ForeignKey("knowledge_units.id"), nullable=False)
-    book_id = Column(String, ForeignKey("books.id"), nullable=False, default="")
+    book_id = Column(String, ForeignKey("books.id"), nullable=False)
     mastery_score = Column(Float, nullable=False)
     mastery_level = Column(String(50), nullable=False)
     last_reviewed_at = Column(DateTime)
@@ -116,8 +118,12 @@ class AnnotationModel(Base):
     id = Column(String, primary_key=True, default=lambda: str(uuid4()))
     user_id = Column(String, ForeignKey("users.id"), nullable=False)
     knowledge_unit_id = Column(String, ForeignKey("knowledge_units.id"), nullable=False)
-    annotation_type = Column(String(20), nullable=False)
+    annotation_type = Column(String(30), nullable=False)
     content = Column(Text)
+    related_concepts_json = Column(Text, default="[]")  # JSON 数组：相关概念
+    example = Column(Text)                              # 用户记录的例子
+    cornell_cues = Column(Text, nullable=True)           # 线索栏：JSON 数组
+    cornell_summary = Column(Text, nullable=True)        # 总结栏：1-2句话
     created_at = Column(DateTime, nullable=False, default=_utc_now)
     updated_at = Column(DateTime, nullable=False, default=_utc_now, onupdate=_utc_now)
 
@@ -237,7 +243,7 @@ class TeachingSessionModel(Base):
     book_id = Column(String, ForeignKey("books.id"), nullable=False)
     unit_ids = Column(Text, nullable=False, default="[]")  # JSON array
     current_unit_index = Column(Integer, default=0)
-    current_phase = Column(String(20), default="intro")
+    current_phase = Column(String(20), default="activate")
     strategy_json = Column(Text, nullable=False, default="{}")
     status = Column(String(20), default="active")
     started_at = Column(DateTime, nullable=False, default=_utc_now)
@@ -258,6 +264,7 @@ class TeachingMessageModel(Base):
     phase = Column(String(20), nullable=False)
     content = Column(Text, nullable=False)
     content_type = Column(String(20), default="text")
+    assessment_json = Column(Text, nullable=True)  # AI 评估结果 JSON
     created_at = Column(DateTime, nullable=False, default=_utc_now)
 
     __table_args__ = (
@@ -292,4 +299,23 @@ class SessionTestModel(Base):
 
     __table_args__ = (
         Index("ix_session_tests_session_id", "session_id"),
+    )
+
+
+class LearningEfficiencyModel(Base):
+    """学习效率统计表"""
+    __tablename__ = "learning_efficiency"
+
+    id = Column(String, primary_key=True, default=lambda: str(uuid4()))
+    session_id = Column(String, ForeignKey("teaching_sessions.id"), nullable=False)
+    unit_id = Column(String, nullable=False)
+    phase = Column(String(20), nullable=False)
+    duration_seconds = Column(Integer, nullable=False)
+    interaction_count = Column(Integer, default=0)
+    efficiency_score = Column(Float, default=0.0)  # 每分钟互动次数
+    created_at = Column(DateTime, nullable=False, default=_utc_now)
+
+    __table_args__ = (
+        Index("ix_learning_efficiency_session_id", "session_id"),
+        Index("ix_learning_efficiency_unit_id", "unit_id"),
     )

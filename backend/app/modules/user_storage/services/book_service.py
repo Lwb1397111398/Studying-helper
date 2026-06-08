@@ -12,6 +12,8 @@ from app.db.models import (
     BookModel, ChapterModel, KnowledgeUnitModel,
     AnnotationModel, MasteryRecordModel, LearningRecordModel,
     KGNodeModel, KGEdgeModel,
+    TeachingSessionModel, TeachingMessageModel,
+    UserQuestionModel, SessionTestModel, ReviewSessionModel,
 )
 
 logger = logging.getLogger(__name__)
@@ -71,21 +73,28 @@ class BookService:
 
     async def update_status(self, book_id: str, **kwargs) -> BookModel:
         book = await self.get_book(book_id)
+        allowed_fields = {
+            "parse_status", "split_status", "learn_status",
+            "total_chapters", "total_units", "learned_units",
+            "reading_motivation",
+        }
         for key, value in kwargs.items():
-            if value is not None and hasattr(book, key):
+            if key in allowed_fields and value is not None:
                 setattr(book, key, value)
         book.updated_at = utc_now()
         await self.db.flush()
         return book
 
-    async def delete_book(self, book_id: str) -> None:
+    async def delete_book(self, book_id: str) -> str | None:
         """
         两阶段删除：
-        1. DB 事务内：级联删除关联数据，file_path 置 NULL 后删除书籍记录
-        2. 事务提交后：删除物理文件（失败只打 warning）
+        1. DB 事务内：级联删除关联数据，删除书籍记录
+        2. 返回物理文件路径，由调用方在 commit 后删除
+
+        返回：物理文件路径（如果存在），否则返回 None
         """
         book = await self.get_book(book_id)
-        file_path = book.file_path  # 提前取出，置 NULL 后就没了
+        file_path = book.file_path  # 提前取出，供调用方删除物理文件
 
         # 1. 收集所有关联 ID（2次查询）
         chapter_ids_result = await self.db.execute(
@@ -136,14 +145,32 @@ class BookService:
             delete(KGNodeModel).where(KGNodeModel.book_id == book_id)
         )
 
-        # 6. file_path 置 NULL，删除书籍记录
-        book.file_path = None
-        await self.db.delete(book)
-        await self.db.flush()
+        # 6. 删除教学会话相关数据
+        session_ids_result = await self.db.execute(
+            select(TeachingSessionModel.id).where(TeachingSessionModel.book_id == book_id)
+        )
+        session_ids = [row[0] for row in session_ids_result.all()]
+        if session_ids:
+            await self.db.execute(
+                delete(TeachingMessageModel).where(TeachingMessageModel.session_id.in_(session_ids))
+            )
+            await self.db.execute(
+                delete(UserQuestionModel).where(UserQuestionModel.session_id.in_(session_ids))
+            )
+            await self.db.execute(
+                delete(SessionTestModel).where(SessionTestModel.session_id.in_(session_ids))
+            )
+        await self.db.execute(
+            delete(TeachingSessionModel).where(TeachingSessionModel.book_id == book_id)
+        )
 
-        # 7. 事务提交后删除物理文件（失败不回滚 DB）
-        if file_path and os.path.exists(file_path):
-            try:
-                os.remove(file_path)
-            except OSError as e:
-                logger.warning(f"文件删除失败: {file_path}, 原因: {e}")
+        # 7. 删除复习会话
+        await self.db.execute(
+            delete(ReviewSessionModel).where(ReviewSessionModel.book_id == book_id)
+        )
+
+        # 8. 删除书籍记录（不设置 file_path = None，避免违反 NOT NULL 约束）
+        await self.db.delete(book)
+
+        # 返回文件路径，由调用方在 commit 后删除物理文件
+        return file_path

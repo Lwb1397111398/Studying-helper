@@ -1,7 +1,6 @@
 import { useEffect, useState } from 'react';
 import Card from '../components/Card';
 import Loading from '../components/Loading';
-import { useAppState } from '../contexts/AppContext';
 import client from '../api/client';
 import type { AuthUser, LearningStyle } from '../types';
 
@@ -14,39 +13,24 @@ interface ProfileData {
 }
 
 export default function Profile() {
-  const { isLoggedIn } = useAppState();
   const [profile, setProfile] = useState<ProfileData | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
 
   useEffect(() => {
-    if (isLoggedIn) {
-      loadProfile();
-    } else {
-      setLoading(false);
-    }
-  }, [isLoggedIn]);
-
-  const loadProfile = async () => {
-    try {
-      const res: any = await client.get('/v1/users/profile');
-      setProfile(res);
-    } catch (err: any) {
-      setError(err.message || '加载失败');
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  if (!isLoggedIn) {
-    return (
-      <div className="max-w-lg mx-auto text-center py-20 animate-fade-in">
-        <div className="text-6xl mb-5">🔐</div>
-        <h2 className="text-xl font-bold text-gray-800 mb-2">请先登录</h2>
-        <p className="text-sm text-gray-400">登录后即可查看你的学习画像</p>
-      </div>
-    );
-  }
+    let cancelled = false;
+    (async () => {
+      try {
+        const res: any = await client.get('/v1/users/profile');
+        if (!cancelled) setProfile(res);
+      } catch (err: any) {
+        if (!cancelled) setError(err.message || '加载失败');
+      } finally {
+        if (!cancelled) setLoading(false);
+      }
+    })();
+    return () => { cancelled = true; };
+  }, []);
 
   if (loading) return <Loading />;
   if (error) return <div className="text-center py-12 text-red-500">{error}</div>;

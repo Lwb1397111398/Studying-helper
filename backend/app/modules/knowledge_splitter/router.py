@@ -4,7 +4,7 @@ import asyncio
 import json
 import logging
 from concurrent.futures import ThreadPoolExecutor
-from datetime import datetime, timezone, timedelta
+from datetime import datetime, timedelta
 from typing import AsyncGenerator
 
 logger = logging.getLogger(__name__)
@@ -14,6 +14,7 @@ from fastapi.responses import StreamingResponse
 from sqlalchemy import select, delete
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.common.time_utils import utc_now
 from app.db.database import get_db
 from app.db.models import BookModel, ChapterModel, KnowledgeUnitModel, MasteryRecordModel, AnnotationModel
 from app.modules.knowledge_splitter.service import KnowledgeSplitterService, NoTOCError
@@ -34,7 +35,7 @@ _PROGRESS_TTL = timedelta(hours=1)
 
 def _cleanup_expired_progress():
     """清理过期的进度记录，防止内存泄漏"""
-    now = datetime.now(timezone.utc)
+    now = utc_now()
     expired = [
         bid for bid, prog in _split_progress.items()
         if prog.get("done") and prog.get("updated_at")
@@ -57,7 +58,7 @@ def _update_progress(book_id: str, stage: str, percent: int, message: str, done:
         "message": message,
         "done": done,
         "error": error,
-        "updated_at": datetime.now(timezone.utc).isoformat(),
+        "updated_at": utc_now().isoformat(),
     }
 
 
@@ -107,7 +108,9 @@ async def _execute_split(book_id: str, db: AsyncSession):
             book.parse_status = "failed"
             book.split_status = "failed"
             await db.commit()
-            _update_progress(book_id, "error", 0, str(e), done=True, error=str(e))
+            import logging
+            logging.getLogger(__name__).error(f"知识拆分失败: {e}", exc_info=True)
+            _update_progress(book_id, "error", 0, "知识拆分失败，请检查文件格式", done=True, error="知识拆分失败")
             return
 
         chapter_count = len(split_result.chapters)
@@ -120,7 +123,7 @@ async def _execute_split(book_id: str, db: AsyncSession):
         # ── 阶段5: 保存数据库 (80% → 100%) ──
         _update_progress(book_id, "saving", 80, "正在保存到数据库...")
 
-        now = datetime.now(timezone.utc)
+        now = utc_now()
 
         # 用 SAVEPOINT 包裹删除+写入，失败可回滚到保存点
         async with db.begin_nested():
@@ -141,21 +144,13 @@ async def _execute_split(book_id: str, db: AsyncSession):
             await db.execute(delete(KnowledgeUnitModel).where(KnowledgeUnitModel.book_id == book_id))
             await db.execute(delete(ChapterModel).where(ChapterModel.book_id == book_id))
 
-            # 写入章节（level=0）
+            # 写入章节（支持多级层级：编>章>节>...）
             for chapter in split_result.chapters:
                 db.add(ChapterModel(
                     id=chapter.id, book_id=book_id, title=chapter.title,
                     chapter_number=chapter.chapter_number, order_index=chapter.order_index,
-                    level=chapter.level, summary=chapter.summary,
-                ))
-
-            # 写入小节（level=1）到同一张 chapters 表
-            for section in split_result.sections:
-                db.add(ChapterModel(
-                    id=section.id, book_id=book_id, title=section.title,
-                    chapter_number=0, order_index=section.order_index,
-                    level=section.level, parent_id=section.chapter_id,
-                    summary=None,
+                    level=chapter.level, parent_id=chapter.parent_id,
+                    summary=chapter.summary,
                 ))
 
             # 写入知识单元
@@ -199,7 +194,7 @@ async def _execute_split(book_id: str, db: AsyncSession):
                 await db.commit()
         except Exception:
             await db.rollback()
-        _update_progress(book_id, "error", 0, f"拆分失败: {str(e)}", done=True, error=str(e))
+        _update_progress(book_id, "error", 0, "知识拆分失败", done=True, error="知识拆分失败")
 
 
 @router.post("/{book_id}")
@@ -219,10 +214,11 @@ async def start_split(book_id: str, db: AsyncSession = Depends(get_db)):
     _update_progress(book_id, "pending", 0, "任务已创建，等待执行...")
 
     # 后台启动异步任务
+    from app.db.database import async_session_factory
+
     async def _run():
-        async for session in get_db():
+        async with async_session_factory() as session:
             await _execute_split(book_id, session)
-            break
 
     asyncio.create_task(_run())
 
@@ -332,7 +328,7 @@ async def split_document_sync(book_id: str, db: AsyncSession = Depends(get_db)):
     except NoTOCError as e:
         raise HTTPException(status_code=422, detail=str(e))
 
-    now = datetime.now(timezone.utc)
+    now = utc_now()
 
     async with db.begin_nested():
         old_units = await db.execute(
@@ -355,15 +351,8 @@ async def split_document_sync(book_id: str, db: AsyncSession = Depends(get_db)):
             db.add(ChapterModel(
                 id=chapter.id, book_id=book_id, title=chapter.title,
                 chapter_number=chapter.chapter_number, order_index=chapter.order_index,
-                level=chapter.level, summary=chapter.summary,
-            ))
-
-        for section in split_result.sections:
-            db.add(ChapterModel(
-                id=section.id, book_id=book_id, title=section.title,
-                chapter_number=0, order_index=section.order_index,
-                level=section.level, parent_id=section.chapter_id,
-                summary=None,
+                level=chapter.level, parent_id=chapter.parent_id,
+                summary=chapter.summary,
             ))
 
         for unit in split_result.units:
@@ -386,7 +375,7 @@ async def split_document_sync(book_id: str, db: AsyncSession = Depends(get_db)):
         book.total_units = len(split_result.units)
         book.updated_at = now
 
-    await db.commit()
+    await db.flush()
 
     return {
         "book_id": book_id,

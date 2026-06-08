@@ -7,29 +7,41 @@ export interface Book {
   total_chapters: number;
   total_units: number;
   learned_units: number;
+  reading_motivation?: string;
   parse_status: string;
   split_status: string;
   created_at: string;
 }
 
-// 章节
+// 章节 — 支持多级层级（编>章>节>...）
 export interface Chapter {
   id: string;
   book_id: string;
   title: string;
-  order_num: number;
-  level?: number;
+  level: number;       // 0=编, 1=章, 2=节, 3=小节...
   parent_id?: string;
+  order_index: number;
+  is_container: boolean; // 是否为容器节点（有子节点，无实际内容）
   knowledge_units: KnowledgeUnit[];
+  children?: Chapter[]; // 前端构建树形结构时使用
 }
 
-// 小节 — level=1 的目录节点
-export interface Section {
-  id: string;
-  chapter_id: string;
+// 保留 Section 作为类型别名以兼容其他引用
+export type Section = Chapter;
+
+// 结构化要点
+export interface KeyPoint {
   title: string;
-  order_index: number;
-  knowledge_units: KnowledgeUnit[];
+  explanation?: string;
+  examples?: string[];
+}
+
+// 概念
+export interface Concept {
+  name: string;
+  definition?: string;
+  examples?: string[];
+  related_concepts?: string[];
 }
 
 // 知识单元
@@ -41,21 +53,26 @@ export interface KnowledgeUnit {
   title: string;
   content: string;
   summary?: string;
+  explanation?: string;
   difficulty_level: number;
-  importance_score?: number;
-  concepts: string[];
-  key_points?: string[];
+  importance_score: number;
+  concepts: (string | Concept)[];
+  key_points: (string | KeyPoint)[];
 }
 
 // 学习记录
 export interface LearningRecord {
   id: string;
   user_id: string;
-  knowledge_unit_id: string;
-  session_type: string;
-  performance_score?: number;
+  book_id: string;
+  session_id: string;
   started_at: string;
   ended_at?: string;
+  duration_minutes?: number;
+  units_covered?: string;
+  questions_asked: number;
+  test_score?: number;
+  annotations_created: number;
 }
 
 // 掌握度
@@ -114,11 +131,34 @@ export interface ReviewFeedback {
   next_review_at: string;
 }
 
+// 自由回忆
+export interface RecalledPoint {
+  content: string;
+  matched_point?: string;
+  is_accurate: boolean;
+}
+
+export interface FreeRecallResult {
+  question_id: string;
+  unit_id: string;
+  coverage: number;
+  accuracy: number;
+  depth: number;
+  overall_score: number;
+  recalled_points: RecalledPoint[];
+  missed_points: string[];
+  incorrect_points: string[];
+  gap_report: string;
+  mastery_change: number;
+  next_review_at: string;
+}
+
 // 知识图谱
 export interface KGNode {
   id: string;
   node_type: string;
   label: string;
+  short_label?: string;
   mastery_score?: number;
   color?: string;
   size: number;
@@ -138,6 +178,30 @@ export interface KnowledgeGraph {
   edges: KGEdge[];
 }
 
+// 可视化数据（后端 /visualization 接口返回）
+export interface VisNode {
+  id: string;
+  label: string;
+  group: string;
+  size: number;
+  color: string;
+  title: string;
+}
+
+export interface VisEdge {
+  from_id: string;
+  to_id: string;
+  label: string;
+  width: number;
+  dashes: boolean;
+}
+
+export interface VisualizationData {
+  nodes: VisNode[];
+  edges: VisEdge[];
+  layout: string;
+}
+
 // 学习统计
 export interface LearningStats {
   total_days: number;
@@ -145,6 +209,36 @@ export interface LearningStats {
   mastery_distribution: Record<string, number>;
   today_minutes: number;
   streak_days: number;
+}
+
+// 每日统计
+export interface DailyStats {
+  user_id: string;
+  date: string;
+  total_minutes: number;
+  units_learned: number;
+  units_reviewed: number;
+  tests_taken: number;
+  avg_test_score: number;
+  streak_day: number;
+}
+
+// 学习进度
+export interface LearningProgress {
+  book_id: string;
+  status: string;
+  total_units: number;
+  learned_units: number;
+  progress_percent: number;
+}
+
+// 书籍概览章节
+export interface BookOverviewChapter {
+  chapter_id: string;
+  title: string;
+  unit_count: number;
+  estimated_minutes: number;
+  difficulty_level: number;
 }
 
 // 学习报告
@@ -166,11 +260,6 @@ export interface AuthUser {
   preferred_language: string;
   created_at: string;
   updated_at: string;
-}
-
-export interface LoginResponse {
-  token: string;
-  user: AuthUser;
 }
 
 // ===== 学习方案 =====
@@ -237,6 +326,7 @@ export interface UserSettings {
   daily_goal_units: number;
   review_reminder: boolean;
   reminder_time: string;
+  llm_max_concurrent: number;
 }
 
 // AI 模块配置（只读）
@@ -254,4 +344,18 @@ export interface AIConfigResponse {
   default_model: string;
   default_base_url: string;
   modules: LLMModuleConfig[];
+}
+
+// AI 配置更新请求
+export interface LLMModuleUpdate {
+  model?: string;
+  api_key?: string;
+  base_url?: string;
+}
+
+export interface AIConfigUpdate {
+  default_model?: string;
+  default_api_key?: string;
+  default_base_url?: string;
+  modules?: Record<string, LLMModuleUpdate>;
 }

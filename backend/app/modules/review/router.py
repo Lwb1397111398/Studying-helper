@@ -11,15 +11,16 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.common.errors import ServiceError, ErrorCode, ERROR_STATUS_MAP
 from app.db.database import get_db
-from app.db.models import KnowledgeUnitModel, MasteryRecordModel, ReviewSessionModel
+from app.db.models import KnowledgeUnitModel, MasteryRecordModel, ReviewSessionModel, KGEdgeModel
 from app.modules.review.schemas import (
     ExamConfig, ExportFormat, MasteryRecord,
 )
 from app.modules.review.service import ReviewService
 from app.modules.knowledge_splitter.schemas import KnowledgeUnit
-from app.deps import get_current_user
 
 router = APIRouter(prefix="/api/v1/review", tags=["review"])
+
+DEFAULT_USER_ID = "anonymous"
 
 
 def _get_service(db: AsyncSession) -> ReviewService:
@@ -39,6 +40,7 @@ class SubmitAnswerRequest(BaseModel):
     question_id: str
     answer: str
     response_time: float = 0.0
+    confidence_level: int = 0  # 信心等级 1-3（0=未提供）
 
 
 class StartExamRequest(BaseModel):
@@ -63,6 +65,37 @@ class ExportRequest(BaseModel):
 
 # ===== 辅助：从 DB 加载知识单元 =====
 
+async def _load_related_unit_ids(db: AsyncSession, book_id: str, unit_ids: List[str]) -> List[str]:
+    """从知识图谱加载与指定单元关联的单元 ID（similar_to / contrasts_with）"""
+    if not unit_ids:
+        return []
+    result = await db.execute(
+        select(KGEdgeModel).where(
+            KGEdgeModel.book_id == book_id,
+            KGEdgeModel.relation_type.in_(["similar_to", "contrasts_with"]),
+            (KGEdgeModel.source_id.in_(unit_ids)) | (KGEdgeModel.target_id.in_(unit_ids)),
+        )
+    )
+    edges = result.scalars().all()
+    related = set()
+    for edge in edges:
+        if edge.source_id in unit_ids:
+            related.add(edge.target_id)
+        if edge.target_id in unit_ids:
+            related.add(edge.source_id)
+    # 排除已在请求列表中的
+    return list(related - set(unit_ids))
+
+def _extract_strings(items: list) -> list:
+    """从混合列表中提取字符串（兼容 key_points/concepts 的两种存储格式）"""
+    result = []
+    for item in items:
+        if isinstance(item, dict):
+            result.append(item.get("title", item.get("name", str(item))))
+        else:
+            result.append(str(item))
+    return result
+
 async def _load_units(db: AsyncSession, book_id: str, unit_ids: List[str] = None) -> List[KnowledgeUnit]:
     if unit_ids:
         result = await db.execute(
@@ -83,8 +116,8 @@ async def _load_units(db: AsyncSession, book_id: str, unit_ids: List[str] = None
             title=u.title, content=u.content, order_index=u.order_index,
             char_offset_start=u.char_offset_start, char_offset_end=u.char_offset_end,
             summary=u.summary,
-            key_points=json.loads(u.key_points) if u.key_points else None,
-            concepts=json.loads(u.concepts) if u.concepts else None,
+            key_points=_extract_strings(json.loads(u.key_points)) if u.key_points else None,
+            concepts=_extract_strings(json.loads(u.concepts)) if u.concepts else None,
             difficulty_level=u.difficulty_level,
             importance_score=u.importance_score,
         )
@@ -141,21 +174,13 @@ async def _load_review_history(db: AsyncSession, user_id: str, unit_id: str) -> 
 @router.get("/due")
 async def get_due_reviews(
     book_id: str,
-    current_user: str = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
-    if current_user == "anonymous":
-        raise HTTPException(status_code=401, detail="请先登录")
     try:
         svc = _get_service(db)
-        records = await _load_mastery_records(db, current_user)
-        due = svc.get_due_reviews(current_user, book_id, records)
-        return {
-            "user_id": current_user,
-            "book_id": book_id,
-            "due_count": len(due),
-            "records": [r.model_dump() for r in due],
-        }
+        records = await _load_mastery_records(db, DEFAULT_USER_ID)
+        due = svc.get_due_reviews(DEFAULT_USER_ID, book_id, records)
+        return [r.model_dump() for r in due]
     except ServiceError as e:
         raise HTTPException(status_code=ERROR_STATUS_MAP.get(e.code, 500), detail=e.message)
 
@@ -163,18 +188,23 @@ async def get_due_reviews(
 @router.post("/start")
 async def start_review(
     request: StartReviewRequest,
-    current_user: str = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
-    if current_user == "anonymous":
-        raise HTTPException(status_code=401, detail="请先登录")
     try:
         svc = _get_service(db)
         knowledge_units = await _load_units(db, request.book_id, request.unit_ids or [])
+        unit_ids = [u.id for u in knowledge_units]
+
+        # 加载关联单元（similar_to / contrasts_with）用于生成干扰项
+        related_ids = await _load_related_unit_ids(db, request.book_id, unit_ids)
+        if related_ids:
+            related_units = await _load_units(db, request.book_id, related_ids)
+            knowledge_units.extend(related_units)
+
         session = await svc.start_review(
-            user_id=current_user,
+            user_id=DEFAULT_USER_ID,
             book_id=request.book_id,
-            unit_ids=[u.id for u in knowledge_units],
+            unit_ids=unit_ids,
             knowledge_units=knowledge_units,
             review_type=request.review_type,
         )
@@ -186,11 +216,8 @@ async def start_review(
 @router.post("/answer")
 async def submit_answer(
     request: SubmitAnswerRequest,
-    current_user: str = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
-    if current_user == "anonymous":
-        raise HTTPException(status_code=401, detail="请先登录")
     try:
         svc = _get_service(db)
         feedback = await svc.submit_review_answer(
@@ -198,9 +225,63 @@ async def submit_answer(
             question_id=request.question_id,
             answer=request.answer,
             response_time=request.response_time,
-            user_id=current_user,
+            user_id=DEFAULT_USER_ID,
+            confidence_level=request.confidence_level,
         )
         return feedback.model_dump()
+    except ServiceError as e:
+        raise HTTPException(status_code=ERROR_STATUS_MAP.get(e.code, 500), detail=e.message)
+
+
+# ===== 自由回忆（Free Recall） =====
+
+class StartFreeRecallRequest(BaseModel):
+    book_id: str
+    unit_ids: List[str]
+
+
+class SubmitFreeRecallRequest(BaseModel):
+    session_id: str
+    question_id: str
+    answer: str
+
+
+@router.post("/free-recall/start")
+async def start_free_recall(
+    request: StartFreeRecallRequest,
+    db: AsyncSession = Depends(get_db),
+):
+    """开始自由回忆复习"""
+    try:
+        svc = _get_service(db)
+        knowledge_units = await _load_units(db, request.book_id, request.unit_ids)
+        unit_ids = [u.id for u in knowledge_units]
+        session = await svc.start_free_recall(
+            user_id=DEFAULT_USER_ID, book_id=request.book_id,
+            unit_ids=unit_ids, knowledge_units=knowledge_units,
+        )
+        return session.model_dump()
+    except ServiceError as e:
+        raise HTTPException(status_code=ERROR_STATUS_MAP.get(e.code, 500), detail=e.message)
+
+
+@router.post("/free-recall/answer")
+async def submit_free_recall_answer(
+    request: SubmitFreeRecallRequest,
+    db: AsyncSession = Depends(get_db),
+):
+    """提交自由回忆答案"""
+    try:
+        from app.deps import get_llm_client
+        llm_client = await get_llm_client("ai_analysis")
+        svc = ReviewService(db, llm_client=llm_client)
+        result = await svc.submit_free_recall_answer(
+            session_id=request.session_id,
+            question_id=request.question_id,
+            answer=request.answer,
+            user_id=DEFAULT_USER_ID,
+        )
+        return result.model_dump()
     except ServiceError as e:
         raise HTTPException(status_code=ERROR_STATUS_MAP.get(e.code, 500), detail=e.message)
 
@@ -208,15 +289,12 @@ async def submit_answer(
 @router.get("/mastery/{unit_id}")
 async def assess_mastery(
     unit_id: str,
-    current_user: str = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
-    if current_user == "anonymous":
-        raise HTTPException(status_code=401, detail="请先登录")
     try:
         svc = _get_service(db)
-        history = await _load_review_history(db, current_user, unit_id)
-        assessment = svc.assess_mastery(user_id=current_user, unit_id=unit_id, review_history=history)
+        history = await _load_review_history(db, DEFAULT_USER_ID, unit_id)
+        assessment = svc.assess_mastery(user_id=DEFAULT_USER_ID, unit_id=unit_id, review_history=history)
         return assessment.model_dump()
     except ServiceError as e:
         raise HTTPException(status_code=ERROR_STATUS_MAP.get(e.code, 500), detail=e.message)
@@ -225,18 +303,15 @@ async def assess_mastery(
 @router.post("/exam/start")
 async def start_exam(
     request: StartExamRequest,
-    current_user: str = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
-    if current_user == "anonymous":
-        raise HTTPException(status_code=401, detail="请先登录")
     try:
         svc = _get_service(db)
         config = request.config or ExamConfig()
         knowledge_units = await _load_units(db, request.book_id)
-        mastery_records = await _load_mastery_records(db, current_user)
+        mastery_records = await _load_mastery_records(db, DEFAULT_USER_ID)
         session = await svc.start_exam(
-            user_id=current_user,
+            user_id=DEFAULT_USER_ID,
             book_id=request.book_id,
             chapter_ids=request.chapter_ids,
             config=config,
@@ -251,14 +326,11 @@ async def start_exam(
 @router.post("/exam/submit")
 async def submit_exam(
     request: SubmitExamRequest,
-    current_user: str = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
-    if current_user == "anonymous":
-        raise HTTPException(status_code=401, detail="请先登录")
     try:
         svc = _get_service(db)
-        result = await svc.submit_exam(session_id=request.session_id, answers=request.answers, user_id=current_user)
+        result = await svc.submit_exam(session_id=request.session_id, answers=request.answers, user_id=DEFAULT_USER_ID)
         return result.model_dump()
     except ServiceError as e:
         raise HTTPException(status_code=ERROR_STATUS_MAP.get(e.code, 500), detail=e.message)
@@ -269,19 +341,48 @@ async def export_book(
     book_id: str,
     book_title: str,
     format: ExportFormat = ExportFormat.MARKDOWN,
-    current_user: str = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
-    if current_user == "anonymous":
-        raise HTTPException(status_code=401, detail="请先登录")
     try:
         svc = _get_service(db)
+
+        # 加载章节
+        from app.db.models import ChapterModel, KnowledgeUnitModel
+        chapters_result = await db.execute(
+            select(ChapterModel).where(ChapterModel.book_id == book_id)
+        )
+        db_chapters = chapters_result.scalars().all()
+        chapters = [{"id": c.id, "title": c.title} for c in db_chapters]
+
+        # 加载知识单元
+        units_result = await db.execute(
+            select(KnowledgeUnitModel).where(KnowledgeUnitModel.book_id == book_id)
+        )
+        db_units = units_result.scalars().all()
+        knowledge_units = [
+            {"id": u.id, "title": u.title, "summary": u.summary, "key_points": json.loads(u.key_points) if u.key_points else []}
+            for u in db_units
+        ]
+
+        # 加载掌握度记录
+        mastery_result = await db.execute(
+            select(MasteryRecordModel).where(
+                MasteryRecordModel.user_id == DEFAULT_USER_ID,
+                MasteryRecordModel.book_id == book_id,
+            )
+        )
+        db_mastery = mastery_result.scalars().all()
+        mastery_records = {
+            r.knowledge_unit_id: {"mastery_score": r.mastery_score, "mastery_level": r.mastery_level}
+            for r in db_mastery
+        }
+
         result = svc.export(
             book_title=book_title,
             export_format=format,
-            chapters=[],
-            knowledge_units=[],
-            mastery_records={},
+            chapters=chapters,
+            knowledge_units=knowledge_units,
+            mastery_records=mastery_records,
         )
         return result.model_dump()
     except ServiceError as e:

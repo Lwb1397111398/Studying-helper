@@ -1,7 +1,8 @@
 """教学策略选择"""
+from typing import List
 from app.modules.ai_learning.schemas import LearnedUnit
 from app.modules.teaching.schemas import (
-    TeachingStrategy, KnowledgeType, CognitiveLevel, UserTeachingProfile,
+    TeachingStrategy, TeachingPhase, KnowledgeType, CognitiveLevel, UserTeachingProfile,
 )
 
 # 知识类型推断的关键词映射
@@ -11,7 +12,13 @@ _PRINCIPLE_KEYWORDS = ("原理", "为什么", "机制", "原因", "本质", "底
 
 def _infer_knowledge_type(unit: LearnedUnit) -> KnowledgeType:
     """从知识单元内容推断知识类型"""
-    key_points_text = " ".join(unit.key_points).lower()
+    kp_parts = []
+    for kp in unit.key_points:
+        if hasattr(kp, 'title'):
+            kp_parts.append(kp.title)
+        else:
+            kp_parts.append(str(kp))
+    key_points_text = " ".join(kp_parts).lower()
     concepts_text = " ".join(c.name for c in unit.concepts).lower()
 
     for kw in _PROCEDURE_KEYWORDS:
@@ -111,3 +118,36 @@ def select_teaching_strategy(
         scaffold_level=_select_scaffold(mastery, difficulty),
         feedback_style=_select_feedback(mastery),
     )
+
+
+def select_phases(unit: LearnedUnit, mastery: float) -> List[TeachingPhase]:
+    """根据内容复杂度选择教学阶段
+
+    - 简单内容（难度低且掌握度高）：ACTIVATE + CORE + RETRIEVAL
+    - 中等内容：ACTIVATE + CORE + RETRIEVAL + CHECK + CONNECT
+    - 复杂内容（难度高或掌握度低）：完整7阶段（含 INTRO + REFLECT）
+    """
+    # 基础阶段：所有内容都需要（CORE 后插入 FEYNMAN 费曼学习法）
+    phases = [TeachingPhase.ACTIVATE, TeachingPhase.CORE, TeachingPhase.FEYNMAN, TeachingPhase.RETRIEVAL]
+
+    # 简单内容：跳过部分阶段
+    if unit.difficulty_level and unit.difficulty_level <= 2 and mastery > 0.7:
+        return phases
+
+    # 复杂内容：完整阶段（含 INTRO）
+    if (unit.difficulty_level and unit.difficulty_level >= 4) or mastery < 0.3:
+        phases = [
+            TeachingPhase.ACTIVATE,
+            TeachingPhase.INTRO,
+            TeachingPhase.CORE,
+            TeachingPhase.FEYNMAN,
+            TeachingPhase.RETRIEVAL,
+            TeachingPhase.CHECK,
+            TeachingPhase.REFLECT,
+            TeachingPhase.CONNECT,
+        ]
+        return phases
+
+    # 中等内容：标准阶段（含 REFLECT）
+    phases.extend([TeachingPhase.CHECK, TeachingPhase.REFLECT, TeachingPhase.CONNECT])
+    return phases

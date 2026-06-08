@@ -100,7 +100,7 @@ def export_mindmap_plantuml(
     lines.append("")
 
     # 颜色定义
-    lines.append("* #FF6B6B " + book_title)
+    lines.append("* " + book_title)
 
     # 按章节组织
     units_by_chapter: Dict[str, list] = {}
@@ -112,7 +112,7 @@ def export_mindmap_plantuml(
 
     for chapter in sorted(chapters, key=lambda c: c.get('chapter_number', 0)):
         chapter_title = chapter.get('title', '未命名章节')
-        lines.append(f"** #4ECDC4 {chapter_title}")
+        lines.append(f"** {chapter_title}")
 
         chapter_units = units_by_chapter.get(chapter['id'], [])
         for unit in chapter_units:
@@ -123,16 +123,16 @@ def export_mindmap_plantuml(
             if mastery:
                 level = mastery.get('level', '')
                 color_map = {
-                    'mastered': '#2ECC71',
-                    'proficient': '#3498DB',
-                    'familiar': '#F39C12',
-                    'beginner': '#E74C3C',
+                    'mastered': '2ECC71',
+                    'proficient': '3498DB',
+                    'familiar': 'F39C12',
+                    'beginner': 'E74C3C',
                 }
-                color = color_map.get(level, '#95A5A6')
+                color = color_map.get(level, '95A5A6')
             else:
-                color = '#95A5A6'
+                color = '95A5A6'
 
-            lines.append(f"*** #{color} {unit_title}")
+            lines.append(f"***[{color}] {unit_title}")
 
             # 关键要点
             key_points = unit.get('key_points', [])

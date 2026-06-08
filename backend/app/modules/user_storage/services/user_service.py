@@ -42,7 +42,6 @@ class UserService:
     async def update_preferences(self, user_id: str, **kwargs) -> UserModel:
         user = await self.get_user(user_id)
 
-        # 单独处理 learning_style_json：用 LearningStyle 校验
         style_json = kwargs.get("learning_style_json")
         if style_json is not None:
             try:
@@ -51,8 +50,9 @@ class UserService:
             except Exception as e:
                 raise ServiceError(ErrorCode.VALIDATION_ERROR, f"learning_style 格式错误: {e}")
 
+        allowed_fields = {"daily_goal_minutes", "preferred_language", "learning_style_json"}
         for key, value in kwargs.items():
-            if value is not None and hasattr(user, key):
+            if key in allowed_fields and value is not None:
                 setattr(user, key, value)
         user.updated_at = utc_now()
         await self.db.flush()

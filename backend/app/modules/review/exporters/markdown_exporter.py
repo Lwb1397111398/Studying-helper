@@ -1,7 +1,7 @@
 """Markdown笔记导出器"""
 
 from typing import List, Dict
-from datetime import datetime
+from datetime import datetime, timezone
 
 from app.modules.review.schemas import ExportResult, ExportFormat
 
@@ -26,7 +26,7 @@ def export_markdown(
     """
     lines = []
     lines.append(f"# {book_title} - 复习笔记")
-    lines.append(f"\n导出时间：{datetime.now().strftime('%Y-%m-%d %H:%M')}\n")
+    lines.append(f"\n导出时间：{datetime.now(timezone.utc).strftime('%Y-%m-%d %H:%M')}\n")
 
     # 按章节组织
     chapter_map = {c['id']: c for c in chapters}
@@ -54,7 +54,7 @@ def export_markdown(
                     'beginner': '[初学]',
                 }
                 level_text = level_emoji.get(mastery.get('level', ''), '[未知]')
-                lines.append(f"掌握度：{level_text} ({mastery.get('score', 0):.0%})\n")
+                lines.append(f"掌握度：{level_text} ({mastery.get('mastery_score', 0):.0%})\n")
 
             # 摘要
             summary = unit.get('summary', '')

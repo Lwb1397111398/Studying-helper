@@ -1,13 +1,15 @@
 """TXT解析器"""
 
+import asyncio
 from pathlib import Path
-from typing import List
+from typing import List, Optional
 
 import chardet
 
 from app.common.errors import ServiceError, ErrorCode
+from app.common.llm_client import LLMClient
 from app.modules.document_parser.schemas import ParsedDocument, BookMetadata, TOCItem
-from app.modules.document_parser.toc_detector import identify_toc_items
+from app.modules.document_parser.toc_detector import identify_toc_items, identify_toc_items_enhanced
 
 
 class TXTParser:
@@ -19,7 +21,7 @@ class TXTParser:
         """识别TXT文件"""
         return file_path.lower().endswith('.txt')
 
-    def parse(self, file_path: str) -> ParsedDocument:
+    def parse(self, file_path: str, llm_client: Optional[LLMClient] = None) -> ParsedDocument:
         """
         解析TXT文件。
 
@@ -60,11 +62,19 @@ class TXTParser:
                 message="文件内容为空"
             )
 
+        # 内容清洗（在目录检测之前，确保偏移量一致）
+        try:
+            from app.modules.document_parser.noise_cleaner import clean_full_text
+            full_text, _ = clean_full_text(full_text)
+        except Exception as e:
+            import logging
+            logging.getLogger(__name__).warning(f"内容清洗失败，使用原始文本: {e}")
+
         # 提取元数据
         metadata = self._extract_metadata(file_path_obj, encoding)
 
         # 提取目录
-        toc = self._extract_toc(full_text)
+        toc = self._extract_toc(full_text, llm_client)
 
         return ParsedDocument(
             metadata=metadata,
@@ -106,7 +116,7 @@ class TXTParser:
             file_size_bytes=file_size
         )
 
-    def _extract_toc(self, full_text: str) -> List[TOCItem]:
+    def _extract_toc(self, full_text: str, llm_client: Optional[LLMClient] = None) -> List[TOCItem]:
         """提取目录"""
         # 先尝试识别文件开头的目录段落
         toc = self._extract_toc_from_header(full_text)
@@ -114,6 +124,13 @@ class TXTParser:
         if not toc:
             # 如果没有目录段落，使用启发式规则
             toc = identify_toc_items(full_text)
+
+        if not toc and llm_client:
+            # 同步解析器只在无线程事件循环中桥接异步 LLM fallback。
+            try:
+                asyncio.get_running_loop()
+            except RuntimeError:
+                toc = asyncio.run(identify_toc_items_enhanced(full_text, "txt", llm_client))
 
         return toc
 

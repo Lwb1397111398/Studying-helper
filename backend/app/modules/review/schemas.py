@@ -1,10 +1,20 @@
 """复习引擎数据模型"""
 
 from pydantic import BaseModel, Field
-from typing import Optional, List, Dict
-from datetime import datetime
+from typing import Optional, List, Dict, Any
+from datetime import datetime, timezone
 from enum import Enum
 from uuid import uuid4
+
+
+class QuestionType(str, Enum):
+    """题型枚举"""
+    SHORT_ANSWER = "short_answer"
+    CHOICE = "choice"
+    FILL_BLANK = "fill_blank"
+    MATCHING = "matching"
+    ORDERING = "ordering"
+    TRUE_FALSE = "true_false"
 
 
 class MasteryRecord(BaseModel):
@@ -14,7 +24,7 @@ class MasteryRecord(BaseModel):
     knowledge_unit_id: str
     book_id: str = ""
     mastery_score: float  # 0-1
-    mastery_level: str  # 'beginner' | 'familiar' | 'proficient' | 'mastered'
+    mastery_level: str  # 'beginner' | 'learning' | 'familiar' | 'proficient' | 'mastered'
     last_reviewed_at: Optional[datetime] = None
     next_review_at: datetime
     review_count: int = 0
@@ -29,8 +39,9 @@ class ReviewSession(BaseModel):
     book_id: str
     review_type: str  # 'spaced' | 'exam' | 'manual'
     questions: List['ReviewQuestion'] = []
-    started_at: datetime = Field(default_factory=datetime.now)
+    started_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
     ended_at: Optional[datetime] = None
+    score: Optional[float] = None
 
 
 class ReviewQuestion(BaseModel):
@@ -38,12 +49,18 @@ class ReviewQuestion(BaseModel):
     id: str = Field(default_factory=lambda: str(uuid4()))
     unit_id: str
     question: str
-    question_type: str
+    question_type: str  # QuestionType 枚举值
     options: Optional[List[str]] = None
     correct_answer: str
     user_answer: Optional[str] = None
     is_correct: Optional[bool] = None
     answered_at: Optional[datetime] = None
+    # 扩展字段（用于配对题、排序题等）
+    pairs: Optional[List[Dict[str, str]]] = None
+    sequence: Optional[List[str]] = None
+    statement: Optional[str] = None
+    # 自由回忆模式扩展字段
+    recall_context: Optional[Dict[str, Any]] = None
 
 
 class ExamConfig(BaseModel):
@@ -73,6 +90,7 @@ class ExportFormat(str, Enum):
     WRONG_ANSWERS = "wrong_answers"
     MIND_MAP_MERMAID = "mind_map_mermaid"
     MIND_MAP_PLANTUML = "mind_map_plantuml"
+    CORNELL_NOTES = "cornell_notes"
 
 
 class ExportResult(BaseModel):
@@ -90,6 +108,7 @@ class ReviewFeedback(BaseModel):
     explanation: str
     next_review_at: datetime
     mastery_change: float
+    calibration_feedback: Optional[str] = None  # 校准反馈（信心与正确性差异）
 
 
 class MasteryAssessment(BaseModel):
@@ -100,3 +119,26 @@ class MasteryAssessment(BaseModel):
     dimensions: Dict[str, float]
     weak_points: List[str]
     recommended_review_at: datetime
+
+
+class RecalledPoint(BaseModel):
+    """回忆到的单个要点"""
+    content: str
+    matched_point: Optional[str] = None
+    is_accurate: bool = False
+
+
+class FreeRecallResult(BaseModel):
+    """自由回忆评估结果"""
+    question_id: str
+    unit_id: str
+    coverage: float = 0.0        # 覆盖率 0-1
+    accuracy: float = 0.0        # 准确性 0-1
+    depth: float = 0.0           # 深度 0-1
+    overall_score: float = 0.0   # 综合分 0-100
+    recalled_points: List[RecalledPoint] = []
+    missed_points: List[str] = []
+    incorrect_points: List[str] = []
+    gap_report: str = ""
+    mastery_change: float = 0.0
+    next_review_at: Optional[datetime] = None

@@ -1,6 +1,5 @@
 """错误处理模块"""
 from enum import Enum
-from fastapi import HTTPException
 
 
 class ErrorCode(str, Enum):
@@ -14,7 +13,8 @@ class ErrorCode(str, Enum):
 
 
 class ServiceError(Exception):
-    def __init__(self, code: ErrorCode, message: str, details: dict = None):
+    def __init__(self, code: ErrorCode, message: str, details: dict | None = None):
+        super().__init__(message)
         self.code = code
         self.message = message
         self.details = details

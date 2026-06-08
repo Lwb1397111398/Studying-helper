@@ -56,12 +56,12 @@ export const getBook = (bookId: string): Promise<Book> => {
   return client.get(`/v1/books/${bookId}`);
 };
 
-// 上传书籍
-export const uploadBook = (file: File, onProgress?: (percent: number) => void): Promise<Book> => {
+// 上传书籍（启动异步解析）
+export const uploadBook = (file: File, onProgress?: (percent: number) => void): Promise<{ upload_id: string }> => {
   const formData = new FormData();
   formData.append('file', file);
 
-  return client.post('/v1/documents/parse', formData, {
+  return client.post('/v1/documents/parse/start', formData, {
     headers: { 'Content-Type': 'multipart/form-data' },
     timeout: 120000,
     onUploadProgress: (progressEvent) => {
@@ -102,17 +102,16 @@ export const confirmToc = (bookId: string, items: ConfirmTocRequest['items']): P
   return client.post(`/v1/documents/${bookId}/toc/confirm`, { items });
 };
 
-// SSE 连接：订阅拆分进度
-export function splitProgressSSE(
-  bookId: string,
-  onProgress: (data: { stage: string; percent: number; message: string; done: boolean; error?: string }) => void,
+function createProgressSSE<T extends { done: boolean }>(
+  url: string,
+  onProgress: (data: T) => void,
   onError?: (err: Error) => void,
 ): () => void {
-  const evtSource = new EventSource(`/api/v1/split/${bookId}/progress`);
+  const evtSource = new EventSource(url);
 
   evtSource.onmessage = (event) => {
     try {
-      const data = JSON.parse(event.data);
+      const data = JSON.parse(event.data) as T;
       onProgress(data);
       if (data.done) {
         evtSource.close();
@@ -127,6 +126,77 @@ export function splitProgressSSE(
     evtSource.close();
   };
 
-  // 返回取消函数
   return () => evtSource.close();
 }
+
+// SSE 连接：订阅拆分进度
+export function splitProgressSSE(
+  bookId: string,
+  onProgress: (data: { stage: string; percent: number; message: string; done: boolean; error?: string }) => void,
+  onError?: (err: Error) => void,
+): () => void {
+  return createProgressSSE(`/api/v1/split/${bookId}/progress`, onProgress, onError);
+}
+
+// SSE 连接：订阅解析进度
+export interface ParseProgressData {
+  upload_id: string;
+  stage: string;
+  percent: number;
+  message: string;
+  done: boolean;
+  error?: string;
+  book?: Book;
+}
+
+export function parseProgressSSE(
+  uploadId: string,
+  onProgress: (data: ParseProgressData) => void,
+  onError?: (err: Error) => void,
+): () => void {
+  return createProgressSSE(`/api/v1/documents/parse/${uploadId}/progress`, onProgress, onError);
+}
+
+// 获取每日学习统计
+export const getDailyStats = (
+  date: string,
+): Promise<{
+  user_id: string;
+  date: string;
+  total_minutes: number;
+  units_learned: number;
+  units_reviewed: number;
+  tests_taken: number;
+  avg_test_score: number;
+  streak_day: number;
+}> => {
+  return client.get(`/v1/stats/daily/${date}`);
+};
+
+// 获取连续学习天数
+export const getStreak = (): Promise<{ user_id: string; streak: number }> => {
+  return client.get('/v1/stats/streak');
+};
+
+// 更新书籍状态
+export const updateBookStatus = (
+  bookId: string,
+  status: {
+    parse_status?: string;
+    split_status?: string;
+    learn_status?: string;
+    total_chapters?: number;
+    total_units?: number;
+    learned_units?: number;
+  },
+): Promise<Book> => {
+  return client.put(`/v1/books/${bookId}/status`, status);
+};
+
+// 更新阅读动机
+export const updateBookMotivation = (
+  bookId: string,
+  motivation: string | null,
+): Promise<Book> => {
+  return client.put(`/v1/books/${bookId}/motivation`, { reading_motivation: motivation });
+};

@@ -12,13 +12,19 @@ export default function ExamSession() {
   const [session, setSession] = useState<ReviewSession | null>(null);
   const [currentIndex, setCurrentIndex] = useState(0);
   const [answers, setAnswers] = useState<Record<string, string>>({});
-  const [feedback, setFeedback] = useState<{ correct: boolean; explanation: string } | null>(null);
   const [loading, setLoading] = useState(true);
   const [submitting, setSubmitting] = useState(false);
   const [result, setResult] = useState<ExamResult | null>(null);
 
   useEffect(() => {
-    if (bookId) initExam();
+    let cancelled = false;
+    if (bookId) {
+      startExam(bookId, [])
+        .then((data) => { if (!cancelled) setSession(data); })
+        .catch((error) => { if (!cancelled) console.error('创建考试失败:', error); })
+        .finally(() => { if (!cancelled) setLoading(false); });
+    }
+    return () => { cancelled = true; };
   }, [bookId]);
 
   const initExam = async () => {
@@ -38,22 +44,11 @@ export default function ExamSession() {
 
   const handleSubmitAnswer = () => {
     if (!currentQuestion || !answers[currentQuestion.id]) return;
-    setFeedback({
-      correct: answers[currentQuestion.id] === currentQuestion.correct_answer,
-      explanation: `正确答案：${currentQuestion.correct_answer}`,
-    });
-  };
-
-  const handleNext = async () => {
-    if (!session) return;
     const nextIndex = currentIndex + 1;
-    if (nextIndex < session.questions.length) {
+    if (nextIndex < session!.questions.length) {
       setCurrentIndex(nextIndex);
-      setAnswers({});
-      setFeedback(null);
     } else {
-      // 交卷
-      await handleSubmitExam();
+      handleSubmitExam();
     }
   };
 
@@ -145,7 +140,7 @@ export default function ExamSession() {
   }
 
   const total = session.questions.length;
-  const progress = Math.round(((currentIndex + (feedback ? 1 : 0)) / total) * 100);
+  const progress = Math.round(((currentIndex + 1) / total) * 100);
 
   return (
     <div className="max-w-3xl mx-auto animate-fade-in">
@@ -176,25 +171,18 @@ export default function ExamSession() {
           <div className="space-y-2.5">
             {currentQuestion.options.map((option, i) => {
               const isSelected = answers[currentQuestion.id] === option;
-              const isCorrect = option === currentQuestion.correct_answer;
-              const showResult = !!feedback;
 
               let style = 'border-gray-100 bg-white hover:border-orange-200 hover:bg-orange-50/30';
-              if (isSelected && !showResult) style = 'border-orange-400 bg-orange-50 ring-2 ring-orange-100';
-              if (showResult && isCorrect) style = 'border-emerald-400 bg-emerald-50 ring-2 ring-emerald-100';
-              if (showResult && isSelected && !isCorrect) style = 'border-red-400 bg-red-50 ring-2 ring-red-100';
+              if (isSelected) style = 'border-orange-400 bg-orange-50 ring-2 ring-orange-100';
 
               return (
-                <button key={i} onClick={() => !feedback && setAnswers({ ...answers, [currentQuestion.id]: option })} disabled={showResult}
+                <button key={i} onClick={() => setAnswers({ ...answers, [currentQuestion.id]: option })}
                   className={`w-full p-4 text-left rounded-xl border-2 transition-all text-sm ${style}`}>
                   <div className="flex items-center gap-3">
                     <span className={`w-6 h-6 rounded-full border-2 flex items-center justify-center text-[10px] font-bold shrink-0 ${
-                      isSelected && !showResult ? 'border-orange-400 bg-orange-500 text-white' :
-                      showResult && isCorrect ? 'border-emerald-400 bg-emerald-500 text-white' :
-                      showResult && isSelected && !isCorrect ? 'border-red-400 bg-red-500 text-white' :
-                      'border-gray-200 text-gray-400'
+                      isSelected ? 'border-orange-400 bg-orange-500 text-white' : 'border-gray-200 text-gray-400'
                     }`}>
-                      {showResult && isCorrect ? '✓' : showResult && isSelected && !isCorrect ? '✗' : String.fromCharCode(65 + i)}
+                      {String.fromCharCode(65 + i)}
                     </span>
                     <span className="text-gray-700">{option}</span>
                   </div>
@@ -205,23 +193,10 @@ export default function ExamSession() {
         ) : (
           <input type="text" value={answers[currentQuestion.id] || ''}
             onChange={(e) => setAnswers({ ...answers, [currentQuestion.id]: e.target.value })}
-            placeholder="输入你的答案..." disabled={!!feedback}
-            className="w-full p-4 border-2 border-gray-100 rounded-xl text-sm focus:outline-none focus:border-orange-300 focus:ring-2 focus:ring-orange-50 bg-gray-50/50 disabled:opacity-50 transition-all" />
+            placeholder="输入你的答案..."
+            className="w-full p-4 border-2 border-gray-100 rounded-xl text-sm focus:outline-none focus:border-orange-300 focus:ring-2 focus:ring-orange-50 bg-gray-50/50 transition-all" />
         )}
       </Card>
-
-      {/* 反馈 */}
-      {feedback && (
-        <Card className={`mb-6 animate-scale-in ${feedback.correct ? 'border-emerald-200 bg-emerald-50/50' : 'border-red-200 bg-red-50/50'}`}>
-          <div className="flex items-center gap-2 mb-2">
-            <span className="text-xl">{feedback.correct ? '✅' : '❌'}</span>
-            <p className={`font-semibold ${feedback.correct ? 'text-emerald-600' : 'text-red-600'}`}>
-              {feedback.correct ? '回答正确' : '回答错误'}
-            </p>
-          </div>
-          <p className="text-sm text-gray-600 leading-relaxed">{feedback.explanation}</p>
-        </Card>
-      )}
 
       {/* 操作按钮 */}
       <div className="flex justify-between items-center">
@@ -229,17 +204,10 @@ export default function ExamSession() {
           className="px-4 py-2.5 text-gray-500 rounded-xl text-sm font-medium hover:bg-gray-100 transition-colors">
           退出考试
         </button>
-        {feedback ? (
-          <button onClick={handleNext}
-            className="flex items-center gap-2 px-6 py-2.5 bg-gradient-to-r from-orange-500 to-amber-500 text-white rounded-xl text-sm font-medium hover:shadow-lg hover:shadow-orange-500/25 transition-all">
-            {currentIndex + 1 < total ? '下一题 →' : '📋 交卷'}
-          </button>
-        ) : (
-          <button onClick={handleSubmitAnswer} disabled={!answers[currentQuestion.id]}
-            className="flex items-center gap-2 px-6 py-2.5 bg-gradient-to-r from-orange-500 to-amber-500 text-white rounded-xl text-sm font-medium hover:shadow-lg hover:shadow-orange-500/25 disabled:opacity-40 disabled:cursor-not-allowed transition-all">
-            确认答案
-          </button>
-        )}
+        <button onClick={handleSubmitAnswer} disabled={!answers[currentQuestion.id] || submitting}
+          className="flex items-center gap-2 px-6 py-2.5 bg-gradient-to-r from-orange-500 to-amber-500 text-white rounded-xl text-sm font-medium hover:shadow-lg hover:shadow-orange-500/25 disabled:opacity-40 disabled:cursor-not-allowed transition-all">
+          {submitting ? '提交中...' : currentIndex + 1 < total ? '下一题 →' : '📋 交卷'}
+        </button>
       </div>
     </div>
   );

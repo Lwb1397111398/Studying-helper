@@ -11,7 +11,7 @@ from app.db.models import (
     UserModel, BookModel, KnowledgeUnitModel, ChapterModel,
     LearningRecordModel, DailyStatsModel,
 )
-from app.modules.ai_learning.schemas import LearnedUnit, Concept, SelfAssessment
+from app.modules.ai_learning.schemas import LearnedUnit, Concept, KeyPoint, SelfAssessment
 from app.modules.learning_plan.service import LearningPlanService
 from app.modules.learning_plan.style_analyzer import LearningStyleAnalyzer
 from app.modules.learning_plan.schemas import LearningStyle, SessionPerformance
@@ -40,7 +40,7 @@ def sample_learned_units():
             unit_id=f"unit-{i}",
             book_id="book-1",
             summary=f"这是第{i}个单元的摘要",
-            key_points=[f"要点{i}-1", f"要点{i}-2"],
+            key_points=[KeyPoint(title=f"要点{i}-1"), KeyPoint(title=f"要点{i}-2")],
             concepts=[Concept(name=f"概念{i}", definition=f"定义{i}")],
             difficulty_level=(i % 5) + 1,
             importance_score=0.5 + (i % 5) * 0.1,
@@ -235,7 +235,7 @@ class TestLearningPlanServiceWithDB:
                 char_offset_start=i * 100,
                 char_offset_end=(i + 1) * 100,
                 summary=f"摘要{i}",
-                key_points=f"要点{i}-1,要点{i}-2",
+                key_points=json.dumps([f"要点{i}-1", f"要点{i}-2"]),
                 difficulty_level=i + 1,
                 importance_score=0.5 + i * 0.1,
             )

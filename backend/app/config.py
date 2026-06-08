@@ -27,6 +27,9 @@ class Settings(BaseSettings):
     LLM_PARSER_MODEL: str = ""
     LLM_PARSER_BASE_URL: str = ""
 
+    # ── 并发控制 ──
+    LLM_MAX_CONCURRENT: int = 4  # 同时进行的 LLM 请求数量上限（过高会导致 API 提供商拒绝连接）
+
     # ── 原有配置 ──
     DB_URL: str = "sqlite+aiosqlite:///./data/learning.db"
     LLM_API_KEY: str = ""          # 向后兼容，映射到 DEFAULT
@@ -34,8 +37,9 @@ class Settings(BaseSettings):
     LLM_BASE_URL: str = "https://api.openai.com/v1"  # 向后兼容
     FILE_STORAGE_DIR: str = "./data/files"
     BACKUP_DIR: str = "./data/backups"
-    JWT_SECRET_KEY: str = "dev-only-key-replace-in-production-env"
+    JWT_SECRET_KEY: str = ""  # 空则每次重启生成临时密钥；生产环境应从 .env 配置
     JWT_EXPIRE_HOURS: int = 72
+    CORS_ORIGINS: str = "http://localhost:3000,http://127.0.0.1:3000"
 
     def get_llm_config(self, module: str) -> dict:
         """获取指定模块的 LLM 配置，未配置则回退到全局默认。

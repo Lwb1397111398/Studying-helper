@@ -3,6 +3,7 @@
 import pytest
 import ebooklib
 from unittest.mock import MagicMock, patch
+from app.modules.ai_learning.tests.mock_llm import MockLLMClient
 from app.modules.document_parser.parsers.epub_parser import EPUBParser
 
 
@@ -75,3 +76,14 @@ class TestEPUBTextFallback:
 
         result = parser._identify_toc_from_text(text)
         assert result == []
+
+    def test_llm_fallback_when_text_rule_fails(self):
+        """Test LLM fallback when text rules cannot detect TOC"""
+        parser = EPUBParser()
+        llm_client = MockLLMClient()
+
+        result = parser._identify_toc_from_text("some text\nmore text", llm_client)
+
+        assert llm_client.call_count == 1
+        assert len(result) >= 3
+        assert result[0].title == "第一章 测试章"

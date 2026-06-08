@@ -34,6 +34,20 @@ class PageInfo(BaseModel):
     end_offset: int
 
 
+class PageTextInfo(BaseModel):
+    """PDF 逐页原始文本（清洗前）"""
+    page_number: int
+    text: str
+    height: float = 0
+
+
+class NoiseRegion(BaseModel):
+    """检测到的噪声区域"""
+    start: int
+    end: int
+    noise_type: str  # "header_footer" | "front_matter" | "toc_page" | "back_matter"
+
+
 class ParsedDocument(BaseModel):
     """解析后的文档"""
     id: str = Field(default_factory=lambda: str(uuid4()))

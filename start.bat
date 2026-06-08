@@ -1,41 +1,50 @@
 @echo off
 chcp 65001 >nul
+title 学习辅助系统 - 启动中...
 
 echo ========================================
-echo       Learning Helper - Starting
+echo       学习辅助系统 - 启动中...
 echo ========================================
 echo.
 
-:: Create required directories
-cd /d "%~dp0backend"
-if not exist "data\files" mkdir "data\files"
-if not exist "data\backups" mkdir "data\backups"
+:: 清理端口
+echo 正在清理端口...
+for /f "tokens=5" %%a in ('netstat -aon ^| findstr :8000 ^| findstr LISTENING') do taskkill /PID %%a /F >nul 2>&1
+for /f "tokens=5" %%a in ('netstat -aon ^| findstr :3000 ^| findstr LISTENING') do taskkill /PID %%a /F >nul 2>&1
+timeout /t 2 /nobreak >nul
 
-:: Start backend in new window
-echo [1/2] Starting backend...
-start "Learning Helper - Backend" cmd /k "cd /d "%~dp0backend" && uvicorn app.main:app --reload --host 0.0.0.0 --port 8000"
+:: 创建必要目录
+if not exist "%~dp0backend\data\files" mkdir "%~dp0backend\data\files"
+if not exist "%~dp0backend\data\backups" mkdir "%~dp0backend\data\backups"
 
-:: Wait for backend
+:: 启动后端（使用 start /D 指定工作目录，避免引号嵌套问题）
+:: 注意：不使用 --reload，避免文件监控在 AI 学习过程中重启服务器导致请求中断
+:: 开发时如需热重载，手动运行: cd backend && uvicorn app.main:app --reload --host 0.0.0.0 --port 8000
+echo [1/2] 启动后端服务...
+start "学习辅助系统-后端" /D "%~dp0backend" cmd /k "uvicorn app.main:app --host 0.0.0.0 --port 8000"
+
+:: 等待后端启动
 timeout /t 3 /nobreak >nul
 
-:: Start frontend in new window
-echo [2/2] Starting frontend...
-start "Learning Helper - Frontend" cmd /k "cd /d "%~dp0frontend" && npm run dev"
+:: 启动前端
+echo [2/2] 启动前端服务...
+start "学习辅助系统-前端" /D "%~dp0frontend" cmd /k "npm run dev"
 
-:: Wait for frontend
+:: 等待前端启动
 timeout /t 5 /nobreak >nul
 
-:: Open browser
+:: 打开浏览器
 echo.
-echo Opening browser...
+echo 正在打开浏览器...
 start http://localhost:3000
 
 echo.
 echo ========================================
-echo  Backend: http://localhost:8000
-echo  Frontend: http://localhost:3000
-echo  API Docs: http://localhost:8000/docs
+echo  启动完成！
+echo  后端: http://localhost:8000
+echo  前端: http://localhost:3000
+echo  API:  http://localhost:8000/docs
 echo ========================================
 echo.
-echo Press any key to exit this window...
+echo 按任意键关闭此窗口...
 pause >nul
