@@ -9,6 +9,7 @@ import androidx.activity.result.contract.ActivityResultContracts
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ExperimentalLayoutApi
 import androidx.compose.foundation.layout.FlowRow
@@ -31,6 +32,8 @@ import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.LinearProgressIndicator
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.TopAppBarDefaults
 import com.studyinghelper.mobile.ui.theme.StudyingHelperTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.OutlinedTextFieldDefaults
@@ -224,36 +227,48 @@ fun BooksScreen(navController: NavHostController, viewModel: StudyViewModel) {
             }
         },
     ) { padding ->
-        Column(modifier = Modifier.padding(padding).padding(16.dp)) {
-            WelcomeSummary(books)
-            Spacer(modifier = Modifier.height(16.dp))
-            ActionGroup("创建与导入") {
-                PaperButton(onClick = { showCreateBook = true }, backgroundColor = CoffeeOrange) { Text("📕 新建书籍") }
-                GhostButton(onClick = { txtImportLauncher.launch(arrayOf("text/plain", "text/*")) }) { Text("📄 导入 TXT") }
-                GhostButton(onClick = { epubImportLauncher.launch(arrayOf("application/epub+zip", "application/octet-stream")) }) { Text("📖 导入 EPUB") }
-                GhostButton(onClick = { pdfImportLauncher.launch(arrayOf("application/pdf", "application/octet-stream")) }) { Text("📑 导入 PDF") }
+        LazyColumn(
+            modifier = Modifier.fillMaxSize().padding(padding).padding(horizontal = 16.dp),
+            verticalArrangement = Arrangement.spacedBy(12.dp),
+        ) {
+            item { Spacer(modifier = Modifier.height(4.dp)) }
+            item { WelcomeSummary(books) }
+            item {
+                ActionGroup("创建与导入") {
+                    PaperButton(onClick = { showCreateBook = true }, backgroundColor = CoffeeOrange) { Text("📕 新建书籍") }
+                    GhostButton(onClick = { txtImportLauncher.launch(arrayOf("text/plain", "text/*")) }) { Text("📄 导入 TXT") }
+                    GhostButton(onClick = { epubImportLauncher.launch(arrayOf("application/epub+zip", "application/octet-stream")) }) { Text("📖 导入 EPUB") }
+                    GhostButton(onClick = { pdfImportLauncher.launch(arrayOf("application/pdf", "application/octet-stream")) }) { Text("📑 导入 PDF") }
+                }
             }
-            Spacer(modifier = Modifier.height(12.dp))
-            ActionGroup("同步与设置") {
-                GhostButton(onClick = { importLauncher.launch(arrayOf("application/json")) }) { Text("📥 导入同步包") }
-                GhostButton(onClick = { exportLauncher.launch("studying-helper-android-sync.json") }) { Text("📤 导出同步包") }
-                GhostButton(onClick = { showAiSettings = true }) { Text("🤖 AI 设置") }
-                GhostButton(onClick = { navController.navigate("report") }) { Text("📊 学习报告") }
+            item {
+                ActionGroup("同步与设置") {
+                    GhostButton(onClick = { importLauncher.launch(arrayOf("application/json")) }) { Text("📥 导入同步包") }
+                    GhostButton(onClick = { exportLauncher.launch("studying-helper-android-sync.json") }) { Text("📤 导出同步包") }
+                    GhostButton(onClick = { showAiSettings = true }) { Text("🤖 AI 设置") }
+                    GhostButton(onClick = { navController.navigate("report") }) { Text("📊 学习报告") }
+                }
             }
-            Spacer(modifier = Modifier.height(16.dp))
             if (books.isEmpty()) {
-                EmptyState()
+                item { EmptyState() }
             } else {
-                LazyColumn(
-                    modifier = Modifier.fillMaxWidth().weight(1f),
-                    verticalArrangement = Arrangement.spacedBy(12.dp),
-                ) {
-                    items(books, key = { it.id }) { book ->
-                        BookCardWithSpine(
-                            book = book,
-                            onClick = { navController.navigate("books/${routeParam(book.id)}") }
-                        )
+                item {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Text("📚", style = MaterialTheme.typography.titleMedium)
+                        Spacer(modifier = Modifier.width(8.dp))
+                        Text("我的书籍", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold, color = InkBrown)
                     }
+                }
+                items(books, key = { it.id }) { book ->
+                    val total = (book.totalUnits ?: 0).coerceAtLeast(1)
+                    val learned = (book.learnedUnits ?: 0).coerceAtMost(total)
+                    val progress = learned.toFloat() / total
+                    BookCardWithSpine(
+                        title = book.title,
+                        subtitle = "章节 ${book.totalChapters ?: 0} · 知识单元 ${book.totalUnits ?: 0} · 已学习 ${book.learnedUnits ?: 0}",
+                        progress = progress,
+                        onClick = { navController.navigate("books/${routeParam(book.id)}") }
+                    )
                 }
             }
         }

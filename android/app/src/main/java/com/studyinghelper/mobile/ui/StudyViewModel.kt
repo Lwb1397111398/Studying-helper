@@ -203,6 +203,7 @@ class StudyViewModel(application: Application) : AndroidViewModel(application) {
 
     fun moveExam(offset: Int) {
         val state = _examState.value ?: return
+        if (state.questions.isEmpty()) return
         val nextIndex = (state.currentIndex + offset).coerceIn(0, state.questions.lastIndex)
         _examState.value = state.copy(currentIndex = nextIndex)
     }
@@ -370,47 +371,53 @@ class StudyViewModel(application: Application) : AndroidViewModel(application) {
             _status.value = "书名不能为空"
             return
         }
-        viewModelScope.launch {
-            val now = OffsetDateTime.now().toString()
-            val bookId = "android-book-${UUID.randomUUID()}"
-            val chapterId = "android-chapter-${UUID.randomUUID()}"
-            dao.insertBooks(
-                listOf(
-                    BookEntity(
-                        id = bookId,
-                        userId = "anonymous",
-                        title = trimmedTitle,
-                        author = author?.trim()?.takeIf { it.isNotEmpty() },
-                        filePath = "android://manual/$bookId",
-                        fileType = "manual",
-                        fileSizeBytes = 0,
-                        parseStatus = "completed",
-                        splitStatus = "completed",
-                        learnStatus = "pending",
-                        totalChapters = 1,
-                        totalUnits = 0,
-                        learnedUnits = 0,
-                        readingMotivation = null,
-                        createdAt = now,
-                        updatedAt = now,
+        viewModelScope.launch(Dispatchers.IO) {
+            runCatching {
+                val now = OffsetDateTime.now().toString()
+                val bookId = "android-book-${UUID.randomUUID()}"
+                val chapterId = "android-chapter-${UUID.randomUUID()}"
+                database.withTransaction {
+                    dao.insertBooks(
+                        listOf(
+                            BookEntity(
+                                id = bookId,
+                                userId = "anonymous",
+                                title = trimmedTitle,
+                                author = author?.trim()?.takeIf { it.isNotEmpty() },
+                                filePath = "android://manual/$bookId",
+                                fileType = "manual",
+                                fileSizeBytes = 0,
+                                parseStatus = "completed",
+                                splitStatus = "completed",
+                                learnStatus = "pending",
+                                totalChapters = 1,
+                                totalUnits = 0,
+                                learnedUnits = 0,
+                                readingMotivation = null,
+                                createdAt = now,
+                                updatedAt = now,
+                            )
+                        )
                     )
-                )
-            )
-            dao.insertChapters(
-                listOf(
-                    ChapterEntity(
-                        id = chapterId,
-                        bookId = bookId,
-                        title = "默认章节",
-                        chapterNumber = 1,
-                        parentId = null,
-                        level = 0,
-                        orderIndex = 0,
-                        summary = null,
+                    dao.insertChapters(
+                        listOf(
+                            ChapterEntity(
+                                id = chapterId,
+                                bookId = bookId,
+                                title = "默认章节",
+                                chapterNumber = 1,
+                                parentId = null,
+                                level = 0,
+                                orderIndex = 0,
+                                summary = null,
+                            )
+                        )
                     )
-                )
-            )
-            _status.value = "已创建书籍"
+                }
+                _status.value = "已创建书籍"
+            }.onFailure { error ->
+                _status.value = "创建书籍失败：${error.message ?: "未知错误"}"
+            }
         }
     }
 
@@ -420,24 +427,30 @@ class StudyViewModel(application: Application) : AndroidViewModel(application) {
             _status.value = "章节标题不能为空"
             return
         }
-        viewModelScope.launch {
-            val order = dao.countChapters(bookId)
-            dao.insertChapters(
-                listOf(
-                    ChapterEntity(
-                        id = "android-chapter-${UUID.randomUUID()}",
-                        bookId = bookId,
-                        title = trimmedTitle,
-                        chapterNumber = order + 1,
-                        parentId = null,
-                        level = 0,
-                        orderIndex = order,
-                        summary = null,
+        viewModelScope.launch(Dispatchers.IO) {
+            runCatching {
+                val order = dao.countChapters(bookId)
+                database.withTransaction {
+                    dao.insertChapters(
+                        listOf(
+                            ChapterEntity(
+                                id = "android-chapter-${UUID.randomUUID()}",
+                                bookId = bookId,
+                                title = trimmedTitle,
+                                chapterNumber = order + 1,
+                                parentId = null,
+                                level = 0,
+                                orderIndex = order,
+                                summary = null,
+                            )
+                        )
                     )
-                )
-            )
-            refreshBookCounts(bookId)
-            _status.value = "已创建章节"
+                }
+                refreshBookCounts(bookId)
+                _status.value = "已创建章节"
+            }.onFailure { error ->
+                _status.value = "创建章节失败：${error.message ?: "未知错误"}"
+            }
         }
     }
 
@@ -448,42 +461,48 @@ class StudyViewModel(application: Application) : AndroidViewModel(application) {
             _status.value = "知识单元标题和内容不能为空"
             return
         }
-        viewModelScope.launch {
-            val chapter = dao.getFirstChapter(bookId) ?: ChapterEntity(
-                id = "android-chapter-${UUID.randomUUID()}",
-                bookId = bookId,
-                title = "默认章节",
-                chapterNumber = 1,
-                parentId = null,
-                level = 0,
-                orderIndex = 0,
-                summary = null,
-            ).also { dao.insertChapters(listOf(it)) }
-            val order = dao.countUnits(bookId)
-            dao.insertUnits(
-                listOf(
-                    KnowledgeUnitEntity(
-                        id = "android-unit-${UUID.randomUUID()}",
+        viewModelScope.launch(Dispatchers.IO) {
+            runCatching {
+                database.withTransaction {
+                    val chapter = dao.getFirstChapter(bookId) ?: ChapterEntity(
+                        id = "android-chapter-${UUID.randomUUID()}",
                         bookId = bookId,
-                        chapterId = chapter.id,
-                        sectionId = null,
-                        title = trimmedTitle,
-                        content = trimmedContent,
-                        orderIndex = order,
-                        charOffsetStart = 0,
-                        charOffsetEnd = trimmedContent.length,
+                        title = "默认章节",
+                        chapterNumber = 1,
+                        parentId = null,
+                        level = 0,
+                        orderIndex = 0,
                         summary = null,
-                        explanation = null,
-                        keyPoints = null,
-                        concepts = null,
-                        prerequisites = null,
-                        difficultyLevel = 1,
-                        importanceScore = 0.5f,
+                    ).also { dao.insertChapters(listOf(it)) }
+                    val order = dao.countUnits(bookId)
+                    dao.insertUnits(
+                        listOf(
+                            KnowledgeUnitEntity(
+                                id = "android-unit-${UUID.randomUUID()}",
+                                bookId = bookId,
+                                chapterId = chapter.id,
+                                sectionId = null,
+                                title = trimmedTitle,
+                                content = trimmedContent,
+                                orderIndex = order,
+                                charOffsetStart = 0,
+                                charOffsetEnd = trimmedContent.length,
+                                summary = null,
+                                explanation = null,
+                                keyPoints = null,
+                                concepts = null,
+                                prerequisites = null,
+                                difficultyLevel = 1,
+                                importanceScore = 0.5f,
+                            )
+                        )
                     )
-                )
-            )
-            refreshBookCounts(bookId)
-            _status.value = "已创建知识单元"
+                }
+                refreshBookCounts(bookId)
+                _status.value = "已创建知识单元"
+            }.onFailure { error ->
+                _status.value = "创建知识单元失败：${error.message ?: "未知错误"}"
+            }
         }
     }
 
@@ -554,6 +573,7 @@ class StudyViewModel(application: Application) : AndroidViewModel(application) {
             val today = LocalDate.now().toString()
             val oldStats = dao.getDailyStats("anonymous", today)
             val newlyLearned = (old?.masteryScore ?: 0f) < 0.6f && clampedScore >= 0.6f
+            val streakDay = computeStreak(today)
             dao.insertDailyStats(
                 listOf(
                     DailyStatsEntity(
@@ -564,13 +584,24 @@ class StudyViewModel(application: Application) : AndroidViewModel(application) {
                         unitsReviewed = (oldStats?.unitsReviewed ?: 0) + 1,
                         testsTaken = oldStats?.testsTaken ?: 0,
                         avgTestScore = oldStats?.avgTestScore ?: 0f,
-                        streakDay = oldStats?.streakDay ?: 1,
+                        streakDay = streakDay,
                     )
                 )
             )
             refreshBookCounts(unit.bookId)
             _status.value = "已更新掌握度"
         }
+    }
+
+    private suspend fun computeStreak(today: String): Int {
+        val yesterday = LocalDate.parse(today).minusDays(1).toString()
+        val yesterdayStats = dao.getDailyStats("anonymous", yesterday)
+        val studiedYesterday = yesterdayStats != null && (
+            (yesterdayStats.unitsReviewed ?: 0) > 0 ||
+            (yesterdayStats.unitsLearned ?: 0) > 0 ||
+            (yesterdayStats.testsTaken ?: 0) > 0
+        )
+        return if (studiedYesterday) (yesterdayStats?.streakDay ?: 1) + 1 else 1
     }
 
     private suspend fun refreshBookCounts(bookId: String) {

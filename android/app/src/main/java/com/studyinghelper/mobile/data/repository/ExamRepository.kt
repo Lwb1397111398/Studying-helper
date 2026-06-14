@@ -53,6 +53,7 @@ class ExamRepository(private val database: StudyDatabase) {
         val oldAverage = old?.avgTestScore ?: 0f
         val newTests = oldTests + 1
         val newAverage = ((oldAverage * oldTests) + score) / newTests
+        val streakDay = computeStreak(today)
         dao.insertDailyStats(
             listOf(
                 DailyStatsEntity(
@@ -63,10 +64,21 @@ class ExamRepository(private val database: StudyDatabase) {
                     unitsReviewed = old?.unitsReviewed ?: 0,
                     testsTaken = newTests,
                     avgTestScore = newAverage,
-                    streakDay = old?.streakDay ?: 1,
+                    streakDay = streakDay,
                 )
             )
         )
+    }
+
+    private suspend fun computeStreak(today: String): Int {
+        val yesterday = LocalDate.parse(today).minusDays(1).toString()
+        val yesterdayStats = dao.getDailyStats("anonymous", yesterday)
+        val studiedYesterday = yesterdayStats != null && (
+            (yesterdayStats.unitsReviewed ?: 0) > 0 ||
+            (yesterdayStats.unitsLearned ?: 0) > 0 ||
+            (yesterdayStats.testsTaken ?: 0) > 0
+        )
+        return if (studiedYesterday) (yesterdayStats?.streakDay ?: 1) + 1 else 1
     }
 
     private fun KnowledgeUnitEntity.toQuestion(): ExamQuestion {
