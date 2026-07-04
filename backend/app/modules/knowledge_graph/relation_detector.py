@@ -167,6 +167,63 @@ class RelationDetector:
                 ))
         return edges
 
+    def detect_concept_associations(
+        self,
+        concept_to_units: dict,
+        concept_node_ids: dict,
+        min_cooccurrence: int = 2,
+    ) -> List[KGEdge]:
+        """检测概念间关联（基于跨单元共现）。
+
+        规则化方法（无 LLM）：两个概念若同时出现在 >= min_cooccurrence 个单元中，
+        说明它们在书中反复结伴出现，存在 similar_to 语义关联。
+        这是 AID 宏观跨章节聚类的概念级依据——同现于不同章节的概念可组成学习模块。
+
+        contrasts_with 等需要语义理解的关系由 LLM 阶段补（见 AID M2），此处不硬做。
+
+        参数:
+            concept_to_units: 概念名 -> 该概念出现的 unit_id 集合/列表
+            concept_node_ids: 概念名 -> 概念节点 id（KGNode.id）的映射
+            min_cooccurrence: 最小共现单元数阈值，默认 2
+
+        返回:
+            concept<->concept 的 similar_to 边列表（无向，存储为双向）
+        """
+        edges: List[KGEdge] = []
+        names = [n for n in concept_node_ids if n in concept_to_units]
+        if len(names) < 2:
+            return edges
+
+        # 转为 set 便于交集
+        unit_sets: dict[str, set] = {
+            n: set(_to_id_list(concept_to_units[n])) for n in names
+        }
+
+        for i in range(len(names)):
+            for j in range(i + 1, len(names)):
+                a, b = names[i], names[j]
+                common = unit_sets[a] & unit_sets[b]
+                if len(common) >= min_cooccurrence:
+                    # 权重 = 共现单元数 / 较小一方单元数（Jaccard 式归一）
+                    union = unit_sets[a] | unit_sets[b]
+                    weight = round(len(common) / len(union), 3) if union else 0.0
+                    id_a = concept_node_ids[a]
+                    id_b = concept_node_ids[b]
+                    edges.append(KGEdge(
+                        source_id=id_a,
+                        target_id=id_b,
+                        relation_type="similar_to",
+                        weight=weight,
+                    ))
+                    # 无向：补一条反向边
+                    edges.append(KGEdge(
+                        source_id=id_b,
+                        target_id=id_a,
+                        relation_type="similar_to",
+                        weight=weight,
+                    ))
+        return edges
+
 
 # ---- 辅助函数 ----
 
@@ -218,6 +275,18 @@ def _get_prerequisites(unit) -> list:
     if isinstance(prereqs, list):
         return prereqs
     return []
+
+
+def _to_id_list(items) -> list:
+    """把可迭代的 id（str 或对象）统一成 list[str]"""
+    result: list[str] = []
+    if not items:
+        return result
+    if isinstance(items, (set, list, tuple)):
+        for x in items:
+            result.append(str(x))
+        return result
+    return [str(items)]
 
 
 def _jaccard_similarity(set_a: set, set_b: set) -> float:

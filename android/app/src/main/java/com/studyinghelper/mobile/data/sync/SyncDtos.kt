@@ -26,6 +26,9 @@ data class SyncPackage(
     @SerialName("user_questions") val userQuestions: List<SyncUserQuestion> = emptyList(),
     @SerialName("session_tests") val sessionTests: List<SyncSessionTest> = emptyList(),
     @SerialName("learning_efficiency") val learningEfficiency: List<SyncLearningEfficiency> = emptyList(),
+    @SerialName("learner_intent_profiles") val learnerIntentProfiles: List<SyncLearnerIntentProfile> = emptyList(),
+    @SerialName("teaching_designs") val teachingDesigns: List<SyncTeachingDesign> = emptyList(),
+    @SerialName("module_micro_plans") val moduleMicroPlans: List<SyncModuleMicroPlan> = emptyList(),
 )
 
 @Serializable
@@ -78,6 +81,7 @@ data class SyncKnowledgeUnit(
     val prerequisites: String? = null,
     @SerialName("difficulty_level") val difficultyLevel: Int? = null,
     @SerialName("importance_score") val importanceScore: Float? = null,
+    @SerialName("ai_cognitive_hint") val aiCognitiveHint: String? = null,
 )
 
 @Serializable
@@ -118,6 +122,14 @@ data class SyncMasteryRecord(
     @SerialName("review_count") val reviewCount: Int? = 0,
     @SerialName("ease_factor") val easeFactor: Float? = 2.5f,
     @SerialName("interval_days") val intervalDays: Int? = 1,
+    // FSRS 算法参数
+    @SerialName("stability") val stability: Float = 0f,
+    @SerialName("difficulty") val difficulty: Float = 5f,
+    @SerialName("lapses") val lapses: Int = 0,
+    @SerialName("reps") val reps: Int = 0,
+    @SerialName("last_elapsed_days") val lastElapsedDays: Int = 0,
+    @SerialName("scheduled_days") val scheduledDays: Int = 0,
+    @SerialName("algorithm") val algorithm: String = "sm2",
 )
 
 @Serializable
@@ -233,4 +245,55 @@ data class SyncLearningEfficiency(
     @SerialName("interaction_count") val interactionCount: Int? = 0,
     @SerialName("efficiency_score") val efficiencyScore: Float? = 0f,
     @SerialName("created_at") val createdAt: String,
+)
+
+@Serializable
+data class SyncLearnerIntentProfile(
+    val id: String,
+    @SerialName("user_id") val userId: String,
+    @SerialName("book_id") val bookId: String,
+    @SerialName("identity_background") val identityBackground: String = "unknown",
+    @SerialName("goal_depth") val goalDepth: String = "apply_understand",
+    @SerialName("cognitive_pref") val cognitivePref: String = "rigorous_system",
+    @SerialName("restructure_tolerance") val restructureTolerance: String = "moderate",
+    @SerialName("time_budget_minutes") val timeBudgetMinutes: Int? = null,
+    val source: String = "ai_inferred",
+    val status: String = "draft",
+    @SerialName("extra_json") val extraJson: String = "{}",
+    @SerialName("created_at") val createdAt: String,
+    @SerialName("updated_at") val updatedAt: String,
+)
+
+@Serializable
+data class SyncTeachingDesign(
+    val id: String,
+    @SerialName("user_id") val userId: String,
+    @SerialName("book_id") val bookId: String,
+    @SerialName("profile_id") val profileId: String? = null,
+    @SerialName("macro_design_json") val macroDesignJson: String? = null,
+    @SerialName("current_module_index") val currentModuleIndex: Int = 0,
+    @SerialName("generated_module_count") val generatedModuleCount: Int = 0,
+    @SerialName("adjustments_json") val adjustmentsJson: String = "[]",
+    val status: String = "draft",
+    val version: Int = 1,
+    @SerialName("created_at") val createdAt: String,
+    @SerialName("updated_at") val updatedAt: String,
+)
+
+@Serializable
+data class SyncModuleMicroPlan(
+    val id: String,
+    @SerialName("design_id") val designId: String,
+    @SerialName("book_id") val bookId: String,
+    @SerialName("user_id") val userId: String,
+    @SerialName("module_index") val moduleIndex: Int,
+    @SerialName("module_title") val moduleTitle: String = "",
+    @SerialName("ordered_unit_ids_json") val orderedUnitIdsJson: String = "[]",
+    @SerialName("unit_annotations_json") val unitAnnotationsJson: String = "[]",
+    @SerialName("module_intro") val moduleIntro: String? = null,
+    @SerialName("module_status") val moduleStatus: String = "pending",
+    @SerialName("module_summary_json") val moduleSummaryJson: String? = null,
+    @SerialName("parent_design_version") val parentDesignVersion: Int = 1,
+    @SerialName("created_at") val createdAt: String,
+    @SerialName("updated_at") val updatedAt: String,
 )

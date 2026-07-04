@@ -55,6 +55,7 @@ data class KnowledgeUnitEntity(
     val prerequisites: String?,
     @ColumnInfo(name = "difficulty_level") val difficultyLevel: Int?,
     @ColumnInfo(name = "importance_score") val importanceScore: Float?,
+    @ColumnInfo(name = "ai_cognitive_hint") val aiCognitiveHint: String? = null,
 )
 
 @Entity(tableName = "kg_nodes", indices = [Index("book_id")])
@@ -95,6 +96,14 @@ data class MasteryRecordEntity(
     @ColumnInfo(name = "review_count") val reviewCount: Int?,
     @ColumnInfo(name = "ease_factor") val easeFactor: Float?,
     @ColumnInfo(name = "interval_days") val intervalDays: Int?,
+    // FSRS 算法参数
+    @ColumnInfo(name = "stability") val stability: Float = 0f,
+    @ColumnInfo(name = "difficulty") val difficulty: Float = 5f,
+    @ColumnInfo(name = "lapses") val lapses: Int = 0,
+    @ColumnInfo(name = "reps") val reps: Int = 0,
+    @ColumnInfo(name = "last_elapsed_days") val lastElapsedDays: Int = 0,
+    @ColumnInfo(name = "scheduled_days") val scheduledDays: Int = 0,
+    @ColumnInfo(name = "algorithm") val algorithm: String = "sm2",
 )
 
 @Entity(tableName = "annotations", indices = [Index("knowledge_unit_id")])
@@ -210,4 +219,74 @@ data class LearningEfficiencyEntity(
     @ColumnInfo(name = "interaction_count") val interactionCount: Int?,
     @ColumnInfo(name = "efficiency_score") val efficiencyScore: Float?,
     @ColumnInfo(name = "created_at") val createdAt: String,
+)
+
+@Entity(
+    tableName = "learner_intent_profiles",
+    indices = [
+        Index(value = ["user_id", "book_id"], unique = true),
+        Index("book_id"),
+    ],
+)
+data class LearnerIntentProfileEntity(
+    @PrimaryKey val id: String,
+    @ColumnInfo(name = "user_id") val userId: String,
+    @ColumnInfo(name = "book_id") val bookId: String,
+    @ColumnInfo(name = "identity_background") val identityBackground: String = "unknown",
+    @ColumnInfo(name = "goal_depth") val goalDepth: String = "apply_understand",
+    @ColumnInfo(name = "cognitive_pref") val cognitivePref: String = "rigorous_system",
+    @ColumnInfo(name = "restructure_tolerance") val restructureTolerance: String = "moderate",
+    @ColumnInfo(name = "time_budget_minutes") val timeBudgetMinutes: Int? = null,
+    val source: String = "ai_inferred",
+    val status: String = "draft",
+    @ColumnInfo(name = "extra_json") val extraJson: String = "{}",
+    @ColumnInfo(name = "created_at") val createdAt: String,
+    @ColumnInfo(name = "updated_at") val updatedAt: String,
+)
+
+@Entity(
+    tableName = "teaching_designs",
+    indices = [
+        Index(value = ["user_id", "book_id", "version"], unique = true),
+        Index("book_id"),
+        Index("status"),
+    ],
+)
+data class TeachingDesignEntity(
+    @PrimaryKey val id: String,
+    @ColumnInfo(name = "user_id") val userId: String,
+    @ColumnInfo(name = "book_id") val bookId: String,
+    @ColumnInfo(name = "profile_id") val profileId: String? = null,
+    @ColumnInfo(name = "macro_design_json") val macroDesignJson: String? = null,
+    @ColumnInfo(name = "current_module_index") val currentModuleIndex: Int = 0,
+    @ColumnInfo(name = "generated_module_count") val generatedModuleCount: Int = 0,
+    @ColumnInfo(name = "adjustments_json") val adjustmentsJson: String = "[]",
+    val status: String = "draft",
+    val version: Int = 1,
+    @ColumnInfo(name = "created_at") val createdAt: String,
+    @ColumnInfo(name = "updated_at") val updatedAt: String,
+)
+
+@Entity(
+    tableName = "module_micro_plans",
+    indices = [
+        Index(value = ["design_id", "module_index"], unique = true),
+        Index(value = ["book_id", "module_status"]),
+    ],
+)
+data class ModuleMicroPlanEntity(
+    @PrimaryKey val id: String,
+    @ColumnInfo(name = "design_id") val designId: String,
+    @ColumnInfo(name = "book_id") val bookId: String,
+    @ColumnInfo(name = "user_id") val userId: String,
+    @ColumnInfo(name = "module_index") val moduleIndex: Int,
+    @ColumnInfo(name = "module_title") val moduleTitle: String = "",
+    @ColumnInfo(name = "ordered_unit_ids_json") val orderedUnitIdsJson: String = "[]",
+    @ColumnInfo(name = "unit_annotations_json") val unitAnnotationsJson: String = "[]",
+    @ColumnInfo(name = "module_intro") val moduleIntro: String? = null,
+    @ColumnInfo(name = "module_status") val moduleStatus: String = "pending",
+    @ColumnInfo(name = "module_summary_json") val moduleSummaryJson: String? = null,
+    @ColumnInfo(name = "parent_design_version") val parentDesignVersion: Int = 1,
+    @ColumnInfo(name = "created_at") val createdAt: String,
+    @ColumnInfo(name = "updated_at") val updatedAt: String,
 )

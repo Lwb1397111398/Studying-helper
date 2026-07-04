@@ -1,8 +1,11 @@
-"""教学服务 - DB持久化版"""
+"""教学服务 - DB持久化版
+
+集成教学计划系统，确保知识覆盖完整性
+"""
 
 import json
 from uuid import uuid4
-from typing import List, Optional
+from typing import List, Optional, Dict
 from datetime import datetime, timezone
 
 from sqlalchemy import select
@@ -27,16 +30,26 @@ from app.modules.teaching.prompts import (
     ASSESS_PROMPT, SUMMARY_PROMPT,
     FEYNMAN_EXPLAIN_PROMPT, FEYNMAN_ASSESS_PROMPT,
     CORNELL_CUES_PROMPT, CORNELL_SUMMARY_PROMPT,
+    EXAMPLE_PROMPT,
 )
 from app.modules.teaching.strategies import select_teaching_strategy
+from app.modules.teaching.teaching_plan import (
+    TeachingPlan, TeachingPlanGenerator, CoverageTracker,
+    plan_generator, coverage_tracker,
+)
 
 
 class TeachingService:
-    """教学服务（会话和消息持久化到数据库）"""
+    """教学服务（会话和消息持久化到数据库）
+
+    集成教学计划系统，确保知识覆盖完整性
+    """
 
     def __init__(self, llm_client: LLMClient, db: AsyncSession):
         self.llm = llm_client
         self.db = db
+        # 教学计划存储 (session_id -> TeachingPlan)
+        self._teaching_plans: Dict[str, TeachingPlan] = {}
 
     async def start_session(
         self,
@@ -77,6 +90,13 @@ class TeachingService:
         ))
         await self.db.flush()
 
+        # 为每个单元生成教学计划
+        for unit in units:
+            plan = plan_generator.generate_plan(unit, book_id)
+            self._teaching_plans[f"{session.id}_{unit.unit_id}"] = plan
+            # 初始化覆盖追踪器
+            coverage_tracker.initialize(plan)
+
         return session
 
     async def get_active_session(self, user_id: str, book_id: str) -> Optional[TeachingSession]:
@@ -111,7 +131,13 @@ class TeachingService:
         session_id: str,
         units: List[LearnedUnit],
     ) -> TeachingMessage:
-        """获取下一条教学消息（幂等：同一单元同一阶段已有消息则直接返回）"""
+        """获取下一条教学消息（幂等：同一单元同一阶段已有消息则直接返回）
+
+        集成教学计划系统：
+        1. 检查教学计划的覆盖情况
+        2. 追踪生成内容的覆盖情况
+        3. 确保严格模式下 100% 覆盖
+        """
         session = await self._get_session(session_id)
 
         if session.current_unit_index >= len(session.unit_ids):
@@ -145,12 +171,22 @@ class TeachingService:
         if not current_unit:
             raise ServiceError(ErrorCode.NOT_FOUND, f"知识单元 {current_unit_id} 不存在")
 
-        if phase == TeachingPhase.ACTIVATE:
+        # 获取教学计划
+        plan_key = f"{session_id}_{current_unit_id}"
+        teaching_plan = self._teaching_plans.get(plan_key)
+
+        # 根据教学计划调整生成策略
+        if teaching_plan and phase == TeachingPhase.CORE:
+            # 核心讲解阶段：确保覆盖所有未覆盖的内容
+            content = await self._generate_core_with_coverage(current_unit, session.strategy, teaching_plan)
+        elif phase == TeachingPhase.ACTIVATE:
             content = await self._generate_activate(current_unit, session.strategy)
         elif phase == TeachingPhase.INTRO:
             content = await self._generate_intro(current_unit, session.strategy)
         elif phase == TeachingPhase.CORE:
             content = await self._generate_core(current_unit, session.strategy)
+        elif phase == TeachingPhase.EXAMPLE:
+            content = await self._generate_example(current_unit, session.strategy)
         elif phase == TeachingPhase.FEYNMAN:
             content = await self._generate_feynman(current_unit)
         elif phase == TeachingPhase.RETRIEVAL:
@@ -164,6 +200,10 @@ class TeachingService:
         else:
             content = await self._generate_core(current_unit, session.strategy)
 
+        # 追踪覆盖情况
+        if teaching_plan:
+            coverage_tracker.track_message(teaching_plan, content, phase.value)
+
         msg_id = str(uuid4())
         self.db.add(TeachingMessageModel(
             id=msg_id,
@@ -174,8 +214,30 @@ class TeachingService:
             content_type="text",
         ))
 
-        # 单元学完（CONNECT 阶段），更新掌握度
+        # 单元学完（CONNECT 阶段），检查覆盖率并更新掌握度
         if phase == TeachingPhase.CONNECT:
+            # 检查覆盖率
+            if teaching_plan:
+                coverage_report = coverage_tracker.get_coverage_report(teaching_plan)
+                if not coverage_report["is_complete"]:
+                    # 严格模式：覆盖率不足，需要补充教学
+                    missing_items = coverage_report["missing_items"]
+                    if missing_items:
+                        # 生成补充教学内容
+                        supplement_content = await self._generate_supplement(current_unit, missing_items)
+                        supplement_msg_id = str(uuid4())
+                        self.db.add(TeachingMessageModel(
+                            id=supplement_msg_id,
+                            session_id=session_id,
+                            unit_id=current_unit_id,
+                            phase="supplement",
+                            content=supplement_content,
+                            content_type="text",
+                        ))
+                        # 追踪补充内容的覆盖
+                        coverage_tracker.track_message(teaching_plan, supplement_content, "supplement")
+
+            # 更新掌握度
             await self._update_mastery_on_unit_complete(current_unit_id, session.book_id, session_id)
 
         # 所有阶段均不自动推进，用户通过 /continue 手动推进
@@ -1048,6 +1110,141 @@ class TeachingService:
         )
         return response.content
 
+    async def _generate_core_with_coverage(
+        self,
+        unit: LearnedUnit,
+        strategy: TeachingStrategy,
+        teaching_plan: TeachingPlan,
+    ) -> str:
+        """生成核心讲解内容，确保覆盖教学计划中的所有未覆盖内容"""
+
+        # 获取未覆盖的内容项
+        missing_items = teaching_plan.get_missing_items()
+
+        # 按类型分组
+        missing_key_points = [item for item in missing_items if item.content_type == "key_point"]
+        missing_concepts = [item for item in missing_items if item.content_type == "concept"]
+        missing_examples = [item for item in missing_items if item.content_type == "example"]
+
+        # 构建提示词
+        kp_str = "\n".join(f"- {item.title}: {item.content}" for item in missing_key_points) or "无"
+        concepts_str = "\n".join(f"- {item.title}: {item.content}" for item in missing_concepts) or "无"
+        examples_str = "\n".join(f"- {item.content}" for item in missing_examples[:3]) or "无"
+
+        prompt = f"""你是一位专业的教师，请讲解以下知识点。
+
+## 知识点
+标题：{unit.summary[:50]}
+内容：{unit.summary}
+
+## 必须覆盖的关键要点（未讲解）
+{kp_str}
+
+## 必须覆盖的核心概念（未讲解）
+{concepts_str}
+
+## 可用的例子
+{examples_str}
+
+## 教学策略
+讲解风格：{strategy.explanation_style}
+视觉辅助：{strategy.visual_level}
+知识类型：{strategy.knowledge_type}
+
+## 任务
+请生成一段讲解内容（300-500字），要求：
+1. 开头说明今天学什么（1-2句话）
+2. **逐一讲解上面列出的每一个关键要点和核心概念**，不要遗漏任何一个
+3. 每个要点都要有具体的例子或类比帮助理解
+4. 结尾引导思考
+
+请直接返回讲解文本，不需要JSON格式。"""
+
+        response = await self.llm.chat(
+            messages=[LLMMessage(role="user", content=prompt)],
+            temperature=0.7,
+        )
+        return response.content
+
+    async def _generate_example(self, unit: LearnedUnit, strategy: TeachingStrategy) -> str:
+        """生成示例说明，通过例子加深理解"""
+
+        # 提取所有可用的例子
+        examples = []
+
+        # 从关键要点中提取例子
+        for kp in (unit.key_points or []):
+            if hasattr(kp, 'examples') and kp.examples:
+                for example in kp.examples:
+                    examples.append(f"- {kp.title}的例子：{example}")
+
+        # 从核心概念中提取例子
+        for concept in (unit.concepts or []):
+            if hasattr(concept, 'examples') and concept.examples:
+                for example in concept.examples:
+                    examples.append(f"- {concept.name}的例子：{example}")
+
+        examples_str = "\n".join(examples[:5]) if examples else "无"
+
+        prompt = f"""你是一位专业的教师，请通过例子帮助学生理解知识点。
+
+## 学习内容
+{unit.summary[:300]}
+
+## 可用的例子
+{examples_str}
+
+## 任务
+请生成 2-3 个生动具体的例子，帮助学生理解上面的知识点。要求：
+1. 例子要贴近生活，容易理解
+2. 每个例子要说明为什么这个例子能帮助理解
+3. 例子之间要有差异性，从不同角度说明
+4. 最后引导学生思考例子与知识点的关系
+
+请直接返回例子说明，不需要JSON格式。"""
+
+        response = await self.llm.chat(
+            messages=[LLMMessage(role="user", content=prompt)],
+            temperature=0.7,
+        )
+        return response.content
+
+    async def _generate_supplement(
+        self,
+        unit: LearnedUnit,
+        missing_items: List[dict],
+    ) -> str:
+        """生成补充教学内容，覆盖遗漏的知识点"""
+
+        # 构建遗漏内容列表
+        missing_str = "\n".join(
+            f"- [{item['type']}] {item['title']}"
+            for item in missing_items
+        )
+
+        prompt = f"""你是一位专业的教师，需要补充讲解遗漏的知识点。
+
+## 原始学习内容
+{unit.summary[:200]}
+
+## 遗漏的知识点
+{missing_str}
+
+## 任务
+请针对上面列出的遗漏知识点，生成补充讲解内容。要求：
+1. 逐一讲解每个遗漏的知识点
+2. 用简洁明了的语言
+3. 提供简单的例子帮助理解
+4. 确保覆盖所有遗漏的内容
+
+请直接返回补充讲解文本，不需要JSON格式。"""
+
+        response = await self.llm.chat(
+            messages=[LLMMessage(role="user", content=prompt)],
+            temperature=0.7,
+        )
+        return response.content
+
     async def _generate_feynman(self, unit: LearnedUnit) -> str:
         """费曼学习法：引导学生用自己的话解释"""
         kp_list = []
@@ -1653,3 +1850,21 @@ class TeachingService:
             'avg_test_score': round(avg_test_score, 1),
             'units_covered': units_covered,
         }
+
+    def get_teaching_plan_coverage(self, session_id: str, unit_id: str) -> dict:
+        """获取教学计划的覆盖报告"""
+        plan_key = f"{session_id}_{unit_id}"
+        teaching_plan = self._teaching_plans.get(plan_key)
+
+        if not teaching_plan:
+            return {
+                "unit_id": unit_id,
+                "total_items": 0,
+                "covered_items": 0,
+                "coverage_rate": 0.0,
+                "is_complete": False,
+                "missing_items": [],
+                "phase_coverage": [],
+            }
+
+        return coverage_tracker.get_coverage_report(teaching_plan)

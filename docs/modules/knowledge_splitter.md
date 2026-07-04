@@ -1,50 +1,62 @@
 # knowledge_splitter 模块
 
-## 概述
+## 职责
 
-将解析后的章节文本拆分为可学习的知识单元（KnowledgeUnit）。
+把 `ChapterModel` 中的章节文本拆成 `KnowledgeUnitModel`。知识单元是 AI 学习、知识图谱、教学、复习、同步的最小业务单位。
 
-## 文件结构
+## 关键文件
 
-| 文件 | 职责 |
-|------|------|
-| `router.py` | API 路由（触发拆分、查询进度） |
-| `schemas.py` | 请求/响应模型（SplitResult、KnowledgeUnit 等） |
-| `service.py` | 拆分服务（协调拆分器、持久化到数据库） |
-| `splitter.py` | 核心拆分算法 |
+| 文件 | 作用 |
+| --- | --- |
+| `router.py` | `/api/v1/split` 路由、拆分任务和进度 |
+| `service.py` | 从章节读取文本、写入知识单元、更新书籍状态 |
+| `splitter.py` | 拆分算法 |
+| `schemas.py` | Chapter、Section、KnowledgeUnit、SplitResult 等模型 |
+| `tests/test_splitter.py` | 拆分算法测试 |
 
-## API 端点
+## API 入口
+
+前缀：`/api/v1/split`
 
 | 方法 | 路径 | 说明 |
-|------|------|------|
-| POST | `/api/v1/split/{book_id}` | 触发知识拆分 |
-| GET | `/api/v1/split/{book_id}/progress` | 查询拆分进度 |
+| --- | --- | --- |
+| POST | `/{book_id}` | 触发拆分 |
+| GET | `/{book_id}/progress` | 查询拆分进度 |
+| GET | `/{book_id}/result` | 查询拆分结果 |
+| POST | `/{book_id}/sync` | 同步/修正拆分结果 |
 
-## 拆分算法
+## 拆分策略
 
-按优先级尝试切分：
-1. **子标题切分**: 按章节内的子标题（h3/h4 等）拆分
-2. **段落切分**: 按段落边界拆分，合并过短段落
-3. **句子切分**: 按句号等标点拆分（最终 fallback）
+优先级大致是：
 
-切分后对每个单元生成：title、content、order_index、char_offset_start/end。
+```text
+子标题
+  -> 段落
+  -> 句子
+  -> 长文本硬切
+```
 
-## 已知问题
+目标是得到适合单次学习/复习的知识单元，而不是机械固定长度 chunk。
 
-| 严重度 | 问题 | 位置 |
-|--------|------|------|
-| 中等 | `text.find()` 偏移追踪 O(n*m) 复杂度，大文档性能差 | `splitter.py:~L86` |
-| 中等 | `_split_by_sub_titles` 从未被传入实际 sub_titles，走的是死代码路径 | `splitter.py` |
-| 低 | 拆分结果无质量校验（过长/过短单元无警告） | `service.py` |
+## 下游影响
 
-## 优化建议
+`KnowledgeUnitModel` 会被这些模块使用：
 
-1. 偏移追踪改用预计算位置映射，O(1) 查找
-2. 清理 `_split_by_sub_titles` 死代码或修复调用链
-3. 添加单元长度校验（建议 min 50 字、max 5000 字）
+- `ai_learning` 写摘要、讲解、概念、难度、重要度。
+- `knowledge_graph` 建节点和边。
+- `adaptive_design` 做模块重组并写 `ai_cognitive_hint`。
+- `teaching` 按单元教学。
+- `review` 生成复习/考试题。
+- `sync` 和 Android 同步所有字段。
 
-## 测试覆盖
+## 验证入口
 
-- `tests/test_splitter.py` — 存在
-- `service.py` — 无独立测试
-- `router.py` — 无测试
+```bash
+cd backend && python -m pytest app/modules/knowledge_splitter/tests/ -q
+```
+
+## 已知风险
+
+- 拆分粒度会直接影响 AI 成本、教学体验和复习题质量。
+- 改 `KnowledgeUnit` schema 时必须检查后端 ORM、sync、Web 类型、Android Entity/DTO。
+- 不要在 splitter 内引入强 LLM 依赖；拆分基础能力应离线可用。

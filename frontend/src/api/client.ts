@@ -1,7 +1,13 @@
 import axios from 'axios';
 
+export const API_BASE_PATH = '/api';
+
+export const apiPath = (path: string): string => (
+  `${API_BASE_PATH}${path.startsWith('/') ? path : `/${path}`}`
+);
+
 const client = axios.create({
-  baseURL: '/api',
+  baseURL: API_BASE_PATH,
   timeout: 30000, // 默认 30 秒，AI 学习等长耗时端点需单独覆盖
   headers: {
     'Content-Type': 'application/json',

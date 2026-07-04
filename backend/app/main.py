@@ -18,6 +18,7 @@ from app.modules.review.router import router as review_router
 from app.modules.knowledge_graph.router import router as kg_router
 from app.modules.settings.router import router as settings_router
 from app.modules.sync.router import router as sync_router
+from app.modules.adaptive_design.router import router as aid_router
 
 # 过滤高频轮询接口的 uvicorn 访问日志
 _POLLING_PATHS = ("/learn-progress", "/split/progress", "/parse")
@@ -85,3 +86,4 @@ app.include_router(review_router)
 app.include_router(kg_router)
 app.include_router(settings_router)
 app.include_router(sync_router)
+app.include_router(aid_router)

@@ -11,6 +11,7 @@ class TeachingPhase(str, Enum):
     ACTIVATE = "activate"
     INTRO = "intro"
     CORE = "core"
+    EXAMPLE = "example"      # 示例说明：通过例子加深理解
     FEYNMAN = "feynman"      # 费曼学习法：用自己的话解释
     RETRIEVAL = "retrieval"  # 检索练习：回忆前置单元
     CHECK = "check"
@@ -44,7 +45,8 @@ class TeachingStrategy(BaseModel):
     feedback_style: str = "immediate"  # 'immediate' | 'delayed' | 'guided'
     phases: List[TeachingPhase] = Field(default_factory=lambda: [
         TeachingPhase.ACTIVATE, TeachingPhase.INTRO, TeachingPhase.CORE,
-        TeachingPhase.FEYNMAN, TeachingPhase.CHECK, TeachingPhase.REFLECT, TeachingPhase.CONNECT,
+        TeachingPhase.EXAMPLE, TeachingPhase.FEYNMAN, TeachingPhase.RETRIEVAL,
+        TeachingPhase.CHECK, TeachingPhase.REFLECT, TeachingPhase.CONNECT,
     ])
 
 

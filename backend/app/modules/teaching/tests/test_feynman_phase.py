@@ -36,34 +36,42 @@ def _make_unit(difficulty: int) -> LearnedUnit:
 class TestFeynmanPhaseInStrategy:
     """测试费曼阶段在策略中的位置"""
 
-    def test_simple_phases_include_feynman_after_core(self):
-        """简单单元：CORE 后面是 FEYNMAN"""
+    def test_simple_phases_include_example_after_core(self):
+        """简单单元：CORE 后面是 EXAMPLE"""
         unit = _make_unit(difficulty=1)
         phases = select_phases(unit, mastery=0.8)
         core_idx = phases.index(TeachingPhase.CORE)
-        assert phases[core_idx + 1] == TeachingPhase.FEYNMAN
+        assert phases[core_idx + 1] == TeachingPhase.EXAMPLE
 
-    def test_medium_phases_include_feynman_after_core(self):
-        """中等单元：CORE 后面是 FEYNMAN"""
+    def test_medium_phases_include_example_after_core(self):
+        """中等单元：CORE 后面是 EXAMPLE"""
         unit = _make_unit(difficulty=3)
         phases = select_phases(unit, mastery=0.5)
         core_idx = phases.index(TeachingPhase.CORE)
-        assert phases[core_idx + 1] == TeachingPhase.FEYNMAN
+        assert phases[core_idx + 1] == TeachingPhase.EXAMPLE
 
-    def test_complex_phases_include_feynman_after_core(self):
-        """复杂单元：CORE 后面是 FEYNMAN"""
+    def test_complex_phases_include_example_after_core(self):
+        """复杂单元：CORE 后面是 EXAMPLE"""
         unit = _make_unit(difficulty=5)
         phases = select_phases(unit, mastery=0.3)
         core_idx = phases.index(TeachingPhase.CORE)
-        assert phases[core_idx + 1] == TeachingPhase.FEYNMAN
+        assert phases[core_idx + 1] == TeachingPhase.EXAMPLE
 
-    def test_feynman_before_retrieval(self):
-        """FEYNMAN 在 RETRIEVAL 之前"""
+    def test_feynman_after_example(self):
+        """FEYNMAN 在 EXAMPLE 之后（复杂内容）"""
+        unit = _make_unit(difficulty=5)
+        phases = select_phases(unit, mastery=0.3)
+        example_idx = phases.index(TeachingPhase.EXAMPLE)
+        feynman_idx = phases.index(TeachingPhase.FEYNMAN)
+        assert example_idx < feynman_idx
+
+    def test_feynman_before_check(self):
+        """FEYNMAN 在 CHECK 之前（中等内容）"""
         unit = _make_unit(difficulty=3)
         phases = select_phases(unit, mastery=0.5)
         feynman_idx = phases.index(TeachingPhase.FEYNMAN)
-        retrieval_idx = phases.index(TeachingPhase.RETRIEVAL)
-        assert feynman_idx < retrieval_idx
+        check_idx = phases.index(TeachingPhase.CHECK)
+        assert feynman_idx < check_idx
 
 
 class TestFeynmanAssessment:

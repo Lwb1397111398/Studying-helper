@@ -118,7 +118,7 @@ class MasteryAssessment(BaseModel):
     level: str
     dimensions: Dict[str, float]
     weak_points: List[str]
-    recommended_review_at: datetime
+    recommended_review_at: Optional[datetime] = None
 
 
 class RecalledPoint(BaseModel):

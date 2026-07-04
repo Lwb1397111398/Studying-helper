@@ -108,14 +108,24 @@ def select_teaching_strategy(
 
     knowledge_type = _infer_knowledge_type(unit)
 
+    pace = _select_pace(mastery, difficulty)
+    scaffold = _select_scaffold(mastery, difficulty)
+
+    # M4：AID 认知标注覆盖默认 pace（memorize 不求快，understand 可提速）
+    hint = getattr(unit, "ai_cognitive_hint", None)
+    if hint == "memorize" and pace == "fast":
+        pace = "normal"
+    elif hint == "understand" and pace == "slow":
+        pace = "normal"
+
     return TeachingStrategy(
         explanation_style=_select_explanation_style(knowledge_type, preferred),
         visual_level=_select_visual_level(difficulty, knowledge_type),
         interaction_frequency="high" if mastery < 0.5 or knowledge_type == KnowledgeType.PROCEDURE else "medium",
-        pace=_select_pace(mastery, difficulty),
+        pace=pace,
         knowledge_type=knowledge_type.value,
         cognitive_level=_select_cognitive_level(difficulty, mastery),
-        scaffold_level=_select_scaffold(mastery, difficulty),
+        scaffold_level=scaffold,
         feedback_style=_select_feedback(mastery),
     )
 
@@ -123,12 +133,12 @@ def select_teaching_strategy(
 def select_phases(unit: LearnedUnit, mastery: float) -> List[TeachingPhase]:
     """根据内容复杂度选择教学阶段
 
-    - 简单内容（难度低且掌握度高）：ACTIVATE + CORE + RETRIEVAL
-    - 中等内容：ACTIVATE + CORE + RETRIEVAL + CHECK + CONNECT
-    - 复杂内容（难度高或掌握度低）：完整7阶段（含 INTRO + REFLECT）
+    - 简单内容（难度低且掌握度高）：ACTIVATE + CORE + EXAMPLE + RETRIEVAL
+    - 中等内容：ACTIVATE + CORE + EXAMPLE + RETRIEVAL + CHECK + CONNECT
+    - 复杂内容（难度高或掌握度低）：完整9阶段（含 INTRO + REFLECT）
     """
-    # 基础阶段：所有内容都需要（CORE 后插入 FEYNMAN 费曼学习法）
-    phases = [TeachingPhase.ACTIVATE, TeachingPhase.CORE, TeachingPhase.FEYNMAN, TeachingPhase.RETRIEVAL]
+    # 基础阶段：所有内容都需要（CORE 后插入 EXAMPLE 示例说明）
+    phases = [TeachingPhase.ACTIVATE, TeachingPhase.CORE, TeachingPhase.EXAMPLE, TeachingPhase.RETRIEVAL]
 
     # 简单内容：跳过部分阶段
     if unit.difficulty_level and unit.difficulty_level <= 2 and mastery > 0.7:
@@ -140,6 +150,7 @@ def select_phases(unit: LearnedUnit, mastery: float) -> List[TeachingPhase]:
             TeachingPhase.ACTIVATE,
             TeachingPhase.INTRO,
             TeachingPhase.CORE,
+            TeachingPhase.EXAMPLE,
             TeachingPhase.FEYNMAN,
             TeachingPhase.RETRIEVAL,
             TeachingPhase.CHECK,
@@ -149,5 +160,5 @@ def select_phases(unit: LearnedUnit, mastery: float) -> List[TeachingPhase]:
         return phases
 
     # 中等内容：标准阶段（含 REFLECT）
-    phases.extend([TeachingPhase.CHECK, TeachingPhase.REFLECT, TeachingPhase.CONNECT])
+    phases.extend([TeachingPhase.FEYNMAN, TeachingPhase.CHECK, TeachingPhase.REFLECT, TeachingPhase.CONNECT])
     return phases

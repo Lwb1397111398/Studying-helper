@@ -352,7 +352,7 @@ async def export_book(
             select(ChapterModel).where(ChapterModel.book_id == book_id)
         )
         db_chapters = chapters_result.scalars().all()
-        chapters = [{"id": c.id, "title": c.title} for c in db_chapters]
+        chapters = [{"id": c.id, "title": c.title, "chapter_number": c.chapter_number} for c in db_chapters]
 
         # 加载知识单元
         units_result = await db.execute(
@@ -360,7 +360,8 @@ async def export_book(
         )
         db_units = units_result.scalars().all()
         knowledge_units = [
-            {"id": u.id, "title": u.title, "summary": u.summary, "key_points": json.loads(u.key_points) if u.key_points else []}
+            {"id": u.id, "title": u.title, "summary": u.summary, "chapter_id": u.chapter_id,
+             "key_points": json.loads(u.key_points) if u.key_points else []}
             for u in db_units
         ]
 

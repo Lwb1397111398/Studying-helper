@@ -111,3 +111,11 @@ async def _run_migrations(conn):
     await _add_column_if_missing("teaching_messages", "assessment_json", "TEXT")
     # 书籍阅读动机
     await _add_column_if_missing("books", "reading_motivation", "TEXT")
+    # FSRS 复习算法字段，兼容已有本地库
+    await _add_column_if_missing("mastery_records", "stability", "FLOAT DEFAULT 0.0")
+    await _add_column_if_missing("mastery_records", "difficulty", "FLOAT DEFAULT 5.0")
+    await _add_column_if_missing("mastery_records", "lapses", "INTEGER DEFAULT 0")
+    await _add_column_if_missing("mastery_records", "reps", "INTEGER DEFAULT 0")
+    await _add_column_if_missing("mastery_records", "last_elapsed_days", "INTEGER DEFAULT 0")
+    await _add_column_if_missing("mastery_records", "scheduled_days", "INTEGER DEFAULT 0")
+    await _add_column_if_missing("mastery_records", "algorithm", "VARCHAR(20) DEFAULT 'sm2'")

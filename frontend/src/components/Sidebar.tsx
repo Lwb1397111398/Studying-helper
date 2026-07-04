@@ -11,6 +11,7 @@ const navItems = [
 const bookActions = [
   { path: '/plan', label: '学习方案', icon: '📋' },
   { path: '/learn', label: '学习模式', icon: '📚' },
+  { path: '/design', label: '教学设计', icon: '🧭' },
   { path: '/teach', label: '教学模式', icon: '🎓' },
   { path: '/review', label: '复习模式', icon: '🔄' },
   { path: '/exam', label: '考试模式', icon: '📝' },

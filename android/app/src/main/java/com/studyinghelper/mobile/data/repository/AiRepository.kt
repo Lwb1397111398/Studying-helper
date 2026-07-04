@@ -44,11 +44,14 @@ class AiRepository(private val configRepository: AiConfigRepository) {
     fun generateTeachingContent(unit: KnowledgeUnitEntity, phase: String, phaseTitle: String): String {
         val instruction = when (phase) {
             "activate" -> "用一个问题或生活场景引入，激活学习者已有经验。"
-            "explain" -> "用清晰分层的方式讲解核心概念。"
-            "analogy" -> "给出贴近日常生活的类比，说明相同点和局限。"
-            "example" -> "给出具体示例，并指出如何迁移到原知识点。"
-            "check" -> "提出一个简短检查题，引导学习者自测理解。"
-            "reflect" -> "总结本单元，并给出反思提示。"
+            "intro" -> "概述本单元的学习目标、核心内容和学习路径，让学习者有整体认知。"
+            "core" -> "用清晰分层的方式讲解核心概念，突出重点和难点。"
+            "example" -> "提供 2-3 个生动具体的例子，帮助学习者理解抽象概念。例子要贴近生活，从不同角度说明。"
+            "feynman" -> "引导学习者用自己的话解释这个知识点，就像教给一个初学者一样。要求学习者尝试用自己的语言复述核心概念。"
+            "retrieval" -> "设计一个主动回忆练习，让学习者不看内容尝试回忆关键信息。可以是填空、简答或联想题。"
+            "check" -> "提出一个简短检查题，引导学习者自测理解程度。"
+            "reflect" -> "引导学习者进行元认知反思：这个知识点的核心是什么？与之前学过的内容有什么联系？还有什么疑问？"
+            "connect" -> "帮助学习者建立知识网络，将本单元内容与已有知识、实际应用或其他学科联系起来。"
             else -> "生成适合当前阶段的教学内容。"
         }
         return chat(
@@ -65,6 +68,10 @@ class AiRepository(private val configRepository: AiConfigRepository) {
             """.trimIndent(),
             maxTokens = 800,
         ).trim()
+    }
+
+    fun chatText(system: String, user: String, maxTokens: Int): String {
+        return chat(system = system, user = user, maxTokens = maxTokens)
     }
 
     fun answerTeachingQuestion(unit: KnowledgeUnitEntity, question: String): String {

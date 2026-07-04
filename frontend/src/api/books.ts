@@ -1,4 +1,4 @@
-import client from './client';
+import client, { apiPath } from './client';
 import type { Book, Chapter } from '../types';
 
 // TOC 相关类型
@@ -135,7 +135,7 @@ export function splitProgressSSE(
   onProgress: (data: { stage: string; percent: number; message: string; done: boolean; error?: string }) => void,
   onError?: (err: Error) => void,
 ): () => void {
-  return createProgressSSE(`/api/v1/split/${bookId}/progress`, onProgress, onError);
+  return createProgressSSE(apiPath(`/v1/split/${bookId}/progress`), onProgress, onError);
 }
 
 // SSE 连接：订阅解析进度
@@ -154,7 +154,7 @@ export function parseProgressSSE(
   onProgress: (data: ParseProgressData) => void,
   onError?: (err: Error) => void,
 ): () => void {
-  return createProgressSSE(`/api/v1/documents/parse/${uploadId}/progress`, onProgress, onError);
+  return createProgressSSE(apiPath(`/v1/documents/parse/${uploadId}/progress`), onProgress, onError);
 }
 
 // 获取每日学习统计

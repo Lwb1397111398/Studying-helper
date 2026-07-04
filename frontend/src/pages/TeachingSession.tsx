@@ -13,6 +13,7 @@ import {
   generateCornellCues, generateCornellSummary, getCornellNotes,
   continueToNextPhase,
 } from '../api/teaching';
+import { getAidActiveUnits } from '../api/aid';
 import type {
   TeachingSession as TeachingSessionType,
   TeachingMessage, UserQuestion, SessionTest, TeachingPhase,
@@ -128,7 +129,21 @@ export default function TeachingSession() {
 
   const startNewSession = async (unitList: KnowledgeUnit[]) => {
     try {
-      const unitIds = unitList.map((u) => u.id);
+      let orderedUnits = unitList;
+      try {
+        const active = await getAidActiveUnits(bookId!);
+        if (active.unit_ids.length > 0) {
+          const byId = new Map(unitList.map((unit) => [unit.id, unit]));
+          const designedUnits = active.unit_ids.map((id) => byId.get(id)).filter(Boolean) as KnowledgeUnit[];
+          if (designedUnits.length > 0) {
+            orderedUnits = designedUnits;
+            setUnits(designedUnits);
+          }
+        }
+      } catch {
+        // 未生成 AID 时继续使用原章节顺序。
+      }
+      const unitIds = orderedUnits.map((u) => u.id);
       const sess = await startTeachingSession(bookId!, unitIds);
       setSession(sess);
       setCurrentPhase(sess.current_phase);

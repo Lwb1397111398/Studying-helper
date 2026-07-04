@@ -201,6 +201,9 @@ export default function SyncCenter() {
                 <StatPill label="用户提问" value={preview.user_questions_count} />
                 <StatPill label="阶段测试" value={preview.session_tests_count} />
                 <StatPill label="效率记录" value={preview.learning_efficiency_count} />
+                <StatPill label="学习画像" value={preview.learner_intent_profiles_count} />
+                <StatPill label="教学设计" value={preview.teaching_designs_count} />
+                <StatPill label="模块编排" value={preview.module_micro_plans_count} />
               </div>
             </div>
             <button
@@ -247,6 +250,9 @@ export default function SyncCenter() {
             <StatPill label="用户提问" value={importResult.user_questions_imported} />
             <StatPill label="阶段测试" value={importResult.session_tests_imported} />
             <StatPill label="效率记录" value={importResult.learning_efficiency_imported} />
+            <StatPill label="学习画像" value={importResult.learner_intent_profiles_imported} />
+            <StatPill label="教学设计" value={importResult.teaching_designs_imported} />
+            <StatPill label="模块编排" value={importResult.module_micro_plans_imported} />
           </div>
           {importResult.overwritten_books.length > 0 && (
             <p className="text-xs text-emerald-600 mt-2">覆盖书籍：{importResult.overwritten_books.join('、')}</p>

@@ -17,8 +17,11 @@ from app.db.models import (
     KGNodeModel,
     KnowledgeUnitModel,
     LearningEfficiencyModel,
+    LearnerIntentProfileModel,
     MasteryRecordModel,
+    ModuleMicroPlanModel,
     TeachingMessageModel,
+    TeachingDesignModel,
     TeachingSessionModel,
     UserModel,
 )
@@ -82,6 +85,7 @@ async def _seed(session: AsyncSession) -> None:
             key_points='["重点"]',
             concepts='[{"name":"概念"}]',
             prerequisites='["pre-1"]',
+            ai_cognitive_hint="understand",
         )
     )
     session.add(
@@ -93,6 +97,13 @@ async def _seed(session: AsyncSession) -> None:
             mastery_score=0.8,
             mastery_level="familiar",
             next_review_at=now,
+            stability=3.5,
+            difficulty=4.2,
+            lapses=1,
+            reps=4,
+            last_elapsed_days=2,
+            scheduled_days=6,
+            algorithm="fsrs",
         )
     )
     session.add(
@@ -161,6 +172,50 @@ async def _seed(session: AsyncSession) -> None:
             created_at=now,
         )
     )
+    session.add(
+        LearnerIntentProfileModel(
+            id="profile-1",
+            user_id="anonymous",
+            book_id="book-1",
+            identity_background="unknown",
+            goal_depth="apply_understand",
+            cognitive_pref="rigorous_system",
+            restructure_tolerance="moderate",
+            status="confirmed",
+            created_at=now,
+            updated_at=now,
+        )
+    )
+    session.add(
+        TeachingDesignModel(
+            id="design-1",
+            user_id="anonymous",
+            book_id="book-1",
+            profile_id="profile-1",
+            macro_design_json='{"modules":[]}',
+            generated_module_count=1,
+            status="active",
+            version=1,
+            created_at=now,
+            updated_at=now,
+        )
+    )
+    session.add(
+        ModuleMicroPlanModel(
+            id="micro-1",
+            design_id="design-1",
+            book_id="book-1",
+            user_id="anonymous",
+            module_index=0,
+            module_title="入门模块",
+            ordered_unit_ids_json='["unit-1"]',
+            unit_annotations_json='[]',
+            module_status="active",
+            parent_design_version=1,
+            created_at=now,
+            updated_at=now,
+        )
+    )
     await session.commit()
 
 
@@ -180,7 +235,13 @@ async def test_export_book_contains_related_data(db_session):
     assert len(package.teaching_sessions) == 1
     assert len(package.teaching_messages) == 1
     assert len(package.learning_efficiency) == 1
+    assert len(package.learner_intent_profiles) == 1
+    assert len(package.teaching_designs) == 1
+    assert len(package.module_micro_plans) == 1
     assert package.knowledge_units[0].key_points == '["重点"]'
+    assert package.knowledge_units[0].ai_cognitive_hint == "understand"
+    assert package.mastery_records[0].algorithm == "fsrs"
+    assert package.mastery_records[0].stability == 3.5
     assert package.kg_edges[0].metadata_json == '{"reason":"test"}'
 
 
@@ -217,6 +278,9 @@ async def test_preview_package_marks_overwritten_books(db_session):
     assert preview.user_questions_count == 0
     assert preview.session_tests_count == 0
     assert preview.learning_efficiency_count == 1
+    assert preview.learner_intent_profiles_count == 1
+    assert preview.teaching_designs_count == 1
+    assert preview.module_micro_plans_count == 1
     assert preview.books[0].id == "book-1"
     assert preview.books[0].will_overwrite is True
     assert preview.books[0].local_title == "同步测试书籍"
@@ -265,9 +329,13 @@ async def test_import_package_replaces_existing_book(db_session):
     assert result.user_questions_imported == 0
     assert result.session_tests_imported == 0
     assert result.learning_efficiency_imported == 1
+    assert result.learner_intent_profiles_imported == 1
+    assert result.teaching_designs_imported == 1
+    assert result.module_micro_plans_imported == 1
     assert book.title == "导入后的标题"
     assert len(units) == 1
     assert units[0].key_points == '["导入重点"]'
+    assert units[0].ai_cognitive_hint == "understand"
     assert len(edges) == 1
     assert len(stats) == 1
     assert len(messages) == 1

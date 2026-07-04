@@ -1,91 +1,70 @@
-# common 模块
+# common / db 基础层
 
-## 概述
+## 职责
 
-共享基础组件，包括 LLM 客户端、错误处理、Pydantic 模型和时间工具。
+`backend/app/common` 和 `backend/app/db` 是后端所有模块共享的底座。接手任何后端任务前，先理解这里的错误模型、LLM 调用方式、时间格式和数据库会话生命周期。
 
-## 文件结构
+## 关键文件
 
-| 文件 | 职责 |
-|------|------|
-| `llm_client.py` | LLM 客户端抽象（OpenAI 兼容协议）、并发信号量、重试逻辑 |
-| `errors.py` | ErrorCode 枚举、ServiceError 异常、HTTP 状态码映射 |
-| `schemas.py` | 共享 Pydantic 模型（TimestampMixin、PaginationParams 等） |
-| `time_utils.py` | 时间工具函数 |
+| 文件 | 作用 |
+| --- | --- |
+| `backend/app/common/errors.py` | `ErrorCode`、`ServiceError`、HTTP 状态码映射 |
+| `backend/app/common/llm_client.py` | OpenAI 兼容 LLM 客户端、并发信号量、优雅关闭 |
+| `backend/app/common/schemas.py` | 共享 Pydantic 模型 |
+| `backend/app/common/time_utils.py` | 时间工具 |
+| `backend/app/common/json_utils.py` | JSON 兼容解析/序列化辅助 |
+| `backend/app/common/mastery.py` | 掌握度等级/分数辅助 |
+| `backend/app/db/database.py` | SQLAlchemy async engine、session、初始化 |
+| `backend/app/db/models.py` | 全部 ORM 表模型 |
+| `backend/app/config.py` | `.env` 配置、模块级 LLM 配置 |
+| `backend/app/deps.py` | FastAPI 依赖注入、模块级 LLM client 缓存 |
 
-## LLM 客户端 (`llm_client.py`)
+## 当前核心约定
 
-### 核心类型
+- 后端使用 FastAPI + SQLAlchemy 2.0 async + SQLite。
+- 大多数路由通过 `get_db` 获取 `AsyncSession`。
+- 单用户模式大量默认使用 `user_id="anonymous"`，认证能力存在但不是主路径。
+- Router 层应把 `ServiceError` 交给全局异常处理，不要随意返回不一致的错误结构。
+- LLM client 支持 OpenAI 兼容接口，配置按模块覆盖。
 
-```python
-class LLMClient(Protocol):
-    async def chat(self, messages, temperature, max_tokens) -> str: ...
-    async def close(self) -> None: ...  # BUG: 未在 Protocol 中声明
-```
+## LLM 配置
 
-### 关键机制
-
-- **信号量并发控制**: `init_semaphore(n)` → `_sema.acquire()` / `_sema.release()`
-- **优雅关闭**: `request_shutdown()` 拒绝新请求，`wait_inflight()` 等待在途请求
-- **模块级客户端**: 每个模块可独立配置 LLM，通过 `get_module_llm_client()` 获取
-
-### 已知问题
-
-| 严重度 | 问题 | 位置 | 状态 |
-|--------|------|------|------|
-| **严重** | HTTP 429/5xx 和 TimeoutException 未重试 | ~L111-120 | **已修复** |
-| **严重** | `_inflight_count` 与信号量存在竞态条件 | ~L100-101 | **已修复** |
-| 中等 | LLMClient Protocol 缺少 `close()` 方法声明 | ~L60-62 | **已修复** |
-| 低 | 300s 统一超时过长，应区分首 token 和生成超时 | ~L72 | 待优化 |
-
-### 优化建议
-
-1. ~~添加指数退避重试（429/5xx/Timeout），最多 3 次~~ ✅ 已完成
-2. ~~`wait_inflight` 读取 `_inflight_count` 时加锁保护~~ ✅ 已完成
-3. ~~在 Protocol 中补充 `close()` 声明~~ ✅ 已完成
-4. 拆分 `timeout` 为 `connect_timeout` + `read_timeout`，生成场景用更长的 read_timeout
-
-## 错误处理 (`errors.py`)
-
-### 结构
+模块列表在 `backend/app/config.py`：
 
 ```python
-class ErrorCode(str, Enum):
-    NOT_FOUND = "NOT_FOUND"              # → 404
-    VALIDATION_ERROR = "VALIDATION_ERROR" # → 400
-    PROCESSING_ERROR = "PROCESSING_ERROR" # → 500
-    EXTERNAL_API_ERROR = "EXTERNAL_API_ERROR"  # → 502
-    RATE_LIMITED = "RATE_LIMITED"        # → 429
-    INSUFFICIENT_DATA = "INSUFFICIENT_DATA" # → 422
-    DATABASE_ERROR = "DATABASE_ERROR"    # → 500
-
-class ServiceError(Exception):
-    code: ErrorCode
-    message: str
-    details: dict
+LLM_MODULES = ["teaching", "ai_analysis", "parser", "aid"]
 ```
 
-### 已知问题
+优先级：
 
-| 严重度 | 问题 |
-|--------|------|
-| 低 | ErrorCode 枚举与 ERROR_STATUS_MAP 无同步校验，新增枚举可能忘记加映射 |
-| 低 | 未使用的 HTTPException 导入 |
+```text
+LLM_<MODULE>_*
+  -> LLM_DEFAULT_*
+  -> 旧字段 LLM_*
+```
 
-## 共享模型 (`schemas.py`)
+`LLM_MAX_CONCURRENT` 控制全局并发。应用关闭时 `main.py` 会拒绝新请求、等待在途请求，并关闭模块级 client。
 
-### 已知问题
+## 数据模型提示
 
-| 严重度 | 问题 |
-|--------|------|
-| 中等 | **死代码**: TimestampMixin、PaginationParams、PaginatedResponse 均未被任何模块导入使用 |
+`models.py` 已不只是旧的 11 张表。当前包含：
 
-### 优化建议
+- 基础学习表：users、books、chapters、knowledge_units、mastery_records、daily_stats。
+- 图谱表：kg_nodes、kg_edges。
+- 教学表：teaching_sessions、teaching_messages、user_questions、session_tests、learning_efficiency。
+- 复习/记录表：review_sessions、annotations、learning_records。
+- AID 表：learner_intent_profiles、teaching_designs、module_micro_plans。
+- 兼容字段：`KnowledgeUnitModel.ai_cognitive_hint`、MasteryRecord 的 FSRS 字段。
 
-确认无使用后删除 `schemas.py`，或将其内容迁移到实际使用的模块中。
+## 验证入口
 
-## 测试覆盖
+```bash
+cd backend && python -m pytest app/tests/test_database_migrations.py -q
+cd backend && python -m pytest app/modules/settings/tests/test_settings_service.py -q
+```
 
-- `tests/test_llm_client.py` — 存在但覆盖不足
-- `schemas.py` — 无测试（且为死代码）
-- `errors.py` — 无独立测试
+## 已知风险
+
+- 改 ORM 字段时要同步 sync schema、Android Entity/DTO 和迁移。
+- LLM 配置热更新会影响已缓存 client，改 settings 逻辑时要检查 `deps.py` 的缓存清理。
+- SQLite 自动建表不是正式迁移系统；生产式迁移能力有限。

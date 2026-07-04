@@ -27,6 +27,9 @@ export interface SyncPreviewResult {
   user_questions_count: number;
   session_tests_count: number;
   learning_efficiency_count: number;
+  learner_intent_profiles_count: number;
+  teaching_designs_count: number;
+  module_micro_plans_count: number;
   books: SyncPreviewBook[];
 }
 
@@ -47,6 +50,9 @@ export interface SyncImportResult {
   user_questions_imported: number;
   session_tests_imported: number;
   learning_efficiency_imported: number;
+  learner_intent_profiles_imported: number;
+  teaching_designs_imported: number;
+  module_micro_plans_imported: number;
 }
 
 export const exportAllSyncPackage = (): Promise<Record<string, unknown>> => {

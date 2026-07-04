@@ -1,12 +1,44 @@
 """数据同步包模型"""
 
 from datetime import datetime, timezone
-from typing import Literal
+from typing import Literal, NamedTuple
 
 from pydantic import BaseModel, Field
 
 
 SCHEMA_VERSION = "1.0"
+
+
+class SyncCollectionContract(NamedTuple):
+    package_field: str
+    preview_count_field: str
+    import_count_field: str
+
+
+SYNC_COLLECTION_CONTRACT: tuple[SyncCollectionContract, ...] = (
+    SyncCollectionContract("books", "books_count", "books_imported"),
+    SyncCollectionContract("chapters", "chapters_count", "chapters_imported"),
+    SyncCollectionContract("knowledge_units", "units_count", "units_imported"),
+    SyncCollectionContract("mastery_records", "mastery_records_count", "mastery_records_imported"),
+    SyncCollectionContract("annotations", "annotations_count", "annotations_imported"),
+    SyncCollectionContract("kg_nodes", "kg_nodes_count", "kg_nodes_imported"),
+    SyncCollectionContract("kg_edges", "kg_edges_count", "kg_edges_imported"),
+    SyncCollectionContract("daily_stats", "daily_stats_count", "daily_stats_imported"),
+    SyncCollectionContract("learning_records", "learning_records_count", "learning_records_imported"),
+    SyncCollectionContract("review_sessions", "review_sessions_count", "review_sessions_imported"),
+    SyncCollectionContract("teaching_sessions", "teaching_sessions_count", "teaching_sessions_imported"),
+    SyncCollectionContract("teaching_messages", "teaching_messages_count", "teaching_messages_imported"),
+    SyncCollectionContract("user_questions", "user_questions_count", "user_questions_imported"),
+    SyncCollectionContract("session_tests", "session_tests_count", "session_tests_imported"),
+    SyncCollectionContract("learning_efficiency", "learning_efficiency_count", "learning_efficiency_imported"),
+    SyncCollectionContract(
+        "learner_intent_profiles",
+        "learner_intent_profiles_count",
+        "learner_intent_profiles_imported",
+    ),
+    SyncCollectionContract("teaching_designs", "teaching_designs_count", "teaching_designs_imported"),
+    SyncCollectionContract("module_micro_plans", "module_micro_plans_count", "module_micro_plans_imported"),
+)
 
 
 class SyncBook(BaseModel):
@@ -56,6 +88,7 @@ class SyncKnowledgeUnit(BaseModel):
     prerequisites: str | None = None
     difficulty_level: int | None = None
     importance_score: float | None = None
+    ai_cognitive_hint: str | None = None
 
 
 class SyncMasteryRecord(BaseModel):
@@ -70,6 +103,14 @@ class SyncMasteryRecord(BaseModel):
     review_count: int | None = 0
     ease_factor: float | None = 2.5
     interval_days: int | None = 1
+    # FSRS 算法参数
+    stability: float | None = 0.0
+    difficulty: float | None = 5.0
+    lapses: int | None = 0
+    reps: int | None = 0
+    last_elapsed_days: int | None = 0
+    scheduled_days: int | None = 0
+    algorithm: str | None = "sm2"
 
 
 class SyncAnnotation(BaseModel):
@@ -201,6 +242,60 @@ class SyncLearningEfficiency(BaseModel):
     created_at: datetime
 
 
+class SyncLearnerIntentProfile(BaseModel):
+    """学习者意图画像同步模型 - 字段名与 ORM 列逐字一致"""
+
+    id: str
+    user_id: str
+    book_id: str
+    identity_background: str = "unknown"
+    goal_depth: str = "apply_understand"
+    cognitive_pref: str = "rigorous_system"
+    restructure_tolerance: str = "moderate"
+    time_budget_minutes: int | None = None
+    source: str = "ai_inferred"
+    status: str = "draft"
+    extra_json: str = "{}"
+    created_at: datetime
+    updated_at: datetime
+
+
+class SyncTeachingDesign(BaseModel):
+    """教学设计总账同步模型"""
+
+    id: str
+    user_id: str
+    book_id: str
+    profile_id: str | None = None
+    macro_design_json: str | None = None
+    current_module_index: int = 0
+    generated_module_count: int = 0
+    adjustments_json: str = "[]"
+    status: str = "draft"
+    version: int = 1
+    created_at: datetime
+    updated_at: datetime
+
+
+class SyncModuleMicroPlan(BaseModel):
+    """模块微观编排同步模型"""
+
+    id: str
+    design_id: str
+    book_id: str
+    user_id: str
+    module_index: int
+    module_title: str = ""
+    ordered_unit_ids_json: str = "[]"
+    unit_annotations_json: str = "[]"
+    module_intro: str | None = None
+    module_status: str = "pending"
+    module_summary_json: str | None = None
+    parent_design_version: int = 1
+    created_at: datetime
+    updated_at: datetime
+
+
 class SyncPackage(BaseModel):
     schema_version: str = SCHEMA_VERSION
     exported_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
@@ -221,6 +316,9 @@ class SyncPackage(BaseModel):
     user_questions: list[SyncUserQuestion] = Field(default_factory=list)
     session_tests: list[SyncSessionTest] = Field(default_factory=list)
     learning_efficiency: list[SyncLearningEfficiency] = Field(default_factory=list)
+    learner_intent_profiles: list[SyncLearnerIntentProfile] = Field(default_factory=list)
+    teaching_designs: list[SyncTeachingDesign] = Field(default_factory=list)
+    module_micro_plans: list[SyncModuleMicroPlan] = Field(default_factory=list)
 
 
 class SyncPreviewBook(BaseModel):
@@ -250,6 +348,9 @@ class SyncPreviewResult(BaseModel):
     user_questions_count: int = 0
     session_tests_count: int = 0
     learning_efficiency_count: int = 0
+    learner_intent_profiles_count: int = 0
+    teaching_designs_count: int = 0
+    module_micro_plans_count: int = 0
     books: list[SyncPreviewBook]
 
 
@@ -270,3 +371,6 @@ class SyncImportResult(BaseModel):
     user_questions_imported: int = 0
     session_tests_imported: int = 0
     learning_efficiency_imported: int = 0
+    learner_intent_profiles_imported: int = 0
+    teaching_designs_imported: int = 0
+    module_micro_plans_imported: int = 0

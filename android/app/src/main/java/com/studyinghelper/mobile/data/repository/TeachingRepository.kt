@@ -7,15 +7,18 @@ import com.studyinghelper.mobile.data.db.TeachingSessionEntity
 import com.studyinghelper.mobile.data.db.UserQuestionEntity
 import java.time.OffsetDateTime
 import java.util.UUID
+import kotlinx.serialization.decodeFromString
+import kotlinx.serialization.json.Json
 
 class TeachingRepository(
     private val database: StudyDatabase,
     private val aiRepository: AiRepository,
 ) {
     private val dao = database.studyDao()
+    private val json = Json { ignoreUnknownKeys = true }
 
     suspend fun start(bookId: String): TeachingState {
-        val units = dao.getUnits(bookId).sortedBy { it.orderIndex }
+        val units = getDesignedUnits(bookId)
         require(units.isNotEmpty()) { "没有可教学的知识单元" }
         val now = OffsetDateTime.now().toString()
         val session = TeachingSessionEntity(
@@ -26,7 +29,7 @@ class TeachingRepository(
             unitIds = units.joinToString(prefix = "[\"", postfix = "\"]", separator = "\",\"") { it.id },
             currentUnitIndex = 0,
             currentPhase = TEACHING_PHASES.first().key,
-            strategyJson = "{\"source\":\"android\",\"manual_advance\":true}",
+            strategyJson = "{\"source\":\"android\",\"manual_advance\":true,\"aid_ordered\":true}",
             status = "active",
             startedAt = now,
             endedAt = null,
@@ -69,7 +72,11 @@ class TeachingRepository(
         val trimmedQuestion = question.trim()
         require(trimmedQuestion.isNotEmpty()) { "问题不能为空" }
         val unit = state.units.getOrNull(state.session.currentUnitIndex ?: 0) ?: state.units.first()
-        val answer = aiRepository.answerTeachingQuestion(unit, trimmedQuestion)
+        val answer = runCatching {
+            aiRepository.answerTeachingQuestion(unit, trimmedQuestion)
+        }.getOrElse {
+            "我现在无法连接 AI，但可以先基于本地内容回答：这个问题应回到“${unit.title}”的核心定义和例子中理解。你可以先复述本单元摘要，再标出不确定的概念。"
+        }
         val now = OffsetDateTime.now().toString()
         val savedQuestion = UserQuestionEntity(
             id = "android-question-${UUID.randomUUID()}",
@@ -96,7 +103,11 @@ class TeachingRepository(
     }
 
     private fun createMessage(sessionId: String, unit: KnowledgeUnitEntity, phase: TeachingPhase): TeachingMessageEntity {
-        val content = aiRepository.generateTeachingContent(unit, phase.key, phase.title)
+        val content = runCatching {
+            aiRepository.generateTeachingContent(unit, phase.key, phase.title)
+        }.getOrElse {
+            buildFallbackTeachingContent(unit, phase)
+        }
         val message = TeachingMessageEntity(
             id = "android-message-${UUID.randomUUID()}",
             sessionId = sessionId,
@@ -110,19 +121,51 @@ class TeachingRepository(
         return message
     }
 
+    private suspend fun getDesignedUnits(bookId: String): List<KnowledgeUnitEntity> {
+        val allUnits = dao.getUnits(bookId).sortedBy { it.orderIndex }
+        val plan = dao.getActiveModuleMicroPlan(bookId)
+            ?: dao.getModuleMicroPlans(bookId).minByOrNull { it.moduleIndex }
+            ?: return allUnits
+        val orderedIds = runCatching {
+            json.decodeFromString<List<String>>(plan.orderedUnitIdsJson)
+        }.getOrDefault(emptyList())
+        val byId = allUnits.associateBy { it.id }
+        val designed = orderedIds.mapNotNull { byId[it] }
+        return designed.ifEmpty { allUnits }
+    }
+
+    private fun buildFallbackTeachingContent(unit: KnowledgeUnitEntity, phase: TeachingPhase): String {
+        val hint = when (unit.aiCognitiveHint) {
+            "memorize" -> "本单元被标注为需要记忆，请优先抓住术语、定义和关键列表。"
+            "skip_if_mastered" -> "如果你已经熟悉这个单元，可以快速自测后跳过。"
+            else -> "本单元重点在理解，请先说明概念之间的关系。"
+        }
+        return "${phase.title}：${unit.title}\n$hint\n${unit.summary ?: unit.content.take(220)}"
+    }
+
     companion object {
+        /**
+         * 完整的 9 阶段教学流程（与 Web 端对齐）
+         */
         val TEACHING_PHASES = listOf(
-            TeachingPhase("activate", "引入"),
-            TeachingPhase("explain", "讲解"),
-            TeachingPhase("analogy", "类比"),
-            TeachingPhase("example", "示例"),
-            TeachingPhase("check", "检查"),
-            TeachingPhase("reflect", "反思"),
+            TeachingPhase("activate", "引入", "激活先验知识，建立学习动机"),
+            TeachingPhase("intro", "导览", "概述学习目标和内容框架"),
+            TeachingPhase("core", "讲解", "核心内容的详细讲解"),
+            TeachingPhase("example", "示例", "通过例子加深理解"),
+            TeachingPhase("feynman", "费曼", "用自己的话解释，检验真正理解"),
+            TeachingPhase("retrieval", "检索", "主动回忆练习，强化记忆"),
+            TeachingPhase("check", "检查", "理解检测，发现知识盲点"),
+            TeachingPhase("reflect", "反思", "元认知反思，总结学习收获"),
+            TeachingPhase("connect", "联结", "建立知识网络，关联已有知识"),
         )
     }
 }
 
-data class TeachingPhase(val key: String, val title: String)
+data class TeachingPhase(
+    val key: String,
+    val title: String,
+    val description: String = ""
+)
 
 data class TeachingState(
     val session: TeachingSessionEntity,

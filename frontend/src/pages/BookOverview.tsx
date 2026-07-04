@@ -521,6 +521,10 @@ export default function BookOverview() {
               className="flex items-center gap-1.5 px-4 py-2 bg-blue-500 text-white rounded-xl text-sm font-medium hover:bg-blue-400 disabled:opacity-40 disabled:cursor-not-allowed shadow-lg shadow-blue-500/25 transition-all">
               📚 学习
             </button>
+            <button onClick={() => navigate(`/books/${bookId}/design`)} disabled={needsSplit}
+              className="flex items-center gap-1.5 px-4 py-2 bg-emerald-500 text-white rounded-xl text-sm font-medium hover:bg-emerald-400 disabled:opacity-40 disabled:cursor-not-allowed shadow-lg shadow-emerald-500/25 transition-all">
+              🧭 教学设计
+            </button>
             <button onClick={handleDelete} disabled={deleting}
               className="flex items-center gap-1.5 px-3 py-2 bg-white/10 text-red-300 rounded-xl text-sm font-medium hover:bg-red-500/20 disabled:opacity-50 transition-all border border-white/10">
               🗑️ 删除

@@ -98,6 +98,7 @@ class GraphBuilder:
 
         # 4. 提取概念 → 创建 concept 节点
         concept_set: dict[str, KGNode] = {}
+        concept_to_units: dict[str, list[str]] = {}
         for unit in units:
             unit_id = _get_id(unit)
             concepts = _get_concepts(unit)
@@ -107,6 +108,9 @@ class GraphBuilder:
                     concept_set[concept_name] = concept_node
                     nodes.append(concept_node)
 
+                # 记录概念归属，供概念间共现分析使用
+                concept_to_units.setdefault(concept_name, []).append(unit_id)
+
                 # unit 关联 concept
                 edges.append(KGEdge(
                     source_id=unit_id,
@@ -114,6 +118,13 @@ class GraphBuilder:
                     relation_type="related",
                     weight=0.8,
                 ))
+
+        # 概念间共现关联：跨章节同现的概念视为 similar_to
+        # 为 AID 宏观跨章节聚类提供概念级依据
+        concept_node_ids = {name: node.id for name, node in concept_set.items()}
+        edges.extend(detector.detect_concept_associations(
+            concept_to_units, concept_node_ids
+        ))
 
         # 5. 关联掌握度 → 更新节点颜色/大小
         for node in nodes:

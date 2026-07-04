@@ -10,10 +10,13 @@ import com.studyinghelper.mobile.data.db.KgNodeEntity
 import com.studyinghelper.mobile.data.db.KnowledgeUnitEntity
 import com.studyinghelper.mobile.data.db.LearningEfficiencyEntity
 import com.studyinghelper.mobile.data.db.LearningRecordEntity
+import com.studyinghelper.mobile.data.db.LearnerIntentProfileEntity
 import com.studyinghelper.mobile.data.db.MasteryRecordEntity
+import com.studyinghelper.mobile.data.db.ModuleMicroPlanEntity
 import com.studyinghelper.mobile.data.db.ReviewSessionEntity
 import com.studyinghelper.mobile.data.db.SessionTestEntity
 import com.studyinghelper.mobile.data.db.StudyDatabase
+import com.studyinghelper.mobile.data.db.TeachingDesignEntity
 import com.studyinghelper.mobile.data.db.TeachingMessageEntity
 import com.studyinghelper.mobile.data.db.TeachingSessionEntity
 import com.studyinghelper.mobile.data.db.UserQuestionEntity
@@ -25,13 +28,16 @@ import com.studyinghelper.mobile.data.sync.SyncDailyStats
 import com.studyinghelper.mobile.data.sync.SyncKgEdge
 import com.studyinghelper.mobile.data.sync.SyncKgNode
 import com.studyinghelper.mobile.data.sync.SyncKnowledgeUnit
+import com.studyinghelper.mobile.data.sync.SyncLearnerIntentProfile
 import com.studyinghelper.mobile.data.sync.SyncLearningEfficiency
 import com.studyinghelper.mobile.data.sync.SyncLearningRecord
 import com.studyinghelper.mobile.data.sync.SyncMasteryRecord
+import com.studyinghelper.mobile.data.sync.SyncModuleMicroPlan
 import com.studyinghelper.mobile.data.sync.SyncPackage
 import com.studyinghelper.mobile.data.sync.SyncPreview
 import com.studyinghelper.mobile.data.sync.SyncReviewSession
 import com.studyinghelper.mobile.data.sync.SyncSessionTest
+import com.studyinghelper.mobile.data.sync.SyncTeachingDesign
 import com.studyinghelper.mobile.data.sync.SyncTeachingMessage
 import com.studyinghelper.mobile.data.sync.SyncTeachingSession
 import com.studyinghelper.mobile.data.sync.SyncUserQuestion
@@ -78,6 +84,9 @@ class SyncRepository(private val database: StudyDatabase) {
             dao.deleteLearningRecords(bookIds)
             dao.deleteReviewSessions(bookIds)
             dao.deleteTeachingSessions(bookIds)
+            dao.deleteModuleMicroPlans(bookIds)
+            dao.deleteTeachingDesigns(bookIds)
+            dao.deleteLearnerIntentProfiles(bookIds)
             dao.deleteKgNodes(bookIds)
             dao.deleteUnits(bookIds)
             dao.deleteChapters(bookIds)
@@ -101,6 +110,9 @@ class SyncRepository(private val database: StudyDatabase) {
             dao.insertUserQuestions(packageData.userQuestions.map { it.toEntity() })
             dao.insertSessionTests(packageData.sessionTests.map { it.toEntity() })
             dao.insertLearningEfficiency(packageData.learningEfficiency.map { it.toEntity() })
+            dao.insertLearnerIntentProfiles(packageData.learnerIntentProfiles.map { it.toEntity() })
+            dao.insertTeachingDesigns(packageData.teachingDesigns.map { it.toEntity() })
+            dao.insertModuleMicroPlans(packageData.moduleMicroPlans.map { it.toEntity() })
         }
 
         return ImportResult(
@@ -113,6 +125,9 @@ class SyncRepository(private val database: StudyDatabase) {
             reviewSessions = packageData.reviewSessions.size,
             teachingSessions = packageData.teachingSessions.size,
             teachingMessages = packageData.teachingMessages.size,
+            learnerIntentProfiles = packageData.learnerIntentProfiles.size,
+            teachingDesigns = packageData.teachingDesigns.size,
+            moduleMicroPlans = packageData.moduleMicroPlans.size,
             overwrittenBooks = overwrittenBooks,
         )
     }
@@ -123,6 +138,8 @@ class SyncRepository(private val database: StudyDatabase) {
         val unitIds = packageData.knowledgeUnits.map { it.id }.toSet()
         val nodeIds = packageData.kgNodes.map { it.id }.toSet()
         val teachingSessionIds = packageData.teachingSessions.map { it.id }.toSet()
+        val profileIds = packageData.learnerIntentProfiles.map { it.id }.toSet()
+        val designIds = packageData.teachingDesigns.map { it.id }.toSet()
 
         require(packageData.chapters.all { it.bookId in bookIds }) { "同步包包含不属于导入书籍的章节" }
         require(packageData.chapters.all { it.parentId == null || it.parentId in chapterIds }) { "同步包包含不属于导入章节树的父章节" }
@@ -139,6 +156,11 @@ class SyncRepository(private val database: StudyDatabase) {
         require(packageData.userQuestions.all { it.sessionId in teachingSessionIds }) { "同步包包含不属于导入教学会话的用户提问" }
         require(packageData.sessionTests.all { it.sessionId in teachingSessionIds }) { "同步包包含不属于导入教学会话的阶段测试" }
         require(packageData.learningEfficiency.all { it.sessionId in teachingSessionIds && it.unitId in unitIds }) { "同步包包含不属于导入范围的学习效率记录" }
+        require(packageData.learnerIntentProfiles.all { it.bookId in bookIds }) { "同步包包含不属于导入书籍的学习者画像" }
+        require(packageData.teachingDesigns.all { it.bookId in bookIds }) { "同步包包含不属于导入书籍的教学设计" }
+        require(packageData.teachingDesigns.all { it.profileId == null || it.profileId in profileIds }) { "同步包包含孤立的学习者画像引用" }
+        require(packageData.moduleMicroPlans.all { it.bookId in bookIds }) { "同步包包含不属于导入书籍的模块微观编排" }
+        require(packageData.moduleMicroPlans.all { it.designId in designIds }) { "同步包包含孤立的教学设计引用" }
     }
 
     suspend fun exportPackage(): String {
@@ -162,6 +184,9 @@ class SyncRepository(private val database: StudyDatabase) {
             userQuestions = dao.getUserQuestions().map { it.toSync() },
             sessionTests = dao.getSessionTests().map { it.toSync() },
             learningEfficiency = dao.getLearningEfficiency().map { it.toSync() },
+            learnerIntentProfiles = dao.getLearnerIntentProfiles().map { it.toSync() },
+            teachingDesigns = dao.getTeachingDesigns().map { it.toSync() },
+            moduleMicroPlans = dao.getModuleMicroPlans().map { it.toSync() },
         )
         return json.encodeToString(packageData)
     }
@@ -177,6 +202,9 @@ data class ImportResult(
     val reviewSessions: Int,
     val teachingSessions: Int,
     val teachingMessages: Int,
+    val learnerIntentProfiles: Int,
+    val teachingDesigns: Int,
+    val moduleMicroPlans: Int,
     val overwrittenBooks: List<String>,
 )
 
@@ -184,14 +212,14 @@ private fun SyncBook.toEntity() = BookEntity(id, "anonymous", title, author, fil
 private fun BookEntity.toSync() = SyncBook(id, userId, title, author, filePath, fileType, fileSizeBytes, parseStatus, splitStatus, learnStatus, totalChapters, totalUnits, learnedUnits, readingMotivation, createdAt, updatedAt)
 private fun SyncChapter.toEntity() = ChapterEntity(id, bookId, title, chapterNumber, parentId, level, orderIndex, summary)
 private fun ChapterEntity.toSync() = SyncChapter(id, bookId, title, chapterNumber, parentId, level, orderIndex, summary)
-private fun SyncKnowledgeUnit.toEntity() = KnowledgeUnitEntity(id, bookId, chapterId, sectionId, title, content, orderIndex, charOffsetStart, charOffsetEnd, summary, explanation, keyPoints, concepts, prerequisites, difficultyLevel, importanceScore)
-private fun KnowledgeUnitEntity.toSync() = SyncKnowledgeUnit(id, bookId, chapterId, sectionId, title, content, orderIndex, charOffsetStart, charOffsetEnd, summary, explanation, keyPoints, concepts, prerequisites, difficultyLevel, importanceScore)
+private fun SyncKnowledgeUnit.toEntity() = KnowledgeUnitEntity(id, bookId, chapterId, sectionId, title, content, orderIndex, charOffsetStart, charOffsetEnd, summary, explanation, keyPoints, concepts, prerequisites, difficultyLevel, importanceScore, aiCognitiveHint)
+private fun KnowledgeUnitEntity.toSync() = SyncKnowledgeUnit(id, bookId, chapterId, sectionId, title, content, orderIndex, charOffsetStart, charOffsetEnd, summary, explanation, keyPoints, concepts, prerequisites, difficultyLevel, importanceScore, aiCognitiveHint)
 private fun SyncKgNode.toEntity() = KgNodeEntity(id, nodeType, label, bookId, contentSummary, difficultyLevel, importanceScore, masteryScore, masteryLevel, size, color)
 private fun KgNodeEntity.toSync() = SyncKgNode(id, nodeType, label, bookId, contentSummary, difficultyLevel, importanceScore, masteryScore, masteryLevel, size, color)
 private fun SyncKgEdge.toEntity() = KgEdgeEntity(id, sourceId, targetId, relationType, weight, metadataJson)
 private fun KgEdgeEntity.toSync() = SyncKgEdge(id, sourceId, targetId, relationType, weight, metadataJson)
-private fun SyncMasteryRecord.toEntity() = MasteryRecordEntity(id, "anonymous", knowledgeUnitId, bookId, masteryScore, masteryLevel, lastReviewedAt, nextReviewAt, reviewCount, easeFactor, intervalDays)
-private fun MasteryRecordEntity.toSync() = SyncMasteryRecord(id, userId, knowledgeUnitId, bookId, masteryScore, masteryLevel, lastReviewedAt, nextReviewAt, reviewCount, easeFactor, intervalDays)
+private fun SyncMasteryRecord.toEntity() = MasteryRecordEntity(id, "anonymous", knowledgeUnitId, bookId, masteryScore, masteryLevel, lastReviewedAt, nextReviewAt, reviewCount, easeFactor, intervalDays, stability, difficulty, lapses, reps, lastElapsedDays, scheduledDays, algorithm)
+private fun MasteryRecordEntity.toSync() = SyncMasteryRecord(id, userId, knowledgeUnitId, bookId, masteryScore, masteryLevel, lastReviewedAt, nextReviewAt, reviewCount, easeFactor, intervalDays, stability, difficulty, lapses, reps, lastElapsedDays, scheduledDays, algorithm)
 private fun SyncAnnotation.toEntity() = AnnotationEntity(id, "anonymous", knowledgeUnitId, annotationType, content, relatedConceptsJson, example, cornellCues, cornellSummary, createdAt, updatedAt)
 private fun AnnotationEntity.toSync() = SyncAnnotation(id, userId, knowledgeUnitId, annotationType, content, relatedConceptsJson, example, cornellCues, cornellSummary, createdAt, updatedAt)
 private fun SyncLearningRecord.toEntity() = LearningRecordEntity(id, "anonymous", bookId, sessionId, startedAt, endedAt, durationMinutes, unitsCovered, questionsAsked, testScore, annotationsCreated)
@@ -210,3 +238,9 @@ private fun SyncSessionTest.toEntity() = SessionTestEntity(id, sessionId, questi
 private fun SessionTestEntity.toSync() = SyncSessionTest(id, sessionId, questionsJson, userAnswersJson, score, weakPointsJson, completedAt)
 private fun SyncLearningEfficiency.toEntity() = LearningEfficiencyEntity(id, sessionId, unitId, phase, durationSeconds, interactionCount, efficiencyScore, createdAt)
 private fun LearningEfficiencyEntity.toSync() = SyncLearningEfficiency(id, sessionId, unitId, phase, durationSeconds, interactionCount, efficiencyScore, createdAt)
+private fun SyncLearnerIntentProfile.toEntity() = LearnerIntentProfileEntity(id, "anonymous", bookId, identityBackground, goalDepth, cognitivePref, restructureTolerance, timeBudgetMinutes, source, status, extraJson, createdAt, updatedAt)
+private fun LearnerIntentProfileEntity.toSync() = SyncLearnerIntentProfile(id, userId, bookId, identityBackground, goalDepth, cognitivePref, restructureTolerance, timeBudgetMinutes, source, status, extraJson, createdAt, updatedAt)
+private fun SyncTeachingDesign.toEntity() = TeachingDesignEntity(id, "anonymous", bookId, profileId, macroDesignJson, currentModuleIndex, generatedModuleCount, adjustmentsJson, status, version, createdAt, updatedAt)
+private fun TeachingDesignEntity.toSync() = SyncTeachingDesign(id, userId, bookId, profileId, macroDesignJson, currentModuleIndex, generatedModuleCount, adjustmentsJson, status, version, createdAt, updatedAt)
+private fun SyncModuleMicroPlan.toEntity() = ModuleMicroPlanEntity(id, designId, bookId, "anonymous", moduleIndex, moduleTitle, orderedUnitIdsJson, unitAnnotationsJson, moduleIntro, moduleStatus, moduleSummaryJson, parentDesignVersion, createdAt, updatedAt)
+private fun ModuleMicroPlanEntity.toSync() = SyncModuleMicroPlan(id, designId, bookId, userId, moduleIndex, moduleTitle, orderedUnitIdsJson, unitAnnotationsJson, moduleIntro, moduleStatus, moduleSummaryJson, parentDesignVersion, createdAt, updatedAt)

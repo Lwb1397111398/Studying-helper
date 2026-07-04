@@ -1,87 +1,140 @@
 # Studying-helper 跨端与 Android 路线图
 
+本文面向接手项目的 AI，用来快速判断 Android 和跨端同步当前状态。
+
 ## 总目标
 
-电脑端 Web 和 Android 端都是一等客户端。两端都能独立学习，并通过离线同步包双向继承学习数据。
+Web 和 Android 都是一等客户端。Web 更适合导入、总览、复杂配置和教学设计；Android 更适合离线学习、复习、考试和轻量教学。两端通过同步包交换数据。
 
-## 第一轮范围
+## 当前跨端架构
 
-第一轮目标是修正跨端基础体验：电脑端有明确同步中心，Android 不再只是同步包查看器。
+```text
+后端 FastAPI + SQLite
+  -> Web React
+  -> 同步包 JSON
+  -> Android Room
+```
+
+同步不是云同步。当前策略以导出、预览、覆盖式导入为主。
+
+## 已完成能力
 
 ### 后端
 
-- 支持全量同步包导出。
-- 支持单本书同步包导出。
-- 支持导入前预览同步包。
-- 导入结果返回覆盖书籍和核心记录数量。
-- 继续采用覆盖式导入，不做自动合并冲突。
+- 全量同步包导出。
+- 单本书同步包导出。
+- 导入前预览。
+- 覆盖式导入。
+- 同步范围包含书籍、章节、知识单元、图谱、掌握度、注释、学习记录、教学记录、复习/考试、学习效率。
+- 已加入 AID 三表和 `ai_cognitive_hint`。
+- 掌握度同步包含 FSRS 字段。
 
 ### Web
 
-- 新增 `/sync` 同步中心。
-- 首页提供明确同步入口。
-- 同步中心支持导出全部、导出单本、预览同步包、确认导入。
-- 导入前明确提示同 ID 书籍会被覆盖。
+- `/sync` 同步中心。
+- 导出全部、导出单本、预览同步包、确认导入。
+- `/books/:bookId/design` AID 教学设计页面。
+- `/books/:bookId/teach` 教学会话。
+- 书籍页提供学习、教学、复习、考试、图谱、导出等入口。
 
 ### Android
 
-- 移除“请先从 Web 端导出”的从属文案。
-- 支持新建书籍。
-- 支持新建章节。
-- 支持新建知识单元。
-- 支持知识单元复习反馈：忘了、模糊、记得、熟练。
-- 支持掌握度、下次复习时间和学习进度更新。
-- 支持导入/导出同步包，与 Web 双向继承进度。
+- Compose 单 Activity 导航。
+- Room 本地数据库，当前 `version = 2`。
+- `MIGRATION_1_2` 已加入 AID 三表和 `knowledge_units.ai_cognitive_hint`。
+- 本地书籍、章节、知识单元管理。
+- TXT/EPUB/PDF 基础导入。
+- 本地 AI 配置，支持 OpenAI 兼容接口。
+- 知识单元 AI 分析。
+- AID 教学设计界面。
+- 端侧教学页面和教学消息记录。
+- 复习反馈和 FSRS 算法。
+- 考试模式。
+- 同步包导入导出。
 
-## 后续计划
+## Android 关键文件
 
-### 第二轮：Android 文档导入
+| 目标 | 文件 |
+| --- | --- |
+| 导航入口 | `android/app/src/main/java/com/studyinghelper/mobile/MainActivity.kt` |
+| 书籍列表 | `BooksScreen.kt` |
+| 教学设计 | `TeachingDesignScreen.kt` |
+| 教学 | `TeachingScreen.kt` |
+| 考试 | `ExamScreen.kt` |
+| ViewModel | `ui/StudyViewModel.kt` |
+| Room Entity | `data/db/Entities.kt` |
+| DAO | `data/db/StudyDao.kt` |
+| 数据库和版本 | `data/db/StudyDatabase.kt` |
+| 迁移 | `data/db/Migrations.kt` |
+| 同步 DTO | `data/sync/SyncDtos.kt` |
+| 同步仓库 | `data/repository/SyncRepository.kt` |
+| AID 仓库 | `data/repository/AdaptiveDesignRepository.kt` |
+| AI 分析 | `data/repository/AiRepository.kt` |
+| 教学 | `data/repository/TeachingRepository.kt` |
+| 复习 | `data/repository/ReviewRepository.kt` |
+| FSRS | `data/algorithm/FSRSAlgorithm.kt` |
 
-优先级：TXT → EPUB → PDF。
+## 后续优先级
 
-- TXT：已完成。读取纯文本，按标题和空行规则拆分章节与知识单元。
-- EPUB：已完成基础版。解析 OPF manifest/spine，清理 HTML 后生成章节与知识单元。
-- PDF：已完成基础版。使用 PDFBox Android 抽取文字型 PDF 文本；扫描件 PDF 仍需后续 OCR/AI 解析支持。
+### 1. 同步稳定性
 
-### 第三轮：Android AI 教学
+- 加强后端 sync contract 和 Android DTO 对齐测试。
+- 覆盖 AID 三表、FSRS 字段、`ai_cognitive_hint` 的端到端导入导出。
+- 明确单书同步对全局统计的处理规则。
 
-- Android AI 设置：已完成。支持 API Key、Base URL、Model，并允许本地 HTTP OpenAI 兼容接口。
-- 知识单元 AI 分析：已完成。支持生成摘要、讲解、要点、概念，结果保存到 Room 并参与同步。
-- 交互式教学问答：已完成基础版。支持按阶段生成教学内容、手动继续、向 AI 提问，并把教学消息/用户提问写入 Room 参与同步。
-- 教学阶段仍然手动推进，不自动跳转。
+### 2. Android 教学体验
 
-### 第四轮：Android 考试模式
+- 优化 AID design -> teach 的路径。
+- 明确端侧教学使用 AID active module 的顺序。
+- 改善教学阶段自动/手动推进体验。
 
-- 本地生成或手动创建题目。
-- 支持选择题、问答题和自由回忆。
-- 考试结果写入本地记录并可同步回 Web。
+### 3. Android 文档导入质量
 
-### 第五轮：云同步
+- TXT/EPUB/PDF 已有基础版。
+- PDF 扫描件仍需要 OCR 或 AI 解析。
+- EPUB 复杂目录和脚注清理仍可优化。
 
-- 在离线同步稳定后再考虑。
-- 需要账号、设备标识、服务端存储和冲突策略。
-- 不应在手动同步可靠前引入。
+### 4. 冲突合并
 
-### 第六轮：自动合并冲突
+- 当前是覆盖式导入。
+- 自动合并需要为书籍、知识单元、掌握度、AID 设计、教学记录分别定义规则。
+- 不应在没有测试数据前贸然引入。
 
-- 需要为书籍、知识单元、掌握度和学习记录定义合并规则。
-- 初期继续用覆盖式导入，避免错误合并学习进度。
-- 自动合并应在有充分测试数据后实现。
+### 5. 云同步
+
+- 需要账号、设备标识、服务端同步状态和冲突策略。
+- 应在离线同步稳定后再做。
 
 ## 验证清单
 
-- Web 导出全部同步包。
-- Android 导入 Web 同步包。
-- Android 新建书籍、章节、知识单元并更新掌握度。
-- Android 导出同步包。
-- Web 预览并导入 Android 同步包。
-- Web 显示 Android 创建的数据和学习进度。
+```bash
+# 后端同步
+cd backend && python -m pytest app/modules/sync/tests/ -q
 
-## 2026-06-08 同步闭环收敛
+# AID 后端
+cd backend && python -m pytest app/modules/adaptive_design/tests/ -q
 
-- Web 同步中心展示完整预览统计和导入结果统计。
-- 后端同步导入结果返回注释、图谱、学习记录、教学记录和效率记录数量。
-- Android 导入同步包后展示覆盖数量和核心记录数量。
-- Android 导出空库时给出明确提示，避免生成无法导入的空同步包。
-- Android DTO 增加 JVM 测试，覆盖 Web 包解析和 Android 包 snake_case 字段输出。
-- 单书同步包不携带每日统计，避免覆盖同一天其他书籍产生的全局累计数据。
+# Android 单元测试
+cd android
+$env:JAVA_HOME='C:\Program Files\Android\Android Studio\jbr'
+$env:GRADLE_USER_HOME=(Resolve-Path '..\.gradle-ascii').Path
+$env:Path="$env:JAVA_HOME\bin;$env:Path"
+.\gradlew.bat :app:testDebugUnitTest
+```
+
+手动链路：
+
+1. Web 导出全部同步包。
+2. Android 导入 Web 包。
+3. Android 新建/修改书籍、章节、知识单元、掌握度。
+4. Android 导出同步包。
+5. Web 预览并导入 Android 包。
+6. 检查 AID 三表、`ai_cognitive_hint`、FSRS 字段是否保留。
+
+## 坑位
+
+- 改 Room Entity 必须改 migration。
+- 改同步字段必须改后端 schema/service、Android DTO/Entity/Repository/Preview。
+- Android 教学不等于 Web 教学页面的简单移植。
+- AID 是跨端功能，不是单个页面功能。
+- 不要把未完成的云同步设想写成当前能力。

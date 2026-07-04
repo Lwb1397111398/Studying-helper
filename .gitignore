@@ -12,11 +12,14 @@ venv/
 # Frontend
 node_modules/
 dist/
+frontend/playwright-report/
+frontend/test-results/
 
 # Android
 android/local.properties
 android/.gradle/
 android/.gradle-user-home/
+/.gradle-ascii/
 android/**/build/
 *.apk
 
@@ -35,7 +38,12 @@ Thumbs.db
 # Codegraph
 .codegraph/
 
+# Local agent workspace
+/.codex/
+/.claude/
+
 # Local runtime artifacts
 *.db
 *.sqlite
 *.stackdump
+/.pytest-tmp/

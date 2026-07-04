@@ -10,8 +10,12 @@ import com.studyinghelper.mobile.data.db.BookEntity
 import com.studyinghelper.mobile.data.db.ChapterEntity
 import com.studyinghelper.mobile.data.db.DailyStatsEntity
 import com.studyinghelper.mobile.data.db.KnowledgeUnitEntity
+import com.studyinghelper.mobile.data.db.LearnerIntentProfileEntity
 import com.studyinghelper.mobile.data.db.MasteryRecordEntity
+import com.studyinghelper.mobile.data.db.ModuleMicroPlanEntity
 import com.studyinghelper.mobile.data.db.StudyDatabase
+import com.studyinghelper.mobile.data.db.TeachingDesignEntity
+import com.studyinghelper.mobile.data.repository.AdaptiveDesignRepository
 import com.studyinghelper.mobile.data.repository.AiConfig
 import com.studyinghelper.mobile.data.repository.AiConfigRepository
 import com.studyinghelper.mobile.data.repository.AiRepository
@@ -45,6 +49,7 @@ class StudyViewModel(application: Application) : AndroidViewModel(application) {
     private val examRepository = ExamRepository(database)
     private val aiConfigRepository = AiConfigRepository(application)
     private val aiRepository = AiRepository(aiConfigRepository)
+    private val adaptiveDesignRepository = AdaptiveDesignRepository(database, aiRepository)
     private val teachingRepository = TeachingRepository(database, aiRepository)
     private val json = Json { prettyPrint = false }
     private val analyzingUnitIds = mutableSetOf<String>()
@@ -80,6 +85,7 @@ class StudyViewModel(application: Application) : AndroidViewModel(application) {
     private var teachingRequestId = 0
     private var reportRequestId = 0
     private var syncRequestId = 0
+    private var aidRequestId = 0
     private var pendingSyncContent: String? = null
     private var syncImporting = false
 
@@ -100,6 +106,9 @@ class StudyViewModel(application: Application) : AndroidViewModel(application) {
 
     private val _teachingState = MutableStateFlow<TeachingState?>(null)
     val teachingState: StateFlow<TeachingState?> = _teachingState
+
+    private val _aidDesignState = MutableStateFlow(AidDesignState())
+    val aidDesignState: StateFlow<AidDesignState> = _aidDesignState
 
     private val _examError = MutableStateFlow<String?>(null)
     val examError: StateFlow<String?> = _examError
@@ -145,6 +154,100 @@ class StudyViewModel(application: Application) : AndroidViewModel(application) {
         bookId,
         OffsetDateTime.now().toString(),
     ).stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyList())
+
+    fun loadAidDesign(bookId: String) {
+        val requestId = ++aidRequestId
+        _aidDesignState.value = _aidDesignState.value.copy(isLoading = true, error = null)
+        viewModelScope.launch(Dispatchers.IO) {
+            runCatching {
+                AidDesignState(
+                    profile = dao.getLearnerIntentProfile(bookId),
+                    design = dao.getTeachingDesign(bookId),
+                    plans = dao.getModuleMicroPlans(bookId),
+                    isLoading = false,
+                    error = null,
+                )
+            }.onSuccess { state ->
+                if (aidRequestId == requestId) _aidDesignState.value = state
+            }.onFailure { error ->
+                if (aidRequestId == requestId) {
+                    _aidDesignState.value = AidDesignState(isLoading = false, error = error.message ?: "加载教学设计失败")
+                }
+            }
+        }
+    }
+
+    fun inferAidProfile(bookId: String) {
+        runAidAction(bookId, "画像已生成") {
+            adaptiveDesignRepository.inferProfile(bookId)
+        }
+    }
+
+    fun saveAidProfile(
+        bookId: String,
+        identityBackground: String,
+        goalDepth: String,
+        cognitivePref: String,
+        restructureTolerance: String,
+        timeBudgetMinutes: Int?,
+    ) {
+        runAidAction(bookId, "画像已保存") {
+            adaptiveDesignRepository.saveProfile(
+                bookId = bookId,
+                identityBackground = identityBackground,
+                goalDepth = goalDepth,
+                cognitivePref = cognitivePref,
+                restructureTolerance = restructureTolerance,
+                timeBudgetMinutes = timeBudgetMinutes,
+            )
+        }
+    }
+
+    fun confirmAidProfile(bookId: String) {
+        runAidAction(bookId, "画像已确认") {
+            adaptiveDesignRepository.confirmProfile(bookId)
+        }
+    }
+
+    fun generateAidDesign(bookId: String) {
+        runAidAction(bookId, "教学设计已生成") {
+            adaptiveDesignRepository.generateDesign(bookId)
+        }
+    }
+
+    fun activateAidDesign(bookId: String) {
+        runAidAction(bookId, "教学设计已激活，可以开始教学") {
+            adaptiveDesignRepository.activateDesign(bookId)
+        }
+    }
+
+    private fun runAidAction(bookId: String, successMessage: String, action: suspend () -> Any) {
+        val requestId = ++aidRequestId
+        _aidDesignState.value = _aidDesignState.value.copy(isLoading = true, error = null)
+        viewModelScope.launch(Dispatchers.IO) {
+            runCatching {
+                action()
+                AidDesignState(
+                    profile = dao.getLearnerIntentProfile(bookId),
+                    design = dao.getTeachingDesign(bookId),
+                    plans = dao.getModuleMicroPlans(bookId),
+                    isLoading = false,
+                    error = null,
+                )
+            }.onSuccess { state ->
+                if (aidRequestId == requestId) {
+                    _aidDesignState.value = state
+                    _status.value = successMessage
+                }
+            }.onFailure { error ->
+                if (aidRequestId == requestId) {
+                    val message = error.message ?: "教学设计操作失败"
+                    _aidDesignState.value = _aidDesignState.value.copy(isLoading = false, error = message)
+                    _status.value = message
+                }
+            }
+        }
+    }
 
     fun refreshReport() {
         val requestId = ++reportRequestId
@@ -352,6 +455,9 @@ class StudyViewModel(application: Application) : AndroidViewModel(application) {
                     dao.deleteLearningRecords(listOf(bookId))
                     dao.deleteReviewSessions(listOf(bookId))
                     dao.deleteTeachingSessions(listOf(bookId))
+                    dao.deleteModuleMicroPlans(listOf(bookId))
+                    dao.deleteTeachingDesigns(listOf(bookId))
+                    dao.deleteLearnerIntentProfiles(listOf(bookId))
                     dao.deleteKgNodes(listOf(bookId))
                     dao.deleteUnits(listOf(bookId))
                     dao.deleteChapters(listOf(bookId))
@@ -725,7 +831,7 @@ class StudyViewModel(application: Application) : AndroidViewModel(application) {
                     } else {
                         "覆盖 ${result.overwrittenBooks.size} 本"
                     }
-                    _status.value = "导入完成：${result.books} 本书，${result.units} 个知识单元，${result.masteryRecords} 条掌握记录，$overwriteText"
+                    _status.value = "导入完成：${result.books} 本书，${result.units} 个知识单元，${result.reviewSessions} 条复习/考试，${result.teachingSessions} 个教学会话，${result.teachingDesigns} 个教学设计，$overwriteText"
                 }
             }.onFailure { error ->
                 if (syncRequestId == requestId) {
@@ -785,4 +891,12 @@ data class ReportState(
     val reviewSessions: Int,
     val examSessions: Int,
     val totalMinutes: Int,
+)
+
+data class AidDesignState(
+    val profile: LearnerIntentProfileEntity? = null,
+    val design: TeachingDesignEntity? = null,
+    val plans: List<ModuleMicroPlanEntity> = emptyList(),
+    val isLoading: Boolean = false,
+    val error: String? = null,
 )

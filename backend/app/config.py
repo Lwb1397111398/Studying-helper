@@ -1,12 +1,14 @@
 """应用配置 — 支持模块级 LLM 配置覆盖"""
-from pydantic_settings import BaseSettings
+from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
 # 需要支持模块级覆盖的 LLM 模块列表
-LLM_MODULES = ["teaching", "ai_analysis", "parser"]
+LLM_MODULES = ["teaching", "ai_analysis", "parser", "aid"]
 
 
 class Settings(BaseSettings):
+    model_config = SettingsConfigDict(env_file=".env", extra="allow")
+
     # ── 全局默认 LLM 配置（保底）──
     LLM_DEFAULT_API_KEY: str = ""
     LLM_DEFAULT_MODEL: str = "gpt-4o-mini"
@@ -26,6 +28,11 @@ class Settings(BaseSettings):
     LLM_PARSER_API_KEY: str = ""
     LLM_PARSER_MODEL: str = ""
     LLM_PARSER_BASE_URL: str = ""
+
+    # ── 适应性教学设计（AID）模块 LLM 配置 ──
+    LLM_AID_API_KEY: str = ""
+    LLM_AID_MODEL: str = ""
+    LLM_AID_BASE_URL: str = ""
 
     # ── 并发控制 ──
     LLM_MAX_CONCURRENT: int = 4  # 同时进行的 LLM 请求数量上限（过高会导致 API 提供商拒绝连接）
@@ -68,10 +75,6 @@ class Settings(BaseSettings):
             or self.LLM_BASE_URL
         )
         return {"api_key": api_key, "model": model, "base_url": base_url}
-
-    class Config:
-        env_file = ".env"
-        extra = "allow"
 
 
 settings = Settings()

@@ -22,8 +22,11 @@ import androidx.room.RoomDatabase
         UserQuestionEntity::class,
         SessionTestEntity::class,
         LearningEfficiencyEntity::class,
+        LearnerIntentProfileEntity::class,
+        TeachingDesignEntity::class,
+        ModuleMicroPlanEntity::class,
     ],
-    version = 1,
+    version = 2,
     exportSchema = false,
 )
 abstract class StudyDatabase : RoomDatabase() {
@@ -38,7 +41,10 @@ abstract class StudyDatabase : RoomDatabase() {
                     context.applicationContext,
                     StudyDatabase::class.java,
                     "studying_helper_mobile.db",
-                ).build().also { instance = it }
+                )
+                    .addMigrations(MIGRATION_1_2)
+                    .build()
+                    .also { instance = it }
             }
         }
     }

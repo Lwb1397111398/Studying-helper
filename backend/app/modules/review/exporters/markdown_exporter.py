@@ -53,8 +53,10 @@ def export_markdown(
                     'familiar': '[熟悉]',
                     'beginner': '[初学]',
                 }
-                level_text = level_emoji.get(mastery.get('level', ''), '[未知]')
-                lines.append(f"掌握度：{level_text} ({mastery.get('mastery_score', 0):.0%})\n")
+                level = mastery.get('mastery_level', mastery.get('level', ''))
+                score = mastery.get('mastery_score', mastery.get('score', 0))
+                level_text = level_emoji.get(level, '[未知]')
+                lines.append(f"掌握度：{level_text} ({score:.0%})\n")
 
             # 摘要
             summary = unit.get('summary', '')

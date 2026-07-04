@@ -56,6 +56,14 @@ async def get_parser_llm_client() -> OpenAIClient:
     return await get_llm_client("parser")
 
 
+async def get_aid_llm_client() -> OpenAIClient:
+    """获取适应性教学设计（AID）模块的 LLM 客户端。
+
+    未单独配置时回退到全局默认（get_llm_config 内部处理）。
+    """
+    return await get_llm_client("aid")
+
+
 async def clear_llm_client_cache(module: str | None = None) -> None:
     """清除 LLM 客户端缓存，下次请求时用新配置重建。
 

@@ -17,6 +17,11 @@ from app.modules.review.schemas import (
     ReviewFeedback, MasteryAssessment, FreeRecallResult, RecalledPoint,
 )
 from app.modules.review.spaced_repetition import calculate_next_review, quality_from_correctness
+from app.modules.review.spaced_repetition_v2 import (
+    SpacedRepetitionV2, Algorithm, ReviewSchedule,
+    calculate_next_review_v2, quality_from_correctness_v2
+)
+from app.modules.review.fsrs import FSRSScheduler, FSRSState, migrate_sm2_to_fsrs
 from app.modules.review.helpers import check_answer, mastery_delta, calibration_adjustment
 from app.modules.review.mastery_evaluator import evaluate_mastery
 from app.modules.review.question_generator import generate_questions
@@ -86,8 +91,12 @@ class ReviewService:
 
     async def _upsert_mastery(self, user_id: str, unit_id: str, mastery_change: float,
                               new_interval: int, new_ease: float, new_rep: int,
-                              book_id: str = "") -> None:
-        """更新或创建掌握度记录"""
+                              book_id: str = "", fsrs_params: Optional[dict] = None) -> None:
+        """更新或创建掌握度记录
+
+        Args:
+            fsrs_params: FSRS 参数，包含 stability, difficulty, lapses, scheduled_days 等
+        """
         existing = await self.db.execute(
             select(MasteryRecordModel).where(
                 MasteryRecordModel.user_id == user_id,
@@ -108,9 +117,20 @@ class ReviewService:
             row.next_review_at = now + timedelta(days=new_interval)
             if book_id:
                 row.book_id = book_id
+
+            # 更新 FSRS 参数
+            if fsrs_params:
+                row.stability = fsrs_params.get('stability', row.stability)
+                row.difficulty = fsrs_params.get('difficulty', row.difficulty)
+                row.lapses = fsrs_params.get('lapses', row.lapses)
+                row.reps = fsrs_params.get('reps', row.reps)
+                row.scheduled_days = fsrs_params.get('scheduled_days', row.scheduled_days)
+                row.algorithm = "fsrs"
+            else:
+                row.algorithm = "sm2"
         else:
             initial_score = max(0.0, min(1.0, mastery_change))
-            self.db.add(MasteryRecordModel(
+            new_record = MasteryRecordModel(
                 id=str(uuid4()),
                 user_id=user_id,
                 knowledge_unit_id=unit_id,
@@ -122,7 +142,20 @@ class ReviewService:
                 review_count=new_rep,
                 ease_factor=new_ease,
                 interval_days=new_interval,
-            ))
+            )
+
+            # 设置 FSRS 参数
+            if fsrs_params:
+                new_record.stability = fsrs_params.get('stability', 0.0)
+                new_record.difficulty = fsrs_params.get('difficulty', 5.0)
+                new_record.lapses = fsrs_params.get('lapses', 0)
+                new_record.reps = fsrs_params.get('reps', 0)
+                new_record.scheduled_days = fsrs_params.get('scheduled_days', new_interval)
+                new_record.algorithm = "fsrs"
+            else:
+                new_record.algorithm = "sm2"
+
+            self.db.add(new_record)
 
     # ===== Session 管理（DB 持久化） =====
 
@@ -257,12 +290,30 @@ class ReviewService:
         ef = mastery.ease_factor if mastery else 2.5
         iv = mastery.interval_days if mastery else 1
 
-        quality = quality_from_correctness(is_correct, response_time, avg_response_time)
-        new_interval, new_ease, new_rep = calculate_next_review(
-            quality=quality, repetitions=rep, ease_factor=ef, interval=iv,
-        )
+        # 使用 v2 算法（FSRS）
+        scheduler = SpacedRepetitionV2(Algorithm.FSRS)
+        quality = scheduler.quality_from_correctness(is_correct, response_time, avg_response_time,
+                                                      confidence=confidence_level / 3.0 if confidence_level > 0 else None)
+        schedule = scheduler.calculate_next_review(quality, rep, ef, iv)
 
-        mastery_change = mastery_delta(quality, mastery.mastery_score if mastery else 0.0)
+        # 提取结果
+        new_interval = schedule.interval_days
+        new_ease = schedule.ease_factor if schedule.ease_factor else ef
+        new_rep = schedule.repetitions if schedule.repetitions else rep
+
+        # FSRS 参数
+        fsrs_params = None
+        if schedule.algorithm == Algorithm.FSRS:
+            fsrs_params = {
+                'stability': schedule.stability,
+                'difficulty': schedule.difficulty,
+                'lapses': schedule.lapses,
+                'reps': new_rep,
+                'scheduled_days': schedule.scheduled_days
+            }
+
+        # 计算掌握度变化
+        mastery_change = schedule.mastery_change
 
         # 校准调整：根据信心与正确性差异调整掌握度变化
         calib_feedback = ""
@@ -272,7 +323,8 @@ class ReviewService:
 
         book_id = session_row.book_id or ""
         await self._upsert_mastery(user_id, question.unit_id, mastery_change,
-                                   new_interval, new_ease, new_rep, book_id=book_id)
+                                   new_interval, new_ease, new_rep, book_id=book_id,
+                                   fsrs_params=fsrs_params)
 
         await self._save_session(ReviewSession(
             id=session_id, user_id=session_row.user_id, book_id=book_id,
@@ -280,7 +332,7 @@ class ReviewService:
             started_at=session_row.started_at,
         ))
 
-        next_review_at = datetime.now(timezone.utc) + timedelta(days=new_interval)
+        next_review_at = schedule.next_review
         return ReviewFeedback(
             is_correct=is_correct,
             correct_answer=question.correct_answer,

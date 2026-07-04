@@ -14,9 +14,12 @@ from app.db.models import (
     KnowledgeUnitModel,
     LearningEfficiencyModel,
     LearningRecordModel,
+    LearnerIntentProfileModel,
     MasteryRecordModel,
+    ModuleMicroPlanModel,
     ReviewSessionModel,
     SessionTestModel,
+    TeachingDesignModel,
     TeachingMessageModel,
     TeachingSessionModel,
     UserQuestionModel,
@@ -31,14 +34,17 @@ from app.modules.sync.schemas import (
     SyncKGEdge,
     SyncKGNode,
     SyncKnowledgeUnit,
+    SyncLearnerIntentProfile,
     SyncLearningEfficiency,
     SyncLearningRecord,
     SyncMasteryRecord,
+    SyncModuleMicroPlan,
     SyncPackage,
     SyncPreviewBook,
     SyncPreviewResult,
     SyncReviewSession,
     SyncSessionTest,
+    SyncTeachingDesign,
     SyncTeachingMessage,
     SyncTeachingSession,
     SyncUserQuestion,
@@ -94,6 +100,9 @@ class SyncService:
             user_questions_count=len(package.user_questions),
             session_tests_count=len(package.session_tests),
             learning_efficiency_count=len(package.learning_efficiency),
+            learner_intent_profiles_count=len(package.learner_intent_profiles),
+            teaching_designs_count=len(package.teaching_designs),
+            module_micro_plans_count=len(package.module_micro_plans),
             books=[
                 SyncPreviewBook(
                     id=book.id,
@@ -147,6 +156,9 @@ class SyncService:
         self._add_models(UserQuestionModel, package.user_questions)
         self._add_models(SessionTestModel, package.session_tests)
         self._add_models(LearningEfficiencyModel, package.learning_efficiency)
+        self._add_models(LearnerIntentProfileModel, package.learner_intent_profiles, user_id=user_id)
+        self._add_models(TeachingDesignModel, package.teaching_designs, user_id=user_id)
+        self._add_models(ModuleMicroPlanModel, package.module_micro_plans, user_id=user_id)
 
         await self.db.flush()
         return SyncImportResult(
@@ -166,6 +178,9 @@ class SyncService:
             user_questions_imported=len(package.user_questions),
             session_tests_imported=len(package.session_tests),
             learning_efficiency_imported=len(package.learning_efficiency),
+            learner_intent_profiles_imported=len(package.learner_intent_profiles),
+            teaching_designs_imported=len(package.teaching_designs),
+            module_micro_plans_imported=len(package.module_micro_plans),
         )
 
     def _validate_package_scope(self, package: SyncPackage) -> None:
@@ -218,6 +233,22 @@ class SyncService:
         for efficiency in package.learning_efficiency:
             if efficiency.session_id not in teaching_session_ids or efficiency.unit_id not in unit_ids:
                 raise ServiceError(ErrorCode.VALIDATION_ERROR, "同步包包含不属于导入范围的学习效率记录")
+        # AID 三表校验
+        profile_ids = {p.id for p in package.learner_intent_profiles}
+        design_ids = {d.id for d in package.teaching_designs}
+        for profile in package.learner_intent_profiles:
+            if profile.book_id not in book_ids:
+                raise ServiceError(ErrorCode.VALIDATION_ERROR, "同步包包含不属于导入书籍的学习者画像")
+        for design in package.teaching_designs:
+            if design.book_id not in book_ids:
+                raise ServiceError(ErrorCode.VALIDATION_ERROR, "同步包包含不属于导入书籍的教学设计")
+            if design.profile_id is not None and design.profile_id not in profile_ids:
+                raise ServiceError(ErrorCode.VALIDATION_ERROR, "同步包包含孤立的学习者画像引用")
+        for plan in package.module_micro_plans:
+            if plan.book_id not in book_ids:
+                raise ServiceError(ErrorCode.VALIDATION_ERROR, "同步包包含不属于导入书籍的模块微观编排")
+            if plan.design_id not in design_ids:
+                raise ServiceError(ErrorCode.VALIDATION_ERROR, "同步包包含孤立的教学设计引用")
 
     async def _build_package(
         self,
@@ -296,6 +327,26 @@ class SyncService:
                 select(LearningEfficiencyModel).where(LearningEfficiencyModel.session_id.in_(session_ids))
             )
 
+        # AID 三表：画像与设计按 book_id 查，微观编排按 design_id 查
+        learner_intent_profiles = await self._fetch_all(
+            select(LearnerIntentProfileModel).where(
+                LearnerIntentProfileModel.user_id == user_id,
+                LearnerIntentProfileModel.book_id.in_(book_ids),
+            )
+        )
+        teaching_designs = await self._fetch_all(
+            select(TeachingDesignModel).where(
+                TeachingDesignModel.user_id == user_id,
+                TeachingDesignModel.book_id.in_(book_ids),
+            )
+        )
+        design_ids = [d.id for d in teaching_designs]
+        module_micro_plans = []
+        if design_ids:
+            module_micro_plans = await self._fetch_all(
+                select(ModuleMicroPlanModel).where(ModuleMicroPlanModel.design_id.in_(design_ids))
+            )
+
         return SyncPackage(
             user_id=user_id,
             books=[self._to_schema(SyncBook, item) for item in books],
@@ -313,6 +364,9 @@ class SyncService:
             user_questions=[self._to_schema(SyncUserQuestion, item) for item in user_questions],
             session_tests=[self._to_schema(SyncSessionTest, item) for item in session_tests],
             learning_efficiency=[self._to_schema(SyncLearningEfficiency, item) for item in learning_efficiency],
+            learner_intent_profiles=[self._to_schema(SyncLearnerIntentProfile, item) for item in learner_intent_profiles],
+            teaching_designs=[self._to_schema(SyncTeachingDesign, item) for item in teaching_designs],
+            module_micro_plans=[self._to_schema(SyncModuleMicroPlan, item) for item in module_micro_plans],
         )
 
     async def _book_exists(self, book_id: str) -> bool:
@@ -365,6 +419,18 @@ class SyncService:
             await self.db.execute(delete(UserQuestionModel).where(UserQuestionModel.session_id.in_(session_ids)))
             await self.db.execute(delete(SessionTestModel).where(SessionTestModel.session_id.in_(session_ids)))
             await self.db.execute(delete(LearningEfficiencyModel).where(LearningEfficiencyModel.session_id.in_(session_ids)))
+
+        # AID：先按 design_id 删微观编排，再删设计与画像
+        design_ids_to_delete = [
+            row[0]
+            for row in (
+                await self.db.execute(select(TeachingDesignModel.id).where(TeachingDesignModel.book_id == book_id))
+            ).all()
+        ]
+        if design_ids_to_delete:
+            await self.db.execute(delete(ModuleMicroPlanModel).where(ModuleMicroPlanModel.design_id.in_(design_ids_to_delete)))
+        await self.db.execute(delete(TeachingDesignModel).where(TeachingDesignModel.book_id == book_id))
+        await self.db.execute(delete(LearnerIntentProfileModel).where(LearnerIntentProfileModel.book_id == book_id))
 
         await self.db.execute(delete(ReviewSessionModel).where(ReviewSessionModel.book_id == book_id))
         await self.db.execute(delete(TeachingSessionModel).where(TeachingSessionModel.book_id == book_id))

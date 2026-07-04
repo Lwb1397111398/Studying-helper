@@ -1,60 +1,68 @@
 # document_parser 模块
 
-## 概述
+## 职责
 
-文档解析模块，负责将上传的 PDF/TXT/EPUB 文件解析为章节结构和纯文本。
+负责把上传的 PDF/TXT/EPUB 转成后续可拆分的章节结构，并支持目录预览、目录确认和解析进度查询。
 
-## 文件结构
+## 关键文件
 
-| 文件 | 职责 |
-|------|------|
-| `router.py` | API 路由（上传、解析状态、SSE 进度推送） |
-| `schemas.py` | 请求/响应模型 |
-| `service.py` | 解析服务（协调解析器、噪声清洗、目录检测） |
-| `parsers/pdf_parser.py` | PDF 解析器（pdfplumber） |
-| `parsers/txt_parser.py` | TXT 解析器（chardet 编码检测） |
-| `parsers/epub_parser.py` | EPUB 解析器（ebooklib） |
-| `toc_detector.py` | 目录检测（正则 + LLM fallback） |
-| `noise_cleaner.py` | 噪声清洗（页眉页脚、重复空白） |
+| 文件 | 作用 |
+| --- | --- |
+| `router.py` | `/api/v1/documents` 路由 |
+| `service.py` | 解析流程编排、上传状态、目录确认 |
+| `schemas.py` | 上传/解析/目录相关模型 |
+| `parsers/pdf_parser.py` | PDF 文本解析 |
+| `parsers/txt_parser.py` | TXT 编码检测和章节解析 |
+| `parsers/epub_parser.py` | EPUB manifest/spine 和 HTML 清理 |
+| `toc_detector.py` | 目录识别 |
+| `toc_prompt.py` | LLM 辅助目录识别 prompt |
+| `noise_cleaner/` | 页眉页脚、目录、前后文噪声清理 |
 
-## API 端点
+## API 入口
+
+前缀：`/api/v1/documents`
 
 | 方法 | 路径 | 说明 |
-|------|------|------|
-| POST | `/api/v1/documents/upload` | 上传文件 |
-| GET | `/api/v1/documents/{book_id}/status` | 查询解析状态 |
-| GET | `/api/v1/documents/{book_id}/parse` | 触发解析（SSE 进度） |
+| --- | --- | --- |
+| POST | `/parse` | 上传并同步/半同步解析 |
+| POST | `/parse/start` | 启动解析任务 |
+| GET | `/parse/{upload_id}/progress` | 查询解析进度 |
+| GET | `/formats` | 查询支持格式 |
+| GET | `/{book_id}/toc/preview` | 获取目录预览 |
+| POST | `/{book_id}/toc/confirm` | 确认目录并写入章节 |
 
-## 解析流程
+## 数据流
 
+```text
+UploadFile
+  -> FileStorage 保存文件
+  -> 根据扩展名选择 parser
+  -> 清理噪声和目录
+  -> 生成 Chapter / Toc 结构
+  -> 写 BookModel / ChapterModel
+  -> 等待 knowledge_splitter 拆单元
 ```
-上传 → 保存文件 → 创建 BookModel (pending)
-  → 触发解析 → 解析器提取文本+章节
-    → 噪声清洗 → 目录检测 → 更新 BookModel (completed)
+
+## 依赖关系
+
+- 依赖 `user_storage.services.file_storage` 保存文件。
+- 依赖 `BookModel`、`ChapterModel`。
+- 可选依赖 parser LLM client，用于目录识别 fallback。
+- 下游是 `knowledge_splitter`。
+
+## Web / Android 关系
+
+- Web 上传走后端 `document_parser`。
+- Android 有端侧 TXT/EPUB/PDF 基础导入，不必经过后端解析；同步时再把结果带回 Web。
+
+## 验证入口
+
+```bash
+cd backend && python -m pytest app/modules/document_parser/tests/ -q
 ```
 
-## 已知问题
+## 已知风险
 
-| 严重度 | 问题 | 位置 |
-|--------|------|------|
-| **严重** | 522 行，零测试覆盖，是整个项目风险最高的模块 | `router.py` |
-| 中等 | async/sync 混用：pdfplumber 等同步库通过 `run_in_executor` 包装 | 全模块 |
-| 中等 | SSE 进度推送无超时机制，客户端断开后服务端继续轮询 | `router.py` |
-| 中等 | 进度存储基于内存（dict），重启后丢失 | `router.py` |
-| 低 | PDF 解析器对扫描版 PDF 无 OCR 支持 | `pdf_parser.py` |
-| 低 | TXT 编码检测依赖 chardet，对小文件准确率低 | `txt_parser.py` |
-
-## 优化建议
-
-1. **优先添加测试**: 至少覆盖 TXT 解析器（最简单）和 service 层
-2. SSE 进度添加心跳和超时（建议 5 分钟）
-3. 进度存储迁移到数据库或 Redis
-4. 考虑将 `run_in_executor` 包装提取为统一工具函数
-
-## 测试覆盖
-
-- `tests/test_pdf_parser.py` — 存在
-- `tests/test_txt_parser.py` — 存在
-- `tests/test_service.py` — 存在
-- `tests/test_toc_detector_enhanced.py` — 存在
-- **router.py — 零覆盖**（最大风险点）
+- 扫描版 PDF 不等于文字型 PDF；当前主要处理可抽取文本。
+- LLM 目录识别不可作为唯一可靠路径，规则解析仍需可用。
+- 目录确认会影响后续章节和知识单元 ID/顺序，改动时要检查 split 流程。

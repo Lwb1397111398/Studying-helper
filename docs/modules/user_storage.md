@@ -1,53 +1,68 @@
 # user_storage 模块
 
-## 概述
+## 职责
 
-用户数据管理模块，包括书籍 CRUD、掌握度查询、每日统计和学习连续天数。
+管理用户、书籍、章节、学习记录、每日统计和本地文件存储。它是后端多数业务模块的数据入口。
 
-## 文件结构
+## 关键文件
 
-| 文件 | 职责 |
-|------|------|
-| `router.py` | API 路由（书籍管理、掌握度、统计） |
-| `schemas.py` | 请求/响应模型 |
-| `service.py` | 用户服务（书籍操作、掌握度聚合） |
-| `auth.py` | 认证（JWT，当前未启用） |
-| `streak_service.py` | 学习连续天数计算 |
+| 文件 | 作用 |
+| --- | --- |
+| `router.py` | `/api/v1` 下的用户、书籍、章节、统计路由 |
+| `service.py` | 聚合服务入口 |
+| `schemas.py` | User、Book、Chapter、LearningRecord、DailyStats 等模型 |
+| `auth.py` | JWT/认证辅助；当前主路径仍是单用户 |
+| `services/book_service.py` | 书籍 CRUD 和状态 |
+| `services/file_storage.py` | 文件保存、备份目录 |
+| `services/learning_record_service.py` | 学习记录 |
+| `services/streak_service.py` | 连续学习天数 |
+| `services/user_service.py` | 用户偏好 |
+| `services/cache_service.py` | 缓存服务 |
 
-## API 端点
+## API 入口
 
-| 方法 | 路径 | 说明 |
-|------|------|------|
-| GET | `/api/v1/books` | 获取书籍列表 |
-| GET | `/api/v1/books/{id}` | 获取书籍详情 |
-| DELETE | `/api/v1/books/{id}` | 删除书籍 |
-| GET | `/api/v1/books/{id}/chapters` | 获取章节树 |
-| GET | `/api/v1/mastery/{book_id}` | 获取掌握度 |
-| GET | `/api/v1/stats/daily` | 获取每日统计 |
-| GET | `/api/v1/stats/streak` | 获取连续学习天数 |
-| POST | `/api/v1/stats/complete` | 记录学习完成 |
+前缀：`/api/v1`
 
-## 已知问题
+常用端点：
 
-| 严重度 | 问题 | 位置 | 状态 |
-|--------|------|------|------|
-| 中等 | `file_size_bytes` 来自客户端而非实际文件大小，可被伪造 | `router.py` | **已修复** |
-| 中等 | `get_book_chapters` 未检查书籍是否存在，直接查询章节 | `router.py` | **已修复** |
-| 中等 | `json.loads` 无异常处理，畸形 JSON 导致 500 错误 | `router.py` | **已修复** |
-| 低 | `complete_record` 不是幂等的，重复调用会重复计数 | `service.py` | 待修复 |
-| 低 | 无数据库外键 `CASCADE` 删除，删书后留下孤立记录 | `models.py` | 待修复 |
+- `GET /users/{user_id}`
+- `PUT /users/preferences`
+- `GET /users/profile`
+- `POST /books`
+- `GET /books`
+- `GET /books/{book_id}`
+- `DELETE /books/{book_id}`
+- `GET /books/{book_id}/chapters`
+- `PUT /books/{book_id}/status`
+- `PUT /books/{book_id}/motivation`
+- `POST /records`
+- `PUT /records/{record_id}/complete`
+- `GET /stats/daily/{date}`
+- `GET /stats/streak`
+- `GET /books/{book_id}/mastery`
 
-## 优化建议
+## 数据流
 
-1. ~~文件大小从服务端文件系统获取（`len(content)`）~~ ✅ 已完成
-2. ~~`get_book_chapters` 先查 BookModel，不存在返回 404~~ ✅ 已完成
-3. ~~`json.loads` 包装 `_safe_json_list`，失败返回空列表~~ ✅ 已完成
-4. `complete_record` 改为幂等（基于 session_id 去重）
-5. 外键添加 `ondelete="CASCADE"` 或在删除时手动清理关联数据
+```text
+上传/新建书籍
+  -> BookModel
+  -> ChapterModel
+  -> KnowledgeUnitModel
+  -> 学习/教学/复习/同步模块继续处理
+```
 
-## 测试覆盖
+## 与 Android 的关系
 
-- `tests/test_user_service.py` — 存在
-- `tests/test_streak_service.py` — 存在
-- `tests/test_auth.py` — 存在
-- **router.py 边界情况 — 测试不足**
+Android 也能本地新建书籍、章节、知识单元。跨端数据最终通过 `sync` 覆盖式导入导出合流。
+
+## 验证入口
+
+```bash
+cd backend && python -m pytest app/modules/user_storage/tests/ -q
+```
+
+## 已知风险
+
+- 删除书籍会牵涉章节、知识单元、图谱、教学、复习、AID 和同步数据。
+- 文件路径和数据库记录必须保持一致。
+- 单用户假设深入代码，改多用户需要系统性处理。

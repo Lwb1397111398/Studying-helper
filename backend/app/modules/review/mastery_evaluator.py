@@ -1,4 +1,4 @@
-"""掌握度评估器 - 5维度评估模型"""
+"""掌握度评估器 - 5维度评估模型（与 FSRS 集成）"""
 
 from datetime import datetime, timedelta, timezone
 from typing import List, Dict, Optional
@@ -15,7 +15,7 @@ DIMENSION_WEIGHTS = {
     'application': 0.15,      # 应用能力
 }
 
-# 掌握度等级阈值（5级体系）
+# 掌握度等级阈值（5级体系，与 FSRS 共用）
 LEVEL_THRESHOLDS = [
     (0.85, 'mastered'),
     (0.65, 'proficient'),
@@ -136,7 +136,7 @@ def evaluate_mastery(
     if confused_count > 0:
         weak_points.append(f"有{confused_count}个'不懂'标记")
 
-    # 根据掌握度推荐复习时间（5级体系）
+    # 评估报告保留一个启发式建议时间；正式复习调度仍由 FSRS/SM-2 记录管理。
     if score >= 0.85:
         days = 30
     elif score >= 0.65:
@@ -147,7 +147,6 @@ def evaluate_mastery(
         days = 3
     else:
         days = 1
-
     recommended_review_at = datetime.now(timezone.utc) + timedelta(days=days)
 
     return MasteryAssessment(

@@ -1,58 +1,43 @@
 # learning_plan 模块
 
-## 概述
+## 职责
 
-生成个性化学习方案和会话，支持学习风格分析和自适应计划调整。
+生成学习计划和学习会话，基于书籍、知识单元、用户目标和学习风格安排学习节奏。它偏“计划层”，不同于 AID 的“教学设计层”。
 
-## 文件结构
+## 关键文件
 
-| 文件 | 职责 |
-|------|------|
-| `router.py` | API 路由（生成计划、查询当前会话） |
-| `schemas.py` | 请求/响应模型 |
-| `service.py` | 计划服务（LLM 生成学习方案、会话管理） |
+| 文件 | 作用 |
+| --- | --- |
+| `router.py` | `/api/v1/plans` 路由 |
+| `service.py` | 计划生成、当前会话、会话完成 |
+| `schemas.py` | 学习计划和会话模型 |
+| `style_analyzer.py` | 学习风格分析 |
+| `style_analyzer_v2.py` | 新版学习风格分析扩展 |
+| `tests/` | service/router 测试 |
 
-## API 端点
+## API 入口
+
+前缀：`/api/v1/plans`
 
 | 方法 | 路径 | 说明 |
-|------|------|------|
-| POST | `/api/v1/plans/{book_id}/generate` | 生成学习计划 |
-| GET | `/api/v1/plans/{book_id}/current-session` | 获取当前学习会话 |
+| --- | --- | --- |
+| POST | `/{book_id}/generate` | 生成学习计划 |
+| GET | `/{book_id}/current-session` | 获取当前学习会话 |
+| POST | `/{book_id}/sessions/{session_id}/complete` | 完成学习会话 |
 
-## 计划生成流程
+## 与 AID 的区别
 
+- `learning_plan` 回答“什么时候学、学多少、当前 session 是什么”。
+- `adaptive_design` 回答“这本书应该如何重组、先讲什么、单元以什么认知模式讲”。
+- 两者可以共存，不要把 AID 逻辑塞进 learning_plan。
+
+## 验证入口
+
+```bash
+cd backend && python -m pytest app/modules/learning_plan/tests/ -q
 ```
-获取书籍知识单元 + 用户掌握度
-  → 分析学习风格（LLM）
-    → 按拓扑层排序 + 层内交错（interleaving）
-      → 生成计划（单元分组 + 时间分配 + 阶段划分）
-        → 创建 LearningRecordModel
-```
 
-## 交错练习
+## 已知风险
 
-学习计划在分组时采用交错策略：
-1. 根据 `prerequisites` 计算每个单元的拓扑深度
-2. 同层单元按共享前置关系分组
-3. 从各组交替选取，使同一学习会话包含相关但不同的概念
-
-## 已知问题
-
-| 严重度 | 问题 | 位置 | 状态 |
-|--------|------|------|------|
-| 中等 | 计划未持久化：每次请求都重新生成，`session_id` 可能失效 | `service.py` | 待修复 |
-| 中等 | `practice_speed` 计算逻辑反转 | `service.py:~L186-189` | **已修复** |
-| 低 | 无计划缓存，相同条件重复调用 LLM | `service.py` | 待修复 |
-
-## 优化建议
-
-1. 将生成的计划持久化到数据库，后续请求直接读取
-2. ~~修复 `practice_speed` 计算逻辑（`estimated / actual`，>1 表示快）~~ ✅ 已完成
-3. ~~交错练习：同层单元按共享前置分组后交替选取~~ ✅ 已完成
-4. 添加计划缓存（基于书籍+用户条件的 hash）
-5. 支持计划手动调整（用户修改后保存）
-
-## 测试覆盖
-
-- `tests/test_plan_service.py` — 存在
-- **router.py — 无测试**
+- 计划依赖学习进度和掌握度，改 user_storage/review 字段时要回看本模块。
+- 学习风格分析 v1/v2 并存，改调用前先查实际引用。

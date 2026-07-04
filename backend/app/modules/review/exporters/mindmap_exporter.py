@@ -46,7 +46,7 @@ def export_mindmap_mermaid(
             # 根据掌握度添加标记
             mastery = mastery_records.get(unit.get('id', ''))
             if mastery:
-                level = mastery.get('level', '')
+                level = mastery.get('mastery_level', '')
                 if level == 'mastered':
                     prefix = "[ok]"
                 elif level == 'proficient':
@@ -121,7 +121,7 @@ def export_mindmap_plantuml(
             # 根据掌握度选择颜色
             mastery = mastery_records.get(unit.get('id', ''))
             if mastery:
-                level = mastery.get('level', '')
+                level = mastery.get('mastery_level', '')
                 color_map = {
                     'mastered': '2ECC71',
                     'proficient': '3498DB',

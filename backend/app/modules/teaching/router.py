@@ -105,6 +105,7 @@ async def _load_learned_units(db: AsyncSession, unit_ids: List[str]) -> List[Lea
             difficulty_level=u.difficulty_level or 1,
             importance_score=u.importance_score or 0.5,
             prerequisites=[],
+            ai_cognitive_hint=u.ai_cognitive_hint,
         ))
     return units
 
@@ -135,25 +136,45 @@ async def start_session(
     svc: TeachingService = Depends(_get_service),
     db: AsyncSession = Depends(get_db),
 ):
-    """开始教学会话（自动排序）"""
+    """开始教学会话（自动排序）
+
+    优先级：AID 教学设计（含跨章节重组+拓扑+重构标注）> KG 拓扑排序 > 原始请求顺序
+    """
     try:
-        # 尝试使用知识图谱拓扑排序
+        # 1. 优先使用 AID 教学设计的当前模块重排单元（若已生成设计）
         unit_ids = request.unit_ids
         try:
-            from app.modules.knowledge_graph.service import KnowledgeGraphService
-            kg_service = KnowledgeGraphService(db)
-            ordered_unit_ids = await kg_service.get_topological_order(request.book_id)
-
-            # 过滤出请求的单元并保持顺序
-            if ordered_unit_ids:
-                unit_ids = [uid for uid in ordered_unit_ids if uid in request.unit_ids]
-                # 如果有未在图谱中的单元，追加到末尾
-                remaining = [uid for uid in request.unit_ids if uid not in unit_ids]
-                unit_ids.extend(remaining)
+            from app.modules.adaptive_design.service import AIDService
+            from app.deps import get_aid_llm_client
+            aid_llm = await get_aid_llm_client()
+            aid_svc = AIDService(llm_client=aid_llm, db=db)
+            aid_unit_ids = await aid_svc.get_active_module_ordered_unit_ids(
+                request.book_id, DEFAULT_USER_ID
+            )
+            if aid_unit_ids:
+                # AID 已重组：用其顺序，并补上 AID 未覆盖但请求里有的单元
+                remaining = [uid for uid in request.unit_ids if uid not in aid_unit_ids]
+                unit_ids = aid_unit_ids + remaining
         except Exception as e:
-            # 知识图谱不存在或出错时，使用原始顺序
-            print(f"拓扑排序失败，使用原始顺序: {e}")
-            unit_ids = request.unit_ids
+            print(f"AID 教学设计获取失败，回退拓扑排序: {e}")
+
+        # 2. 无 AID 设计时，尝试知识图谱拓扑排序
+        if not unit_ids or unit_ids == request.unit_ids:
+            try:
+                from app.modules.knowledge_graph.service import KnowledgeGraphService
+                kg_service = KnowledgeGraphService(db)
+                ordered_unit_ids = await kg_service.get_topological_order(request.book_id)
+
+                # 过滤出请求的单元并保持顺序
+                if ordered_unit_ids:
+                    unit_ids = [uid for uid in ordered_unit_ids if uid in request.unit_ids]
+                    # 如果有未在图谱中的单元，追加到末尾
+                    remaining = [uid for uid in request.unit_ids if uid not in unit_ids]
+                    unit_ids.extend(remaining)
+            except Exception as e:
+                # 知识图谱不存在或出错时，使用原始顺序
+                print(f"拓扑排序失败，使用原始顺序: {e}")
+                unit_ids = request.unit_ids
 
         units = await _load_learned_units(db, unit_ids)
         session = await svc.start_session(
@@ -440,3 +461,28 @@ async def get_teaching_stats(
         import logging
         logging.getLogger(__name__).error(f"教学统计异常: {e}", exc_info=True)
         raise HTTPException(status_code=500, detail="获取教学统计失败")
+
+
+@router.get("/sessions/{session_id}/units/{unit_id}/coverage")
+async def get_teaching_plan_coverage(
+    session_id: str,
+    unit_id: str,
+    svc: TeachingService = Depends(_get_service),
+):
+    """获取教学计划的覆盖报告
+
+    返回：
+    - total_items: 总内容项数
+    - covered_items: 已覆盖的内容项数
+    - coverage_rate: 覆盖率 (0-1)
+    - is_complete: 是否完成（严格模式下需要 100% 覆盖）
+    - missing_items: 未覆盖的内容项列表
+    - phase_coverage: 每个阶段的覆盖情况
+    """
+    try:
+        coverage_report = svc.get_teaching_plan_coverage(session_id, unit_id)
+        return coverage_report
+    except Exception as e:
+        import logging
+        logging.getLogger(__name__).error(f"获取教学计划覆盖报告异常: {e}", exc_info=True)
+        raise HTTPException(status_code=500, detail="获取教学计划覆盖报告失败")

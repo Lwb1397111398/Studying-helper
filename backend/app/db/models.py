@@ -83,6 +83,7 @@ class KnowledgeUnitModel(Base):
     prerequisites = Column(Text)       # JSON 数组：存 unit_id 列表或概念名字符串列表
     difficulty_level = Column(Integer)
     importance_score = Column(Float)
+    ai_cognitive_hint = Column(String(30))  # AID 标注：memorize|understand|skip_if_mastered
 
     __table_args__ = (
         Index("ix_knowledge_units_book_id", "book_id"),
@@ -104,6 +105,15 @@ class MasteryRecordModel(Base):
     review_count = Column(Integer, default=0)
     ease_factor = Column(Float, default=2.5)
     interval_days = Column(Integer, default=1)
+
+    # FSRS 算法参数
+    stability = Column(Float, default=0.0)       # 稳定性（天）
+    difficulty = Column(Float, default=5.0)       # 难度（0-10）
+    lapses = Column(Integer, default=0)           # 遗忘次数
+    reps = Column(Integer, default=0)             # 复习次数（FSRS 专用）
+    last_elapsed_days = Column(Integer, default=0)  # 上次复习后的过期天数
+    scheduled_days = Column(Integer, default=0)   # FSRS 计划天数
+    algorithm = Column(String(20), default="sm2") # 使用的算法：sm2 或 fsrs
 
     __table_args__ = (
         UniqueConstraint("user_id", "knowledge_unit_id", name="uq_mastery_user_unit"),
@@ -318,4 +328,79 @@ class LearningEfficiencyModel(Base):
     __table_args__ = (
         Index("ix_learning_efficiency_session_id", "session_id"),
         Index("ix_learning_efficiency_unit_id", "unit_id"),
+    )
+
+
+
+class LearnerIntentProfileModel(Base):
+    """学习者意图画像 - 每本书一份，用户主动声明（区别于行为画像）"""
+    __tablename__ = "learner_intent_profiles"
+
+    id = Column(String, primary_key=True, default=lambda: str(uuid4()))
+    user_id = Column(String, ForeignKey("users.id"), nullable=False)
+    book_id = Column(String, ForeignKey("books.id"), nullable=False)
+    # 四维 + 重组 tolerance
+    identity_background = Column(String(50), nullable=False, default="unknown")
+    goal_depth = Column(String(50), nullable=False, default="apply_understand")
+    cognitive_pref = Column(String(50), nullable=False, default="rigorous_system")
+    restructure_tolerance = Column(String(50), nullable=False, default="moderate")
+    time_budget_minutes = Column(Integer)
+    source = Column(String(20), nullable=False, default="ai_inferred")
+    status = Column(String(20), nullable=False, default="draft")
+    extra_json = Column(Text, nullable=False, default="{}")
+    created_at = Column(DateTime, nullable=False, default=_utc_now)
+    updated_at = Column(DateTime, nullable=False, default=_utc_now, onupdate=_utc_now)
+
+    __table_args__ = (
+        UniqueConstraint("user_id", "book_id", name="uq_intent_profile_user_book"),
+        Index("ix_intent_profiles_book_id", "book_id"),
+    )
+
+
+class TeachingDesignModel(Base):
+    """教学设计总账 - 一本书的 AID 编排方案（渐进式：存进行到哪、生成哪些模块）"""
+    __tablename__ = "teaching_designs"
+
+    id = Column(String, primary_key=True, default=lambda: str(uuid4()))
+    user_id = Column(String, ForeignKey("users.id"), nullable=False)
+    book_id = Column(String, ForeignKey("books.id"), nullable=False)
+    profile_id = Column(String, ForeignKey("learner_intent_profiles.id"))
+    macro_design_json = Column(Text)
+    current_module_index = Column(Integer, nullable=False, default=0)
+    generated_module_count = Column(Integer, nullable=False, default=0)
+    adjustments_json = Column(Text, nullable=False, default="[]")
+    status = Column(String(20), nullable=False, default="draft")
+    version = Column(Integer, nullable=False, default=1)
+    created_at = Column(DateTime, nullable=False, default=_utc_now)
+    updated_at = Column(DateTime, nullable=False, default=_utc_now, onupdate=_utc_now)
+
+    __table_args__ = (
+        UniqueConstraint("user_id", "book_id", "version", name="uq_teaching_design_user_book_ver"),
+        Index("ix_teaching_designs_book_id", "book_id"),
+        Index("ix_teaching_designs_status", "status"),
+    )
+
+
+class ModuleMicroPlanModel(Base):
+    """模块微观编排 - 进入某 Module 时生成，存重排后的 unit_ids 与重构标注"""
+    __tablename__ = "module_micro_plans"
+
+    id = Column(String, primary_key=True, default=lambda: str(uuid4()))
+    design_id = Column(String, ForeignKey("teaching_designs.id"), nullable=False)
+    book_id = Column(String, ForeignKey("books.id"), nullable=False)
+    user_id = Column(String, ForeignKey("users.id"), nullable=False)
+    module_index = Column(Integer, nullable=False)
+    module_title = Column(String(255), nullable=False, default="")
+    ordered_unit_ids_json = Column(Text, nullable=False, default="[]")
+    unit_annotations_json = Column(Text, nullable=False, default="[]")
+    module_intro = Column(Text)
+    module_status = Column(String(20), nullable=False, default="pending")
+    module_summary_json = Column(Text)
+    parent_design_version = Column(Integer, nullable=False, default=1)
+    created_at = Column(DateTime, nullable=False, default=_utc_now)
+    updated_at = Column(DateTime, nullable=False, default=_utc_now, onupdate=_utc_now)
+
+    __table_args__ = (
+        UniqueConstraint("design_id", "module_index", name="uq_micro_plan_design_module"),
+        Index("ix_module_micro_plans_book_status", "book_id", "module_status"),
     )

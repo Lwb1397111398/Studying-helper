@@ -134,3 +134,56 @@ class TestDetectPartOf:
         chapters = [{"id": "ch-1", "title": "基础"}]
         edges = detector.detect_part_of(units, chapters)
         assert len(edges) == 0
+
+
+class TestDetectConceptAssociations:
+    """测试概念间共现关联检测（AID 跨章节聚类的概念级依据）"""
+
+    def test_real_cooccurrence_produces_edge(self, detector):
+        """两个概念共同出现在 2 个单元中应产出边"""
+        concept_to_units = {
+            "概念A": ["u-1", "u-2"],
+            "概念B": ["u-1", "u-2"],
+            "概念C": ["u-3"],
+        }
+        concept_node_ids = {name: f"node-{name}" for name in concept_to_units}
+        edges = detector.detect_concept_associations(concept_to_units, concept_node_ids)
+
+        # 概念A 与 概念B 共现于 u-1、u-2（共现2，>= 阈值2）
+        similar_pairs = [
+            (e.source_id, e.target_id) for e in edges if e.relation_type == "similar_to"
+        ]
+        assert ("node-概念A", "node-概念B") in similar_pairs
+        assert ("node-概念B", "node-概念A") in similar_pairs  # 双向
+        # 概念C 独占 u-3，无共现，不应出现
+        assert all("node-概念C" not in pair for pair in similar_pairs)
+
+    def test_below_threshold_no_edge(self, detector):
+        """共现数低于阈值不产出边"""
+        concept_to_units = {
+            "概念A": ["u-1"],
+            "概念B": ["u-1"],  # 与 A 共现1次 < 默认阈值2
+        }
+        concept_node_ids = {name: f"node-{name}" for name in concept_to_units}
+        edges = detector.detect_concept_associations(
+            concept_to_units, concept_node_ids, min_cooccurrence=2
+        )
+        assert len(edges) == 0
+
+    def test_empty_input(self, detector):
+        """空输入返回空列表"""
+        assert detector.detect_concept_associations({}, {}) == []
+        assert detector.detect_concept_associations({"A": ["u-1"]}, {}) == []
+
+    def test_weight_is_jaccard(self, detector):
+        """权重应为共现数/并集数（Jaccard 式）"""
+        concept_to_units = {
+            "A": ["u-1", "u-2", "u-3"],
+            "B": ["u-1", "u-2"],  # 共现2，并集3 → 2/3
+        }
+        concept_node_ids = {"A": "nA", "B": "nB"}
+        edges = detector.detect_concept_associations(
+            concept_to_units, concept_node_ids, min_cooccurrence=2
+        )
+        weights = [e.weight for e in edges]
+        assert round(2 / 3, 3) in weights

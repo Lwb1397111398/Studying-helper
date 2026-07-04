@@ -20,6 +20,15 @@ interface StudyDao {
     @Query("SELECT * FROM knowledge_units WHERE book_id = :bookId ORDER BY order_index")
     fun observeUnits(bookId: String): Flow<List<KnowledgeUnitEntity>>
 
+    @Query("SELECT * FROM learner_intent_profiles WHERE book_id = :bookId ORDER BY updated_at DESC LIMIT 1")
+    fun observeLearnerIntentProfile(bookId: String): Flow<LearnerIntentProfileEntity?>
+
+    @Query("SELECT * FROM teaching_designs WHERE book_id = :bookId ORDER BY version DESC LIMIT 1")
+    fun observeTeachingDesign(bookId: String): Flow<TeachingDesignEntity?>
+
+    @Query("SELECT * FROM module_micro_plans WHERE book_id = :bookId ORDER BY module_index")
+    fun observeModuleMicroPlans(bookId: String): Flow<List<ModuleMicroPlanEntity>>
+
     @Query("SELECT * FROM knowledge_units WHERE id = :unitId")
     fun observeUnit(unitId: String): Flow<KnowledgeUnitEntity?>
 
@@ -56,6 +65,24 @@ interface StudyDao {
     @Query("SELECT * FROM knowledge_units WHERE book_id = :bookId ORDER BY order_index")
     suspend fun getUnits(bookId: String): List<KnowledgeUnitEntity>
 
+    @Query("SELECT * FROM learner_intent_profiles WHERE book_id = :bookId ORDER BY updated_at DESC LIMIT 1")
+    suspend fun getLearnerIntentProfile(bookId: String): LearnerIntentProfileEntity?
+
+    @Query("SELECT * FROM teaching_designs WHERE book_id = :bookId ORDER BY version DESC LIMIT 1")
+    suspend fun getTeachingDesign(bookId: String): TeachingDesignEntity?
+
+    @Query("SELECT * FROM teaching_designs WHERE book_id = :bookId AND status IN ('active', 'completed') ORDER BY version DESC LIMIT 1")
+    suspend fun getActiveTeachingDesign(bookId: String): TeachingDesignEntity?
+
+    @Query("SELECT * FROM module_micro_plans WHERE book_id = :bookId ORDER BY module_index")
+    suspend fun getModuleMicroPlans(bookId: String): List<ModuleMicroPlanEntity>
+
+    @Query("SELECT * FROM module_micro_plans WHERE book_id = :bookId AND module_index = :moduleIndex LIMIT 1")
+    suspend fun getModuleMicroPlan(bookId: String, moduleIndex: Int): ModuleMicroPlanEntity?
+
+    @Query("SELECT * FROM module_micro_plans WHERE book_id = :bookId AND module_status = 'active' ORDER BY module_index LIMIT 1")
+    suspend fun getActiveModuleMicroPlan(bookId: String): ModuleMicroPlanEntity?
+
     @Query("SELECT * FROM mastery_records WHERE knowledge_unit_id = :unitId LIMIT 1")
     suspend fun getMastery(unitId: String): MasteryRecordEntity?
 
@@ -79,6 +106,15 @@ interface StudyDao {
 
     @Query("UPDATE knowledge_units SET summary = :summary, explanation = :explanation, key_points = :keyPoints, concepts = :concepts WHERE id = :unitId")
     suspend fun updateUnitAnalysis(unitId: String, summary: String, explanation: String, keyPoints: String, concepts: String)
+
+    @Query("UPDATE knowledge_units SET ai_cognitive_hint = :hint WHERE id = :unitId")
+    suspend fun updateUnitCognitiveHint(unitId: String, hint: String?)
+
+    @Query("UPDATE module_micro_plans SET module_status = :status, updated_at = :updatedAt WHERE id = :planId")
+    suspend fun updateModuleStatus(planId: String, status: String, updatedAt: String)
+
+    @Query("UPDATE teaching_designs SET status = :status, current_module_index = :currentModuleIndex, updated_at = :updatedAt WHERE id = :designId")
+    suspend fun updateTeachingDesignStatus(designId: String, status: String, currentModuleIndex: Int, updatedAt: String)
 
     @Query("SELECT * FROM books")
     suspend fun getBooks(): List<BookEntity>
@@ -125,6 +161,15 @@ interface StudyDao {
     @Query("SELECT * FROM learning_efficiency")
     suspend fun getLearningEfficiency(): List<LearningEfficiencyEntity>
 
+    @Query("SELECT * FROM learner_intent_profiles")
+    suspend fun getLearnerIntentProfiles(): List<LearnerIntentProfileEntity>
+
+    @Query("SELECT * FROM teaching_designs")
+    suspend fun getTeachingDesigns(): List<TeachingDesignEntity>
+
+    @Query("SELECT * FROM module_micro_plans")
+    suspend fun getModuleMicroPlans(): List<ModuleMicroPlanEntity>
+
     @Query("DELETE FROM books WHERE id IN (:bookIds)")
     suspend fun deleteBooks(bookIds: List<String>)
 
@@ -148,6 +193,15 @@ interface StudyDao {
 
     @Query("DELETE FROM teaching_sessions WHERE book_id IN (:bookIds)")
     suspend fun deleteTeachingSessions(bookIds: List<String>)
+
+    @Query("DELETE FROM learner_intent_profiles WHERE book_id IN (:bookIds)")
+    suspend fun deleteLearnerIntentProfiles(bookIds: List<String>)
+
+    @Query("DELETE FROM teaching_designs WHERE book_id IN (:bookIds)")
+    suspend fun deleteTeachingDesigns(bookIds: List<String>)
+
+    @Query("DELETE FROM module_micro_plans WHERE book_id IN (:bookIds)")
+    suspend fun deleteModuleMicroPlans(bookIds: List<String>)
 
     @Query("DELETE FROM annotations WHERE knowledge_unit_id IN (:unitIds)")
     suspend fun deleteAnnotations(unitIds: List<String>)
@@ -223,4 +277,13 @@ interface StudyDao {
 
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun insertLearningEfficiency(items: List<LearningEfficiencyEntity>)
+
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    suspend fun insertLearnerIntentProfiles(items: List<LearnerIntentProfileEntity>)
+
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    suspend fun insertTeachingDesigns(items: List<TeachingDesignEntity>)
+
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    suspend fun insertModuleMicroPlans(items: List<ModuleMicroPlanEntity>)
 }

@@ -53,4 +53,20 @@ class UiStateHelpersTest {
         assertEquals("已选择 0 分", examScoreHint(0))
         assertEquals("已自评分", examScoreHint(40))
     }
+
+    @Test
+    fun profileStatusLabelsCoverKnownStatesAndFallback() {
+        assertEquals("已确认", profileStatusLabel("confirmed"))
+        assertEquals("草稿", profileStatusLabel("draft"))
+        assertEquals("未生成", profileStatusLabel(null))
+        assertEquals("未生成", profileStatusLabel("unexpected"))
+    }
+
+    @Test
+    fun teachingDesignOptionListsExposeStableValues() {
+        assertEquals("未知", identityOptions().first { it.first == "unknown" }.second)
+        assertEquals("理解应用", goalOptions().first { it.first == "apply_understand" }.second)
+        assertEquals("系统严谨", prefOptions().first { it.first == "rigorous_system" }.second)
+        assertEquals("适度重组", toleranceOptions().first { it.first == "moderate" }.second)
+    }
 }

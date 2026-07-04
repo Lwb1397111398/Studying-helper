@@ -1,61 +1,66 @@
 # ai_learning 模块
 
-## 概述
+## 职责
 
-LLM 驱动的知识分析模块，负责对知识单元进行摘要、要点提取、概念识别、难度评估。
+对知识单元进行 LLM 分析，写回摘要、讲解、要点、概念、先修、难度和重要度。它是 AID、教学、复习和知识图谱质量的上游。
 
-## 文件结构
+## 关键文件
 
-| 文件 | 职责 |
-|------|------|
-| `router.py` | API 路由（触发学习、查询进度） |
-| `schemas.py` | 请求/响应模型（LearnedUnit、Concept、KeyPoint 等） |
-| `service.py` | 学习服务（LLM 调用、结果解析、持久化） |
-| `prompts.py` | LLM prompt 模板 |
-| `token_optimizer.py` | Token 优化器（控制 LLM 输入长度） |
-| `tests/mock_llm.py` | 测试用 LLM mock |
+| 文件 | 作用 |
+| --- | --- |
+| `router.py` | `/api/v1/learning` 路由、学习进度、笔记、统计 |
+| `service.py` | LLM 分析、结果解析、持久化 |
+| `schemas.py` | LearnedUnit、Concept、KeyPoint、LearningSession 等模型 |
+| `prompts.py` | AI 分析 prompt |
+| `token_optimizer.py` | 输入压缩和 token 控制 |
+| `token_optimizer_v2.py` | 新版 token 优化实验/扩展 |
+| `tests/mock_llm.py` | 测试 LLM |
 
-## API 端点
+## API 入口
 
-| 方法 | 路径 | 说明 |
-|------|------|------|
-| POST | `/api/v1/learning/{book_id}/learn` | 触发全书学习 |
-| GET | `/api/v1/learning/{book_id}/progress` | 查询学习进度 |
+前缀：`/api/v1/learning`
 
-## 学习流程
+常用端点：
 
+- `POST /{book_id}/learn`
+- `POST /{book_id}/learn-selected`
+- `GET /{book_id}/progress`
+- `GET /{book_id}/learn-progress`
+- `GET /{book_id}/overview`
+- `GET /units/{unit_id}`
+- `POST /units/{unit_id}/notes`
+- `POST /units/{unit_id}/mark`
+- `POST /units/{unit_id}/relearn`
+- `PUT /units/{unit_id}/enrich`
+- `POST /units/{unit_id}/restore`
+- `GET /stats`
+- `GET /report`
+
+## 数据流
+
+```text
+KnowledgeUnitModel.content
+  -> token optimizer
+  -> LLM ai_analysis client
+  -> JSON 解析
+  -> KnowledgeUnitModel.summary/explanation/key_points/concepts/prerequisites/difficulty_level/importance_score
+  -> 图谱/AID/教学/复习使用
 ```
-获取知识单元 → 拓扑排序（可选）
-  → 逐单元调用 LLM 分析
-    → 解析 LLM 返回的 JSON（摘要/要点/概念/难度/重要性）
-      → 更新 KnowledgeUnitModel
+
+## 依赖关系
+
+- 上游：`knowledge_splitter` 生成知识单元。
+- 可选：`knowledge_graph` 拓扑排序优化学习顺序。
+- 下游：`adaptive_design`、`teaching`、`review`、Web/Android 展示。
+
+## 验证入口
+
+```bash
+cd backend && python -m pytest app/modules/ai_learning/tests/ -q
 ```
 
-## 并发机制
+## 已知风险
 
-- 按拓扑层级分批，同层单元可并发
-- 信号量控制 LLM 并发数（`LLM_MAX_CONCURRENT`）
-
-## 已知问题
-
-| 严重度 | 问题 | 位置 |
-|--------|------|------|------|
-| 中等 | 魔法哨兵值：`difficulty=3` 和 `importance=0.5` 被视为"未返回"，与实际值冲突 | `service.py:~L1003` | **已修复** |
-| 中等 | `token_cost` 对大单元始终返回 0，无法统计实际消耗 | `service.py:~L326` | **已修复** |
-| 中等 | 连续学习天数查询存在 N+1 问题 | `router.py:~L273-288` | **已修复** |
-| 低 | LLM 返回非 JSON 时解析失败，无重试 | `service.py` | 待修复 |
-
-## 优化建议
-
-1. ~~用 `None` 替代魔法哨兵值（`difficulty=None` 表示未返回）~~ ✅ 已完成
-2. ~~修复 token_cost 计算：大单元通过 `_last_large_unit_tokens` 累计追踪~~ ✅ 已完成
-3. ~~连续天数改用 `StreakService` 单条查询~~ ✅ 已完成
-4. LLM 返回解析失败时添加一次重试（换 prompt 格式）
-
-## 测试覆盖
-
-- `tests/test_learning_service.py` — 存在
-- `tests/test_schemas.py` — 存在
-- `tests/test_token_optimizer.py` — 存在
-- `tests/mock_llm.py` — 测试辅助
-- **router.py — 测试不足**（N+1 问题未被发现）
+- LLM 返回不稳定，service 必须能处理非标准 JSON 或缺字段。
+- 大单元 token 控制会影响成本和质量。
+- 改 LearnedUnit 字段时要检查 teaching、review、Android 内容解析和 sync。

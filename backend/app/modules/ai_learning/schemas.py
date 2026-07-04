@@ -1,7 +1,7 @@
 """AI学习数据模型"""
 
 from pydantic import BaseModel, Field
-from typing import Optional, List
+from typing import ClassVar, Optional, List
 from datetime import datetime
 from uuid import uuid4
 from enum import Enum
@@ -32,6 +32,8 @@ class Concept(BaseModel):
 
 class TestQuestion(BaseModel):
     """测试题"""
+    __test__: ClassVar[bool] = False
+
     question: str
     question_type: str  # 'choice' | 'fill_blank' | 'short_answer' | 'matching' | 'ordering' | 'true_false'
     options: Optional[List[str]] = None
@@ -71,6 +73,7 @@ class LearnedUnit(BaseModel):
     learned_at: datetime = Field(default_factory=datetime.now)
     llm_model: str = ""
     token_cost: int = 0
+    ai_cognitive_hint: Optional[str] = None  # AID 标注: memorize|understand|skip_if_mastered
 
 
 class LearningContext(BaseModel):

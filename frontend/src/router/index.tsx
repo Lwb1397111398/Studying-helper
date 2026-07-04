@@ -8,6 +8,7 @@ const Home = lazy(() => import('../pages/Home'));
 const BookUpload = lazy(() => import('../pages/BookUpload'));
 const BookOverview = lazy(() => import('../pages/BookOverview'));
 const LearningSession = lazy(() => import('../pages/LearningSession'));
+const TeachingDesign = lazy(() => import('../pages/TeachingDesign'));
 const TeachingSession = lazy(() => import('../pages/TeachingSession'));
 const ReviewSession = lazy(() => import('../pages/ReviewSession'));
 const ExamSession = lazy(() => import('../pages/ExamSession'));
@@ -55,6 +56,7 @@ export const router = createBrowserRouter([
       { path: 'books/:bookId', element: page(BookOverview) },
       { path: 'books/:bookId/toc', element: page(TocConfirm) },
       { path: 'books/:bookId/learn', element: page(LearningSession) },
+      { path: 'books/:bookId/design', element: page(TeachingDesign) },
       { path: 'books/:bookId/teach', element: page(TeachingSession) },
       { path: 'books/:bookId/review', element: page(ReviewSession) },
       { path: 'books/:bookId/exam', element: page(ExamSession) },
