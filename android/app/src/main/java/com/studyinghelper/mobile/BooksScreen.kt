@@ -31,6 +31,7 @@ import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -42,11 +43,15 @@ import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
+import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.navigation.NavHostController
 import com.studyinghelper.mobile.data.db.BookEntity
 import com.studyinghelper.mobile.data.repository.AiConfig
 import com.studyinghelper.mobile.data.sync.SyncPreview
 import com.studyinghelper.mobile.ui.StudyViewModel
+import com.studyinghelper.mobile.ui.UpdateDialog
+import com.studyinghelper.mobile.ui.UpdateUiState
+import com.studyinghelper.mobile.ui.UpdateViewModel
 import com.studyinghelper.mobile.ui.components.BookCardWithSpine
 import com.studyinghelper.mobile.ui.components.BookmarkRibbon
 import com.studyinghelper.mobile.ui.components.GhostButton
@@ -82,6 +87,9 @@ fun BooksScreen(navController: NavHostController, viewModel: StudyViewModel) {
     val exportLauncher = rememberLauncherForActivityResult(ActivityResultContracts.CreateDocument("application/json")) { uri ->
         if (uri != null) viewModel.exportToUri(uri)
     }
+    val updateViewModel: UpdateViewModel = viewModel()
+    val updateState by updateViewModel.state.collectAsState()
+    LaunchedEffect(Unit) { updateViewModel.maybeAutoCheck() }
 
     Scaffold(
         topBar = {
@@ -129,6 +137,7 @@ fun BooksScreen(navController: NavHostController, viewModel: StudyViewModel) {
                     GhostButton(onClick = { exportLauncher.launch("studying-helper-android-sync.json") }) { Text("📤 导出同步包") }
                     GhostButton(onClick = { showAiSettings = true }) { Text("🤖 AI 设置") }
                     GhostButton(onClick = { navController.navigate("report") }) { Text("📊 学习报告") }
+                    GhostButton(onClick = { updateViewModel.manualCheck() }) { Text("⬆️ 检查更新") }
                 }
             }
             if (books.isEmpty()) {
@@ -180,6 +189,9 @@ fun BooksScreen(navController: NavHostController, viewModel: StudyViewModel) {
             onDismiss = viewModel::cancelSyncImport,
             onConfirm = viewModel::confirmSyncImport,
         )
+    }
+    if (updateState !is UpdateUiState.Idle && updateState !is UpdateUiState.Checking) {
+        UpdateDialog(updateState, updateViewModel)
     }
 }
 
@@ -282,7 +294,7 @@ fun SyncPreviewDialog(
                     Text("AID：画像 ${preview.learnerIntentProfiles} 个，设计 ${preview.teachingDesigns} 个，模块 ${preview.moduleMicroPlans} 个")
                 }
                 if (preview.overwrittenBooks > 0) {
-                    Text("将覆盖本地 ${preview.overwrittenBooks} 本同 ID 书籍，请确认已备份。")
+                    Text("将覆盖本地 ${preview.overwrittenBooks} 本同 ID 书籍的学习进度、复习记录和教学记录，请确认已备份。")
                 } else {
                     Text("不会覆盖本地已有书籍。")
                 }

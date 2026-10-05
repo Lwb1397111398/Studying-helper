@@ -6,6 +6,19 @@ plugins {
     id 'org.jetbrains.kotlin.kapt'
 }
 
+// 版本号 = git 提交数：本机与 CI 对同一提交算出同一个号，每推一次自动 +1
+// 注意：providers.exec 的闭包里不能直接引用 rootDir（会被解析到 exec 配置对象上），先取局部变量
+def androidRoot = rootDir.absolutePath
+def commitCount
+try {
+    commitCount = providers.exec {
+        commandLine 'git', '-C', androidRoot, 'rev-list', '--count', 'HEAD'
+    }.standardOutput.asText.get().trim().toInteger()
+} catch (Exception ignored) {
+    logger.warn "android: 无法统计 git 提交数（${ignored.class.simpleName}: ${ignored.message}），versionCode 回退为 1"
+    commitCount = 1
+}
+
 android {
     namespace 'com.studyinghelper.mobile'
     compileSdk 35
@@ -14,16 +27,30 @@ android {
         applicationId 'com.studyinghelper.mobile'
         minSdk 26
         targetSdk 35
-        versionCode 1
-        versionName '1.0'
+        versionCode commitCount
+        versionName "1.0.${commitCount}"
 
         testInstrumentationRunner 'androidx.test.runner.AndroidJUnitRunner'
     }
 
+    signingConfigs {
+        // 统一签名：debug 与 release 用同一把仓库内钥匙，任何环境构建的包可互相覆盖安装
+        appUpdate {
+            storeFile rootProject.file('keystore/app.keystore')
+            storePassword 'android'
+            keyAlias 'androiddebugkey'
+            keyPassword 'android'
+        }
+    }
+
     buildTypes {
+        debug {
+            signingConfig signingConfigs.appUpdate
+        }
         release {
             minifyEnabled false
             proguardFiles getDefaultProguardFile('proguard-android-optimize.txt'), 'proguard-rules.pro'
+            signingConfig signingConfigs.appUpdate
         }
     }
 
@@ -59,6 +86,8 @@ dependencies {
     implementation 'org.jetbrains.kotlinx:kotlinx-serialization-json:1.7.3'
     implementation 'com.tom-roush:pdfbox-android:2.0.27.0'
     testImplementation 'junit:junit:4.13.2'
+    testImplementation 'androidx.test:core:1.6.1'
+    testImplementation 'org.robolectric:robolectric:4.13'
 
     debugImplementation 'androidx.compose.ui:ui-tooling'
     debugImplementation 'androidx.compose.ui:ui-test-manifest'

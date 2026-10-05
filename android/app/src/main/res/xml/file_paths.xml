@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8"?>
+<paths>
+    <!-- 只开放更新 APK 的缓存目录，不给整个缓存区 -->
+    <cache-path
+        name="updates"
+        path="updates/" />
+</paths>
