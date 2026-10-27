@@ -2,6 +2,8 @@
 
 import pytest
 from datetime import datetime, timedelta
+import math
+from datetime import datetime, timedelta, timezone
 from app.modules.review.fsrs import (
     FSRSScheduler,
     FSRSState,
@@ -9,6 +11,7 @@ from app.modules.review.fsrs import (
     migrate_sm2_to_fsrs,
     DEFAULT_PARAMETERS
 )
+from app.modules.review.spaced_repetition_v2 import Algorithm, SpacedRepetitionV2
 
 
 class TestFSRSScheduler:
@@ -308,6 +311,106 @@ class TestFSRSIntegration:
         state = FSRSState(stability=10.0, difficulty=10.0, reps=1)
         result = scheduler.next_review(state, grade=4, now=datetime.now())
         assert 0 <= result.difficulty <= 10
+
+
+class TestFSRSLapsesFix:
+    """P1 修复：FSRS lapses 端到端记账（修复前该值永远 0/1，无法累积）。
+
+    口径（与计划案一致）：
+    - 仅 grade == GRADE_AGAIN（quality<=1）时 lapses+1，HARD/GOOD/EASY 不变；
+    - 稳定性/难度更新使用更新前的旧 state.lapses；
+    - 修复前快照（docs/superpowers/plans/logs/p1_pre_fix_snapshot.txt）证明：
+      当前公式实现不读取 lapses，故修复不改变 stability/difficulty/scheduled_days，
+      仅修正 lapses 记账；quality=2 的 lapses 由错误的 +1 修正为不变。
+    - 数值测试统一用固定时钟与固定输入（第 10 轮评审要求）。
+    """
+
+    FIXED_NOW = datetime(2026, 1, 1, tzinfo=timezone.utc)
+
+    def _state(self, lapses=0, stability=5.0, difficulty=5.0, reps=3):
+        return FSRSState(
+            stability=stability, difficulty=difficulty, elapsed_days=0,
+            scheduled_days=10, reps=reps, lapses=lapses, last_review=self.FIXED_NOW,
+        )
+
+    def test_again_increments_consecutively(self):
+        """测试 1：已有历史的记录连续 AGAIN 3 次 → lapses 依次 1、2、3"""
+        scheduler = FSRSScheduler()
+        state = self._state(lapses=0)
+        for expected in (1, 2, 3):
+            result = scheduler.next_review(state, grade=1, now=self.FIXED_NOW)
+            assert result.lapses == expected
+            state = FSRSState(
+                stability=result.stability, difficulty=result.difficulty,
+                elapsed_days=0, scheduled_days=result.scheduled_days,
+                reps=state.reps + 1, lapses=result.lapses, last_review=self.FIXED_NOW,
+            )
+
+    def test_good_keeps_lapses(self):
+        """测试 2：lapses=2 后 GOOD 一次 → 仍为 2"""
+        result = FSRSScheduler().next_review(self._state(lapses=2), grade=3, now=self.FIXED_NOW)
+        assert result.lapses == 2
+
+    def test_hard_easy_keep_lapses(self):
+        """测试 3：lapses=2 后 HARD / EASY 各一次 → 仍为 2"""
+        for grade in (2, 4):
+            result = FSRSScheduler().next_review(self._state(lapses=2), grade=grade, now=self.FIXED_NOW)
+            assert result.lapses == 2
+
+    def test_quality_0_to_5_full_coverage(self):
+        """测试 3b：quality 0~5 全覆盖 → 恰好 0/1/2 递增（AGAIN 映射唯一判定）。
+
+        映射行为变更（P1 修复）：quality=2 只可能来自答错（quality_from_correctness
+        仅在答错且快速时返回 2；置信度调整对正确答案保底 3），故 2 → AGAIN；
+        与 Android 端"错题一律 AGAIN"及 SM-2"0-2 均失败"语义对齐。
+        """
+        sched = SpacedRepetitionV2(Algorithm.FSRS)
+        for quality in range(6):
+            grade = sched._quality_to_grade(quality)
+            assert (grade == 1) == (quality in (0, 1, 2)), f"quality={quality} 映射错误"
+            schedule = sched.calculate_next_review(
+                quality, repetitions=3, ease_factor=2.5, interval=10,
+                now=self.FIXED_NOW, lapses=0,
+            )
+            assert schedule.lapses == (1 if quality in (0, 1, 2) else 0), f"quality={quality} lapses 记账错误"
+
+    def test_pre_fix_snapshot_non_again_unchanged(self):
+        """测试 4：修复前快照复现——非 AGAIN 路径 stability/difficulty/scheduled_days 与修复前完全一致；
+        AGAIN 路径调度数值也不变（当前公式不读取 lapses），仅 lapses 记账修正。
+        快照来源：logs/p1_pre_fix_snapshot.txt（repetitions=3, ease=2.5, interval=10, 固定时钟）。
+        安全边界：stability/difficulty 非负有限、scheduled_days 为正。
+        """
+        sched = SpacedRepetitionV2(Algorithm.FSRS)
+        # quality=2 修复前为 (275.693091, 0.860000, 280)——错题被当 HARD 成功回忆，
+        # 修复后走 AGAIN 分支，调度数值与 q0/q1 相同（快照见 logs/p1_pre_fix_snapshot.txt）
+        expected = {
+            0: (2.744457, 1.720000, 3),
+            1: (2.744457, 1.720000, 3),
+            2: (2.744457, 1.720000, 3),
+            3: (931.079624, 0.000000, 365),
+            4: (931.079624, 0.000000, 365),
+            5: (2417.237818, 0.000000, 365),
+        }
+        for quality, (stability, difficulty, days) in expected.items():
+            r = sched.calculate_next_review(
+                quality, repetitions=3, ease_factor=2.5, interval=10,
+                now=self.FIXED_NOW, lapses=0,
+            )
+            assert abs(r.stability - stability) < 1e-4, f"quality={quality} stability 漂移"
+            assert abs(r.difficulty - difficulty) < 1e-6, f"quality={quality} difficulty 漂移"
+            assert r.scheduled_days == days, f"quality={quality} scheduled_days 漂移"
+            # 安全边界
+            assert r.stability >= 0 and math.isfinite(r.stability)
+            assert r.difficulty >= 0 and math.isfinite(r.difficulty)
+            assert r.scheduled_days > 0
+
+    def test_result_default_lapses_zero(self):
+        """构造兼容：不传 lapses 也能构造 FSRSResult 且默认 0（旧调用方零破坏）"""
+        r = FSRSResult(
+            next_review=self.FIXED_NOW, stability=1.0, difficulty=1.0,
+            scheduled_days=1, retrievability=1.0,
+        )
+        assert r.lapses == 0
 
 
 if __name__ == "__main__":

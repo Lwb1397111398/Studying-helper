@@ -73,7 +73,8 @@ class SpacedRepetitionV2:
         ease_factor: float,
         interval: int,
         now: Optional[datetime] = None,
-        algorithm: Optional[Algorithm] = None
+        algorithm: Optional[Algorithm] = None,
+        lapses: int = 0
     ) -> ReviewSchedule:
         """
         计算下次复习时间
@@ -85,6 +86,7 @@ class SpacedRepetitionV2:
             interval: 当前间隔天数
             now: 当前时间
             algorithm: 指定算法，None 使用默认算法
+            lapses: 历史遗忘次数（仅 FSRS 路径使用；None/缺省按 0）
 
         Returns:
             ReviewSchedule: 复习调度结果
@@ -98,7 +100,7 @@ class SpacedRepetitionV2:
         if algorithm == Algorithm.SM2:
             return self._calculate_sm2(quality, repetitions, ease_factor, interval, now)
         else:
-            return self._calculate_fsrs(quality, repetitions, ease_factor, interval, now)
+            return self._calculate_fsrs(quality, repetitions, ease_factor, interval, now, lapses=lapses)
 
     def _calculate_sm2(
         self,
@@ -132,20 +134,21 @@ class SpacedRepetitionV2:
         repetitions: int,
         ease_factor: float,
         interval: int,
-        now: datetime
+        now: datetime,
+        lapses: int = 0
     ) -> ReviewSchedule:
         """FSRS 算法计算"""
         # 将 SM-2 参数迁移到 FSRS 状态
         stability, difficulty = migrate_sm2_to_fsrs(ease_factor, interval, repetitions)
 
-        # 创建 FSRS 状态
+        # 创建 FSRS 状态（携带真实历史遗忘次数，不再硬编码 0）
         state = FSRSState(
             stability=stability,
             difficulty=difficulty,
             elapsed_days=0,
             scheduled_days=interval,
             reps=repetitions,
-            lapses=0,
+            lapses=lapses,
             last_review=now - timedelta(days=interval)
         )
 
@@ -167,16 +170,21 @@ class SpacedRepetitionV2:
             stability=result.stability,
             difficulty=result.difficulty,
             retrievability=result.retrievability,
-            lapses=state.lapses + (1 if quality < 3 else 0),
+            lapses=result.lapses,
             scheduled_days=result.scheduled_days
         )
 
     def _quality_to_grade(self, quality: int) -> int:
-        """将质量分数 (0-5) 转换为 FSRS 评分 (1-4)"""
-        if quality <= 1:
-            return 1  # AGAIN
-        elif quality == 2:
-            return 2  # HARD
+        """将质量分数 (0-5) 转换为 FSRS 评分 (1-4)
+
+        行为变更（P1 修复）：quality<=2 一律映射 AGAIN。
+        依据：quality=2 在本代码库只可能来自答错（quality_from_correctness 仅在
+        is_correct=False 且快速作答时返回 2；置信度调整对正确答案保底 3），
+        SM-2 语义中 0-2 均为失败，Android 端calculateQuality 也把错题一律记 AGAIN。
+        旧映射把"答错但快速"当 HARD 成功回忆，导致稳定性暴涨且不记遗忘。
+        """
+        if quality <= 2:
+            return 1  # AGAIN（答错即遗忘，无"错但简单"档位）
         elif quality <= 4:
             return 3  # GOOD
         else:

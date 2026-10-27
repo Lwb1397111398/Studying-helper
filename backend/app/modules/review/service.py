@@ -87,6 +87,7 @@ class ReviewService:
             review_count=row.review_count,
             ease_factor=row.ease_factor,
             interval_days=row.interval_days,
+            lapses=row.lapses,
         )
 
     async def _upsert_mastery(self, user_id: str, unit_id: str, mastery_change: float,
@@ -289,12 +290,14 @@ class ReviewService:
         rep = mastery.review_count if mastery else 0
         ef = mastery.ease_factor if mastery else 2.5
         iv = mastery.interval_days if mastery else 1
+        # 历史遗忘次数：legacy 记录可能为 None → 按 0（修复前该值从未正确累积）
+        old_lapses = (mastery.lapses or 0) if mastery else 0
 
         # 使用 v2 算法（FSRS）
         scheduler = SpacedRepetitionV2(Algorithm.FSRS)
         quality = scheduler.quality_from_correctness(is_correct, response_time, avg_response_time,
                                                       confidence=confidence_level / 3.0 if confidence_level > 0 else None)
-        schedule = scheduler.calculate_next_review(quality, rep, ef, iv)
+        schedule = scheduler.calculate_next_review(quality, rep, ef, iv, lapses=old_lapses)
 
         # 提取结果
         new_interval = schedule.interval_days

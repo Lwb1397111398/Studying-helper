@@ -46,6 +46,7 @@ class FSRSResult:
     difficulty: float          # 新难度
     scheduled_days: int        # 计划天数
     retrievability: float      # 当前可提取性（回忆概率）
+    lapses: int = 0            # 遗忘次数（AGAIN 递增，其余不变）
 
 
 class FSRSScheduler:
@@ -117,7 +118,8 @@ class FSRSScheduler:
             stability=stability,
             difficulty=difficulty,
             scheduled_days=scheduled_days,
-            retrievability=1.0
+            retrievability=1.0,
+            lapses=0
         )
 
     def _update_card(
@@ -146,20 +148,18 @@ class FSRSScheduler:
             grade
         )
 
-        # 计算下次间隔
-        if grade == GRADE_AGAIN:
-            # 遗忘后重新学习
-            scheduled_days = self._next_interval(new_stability, new_difficulty)
-            lapses = state.lapses + 1
-        else:
-            scheduled_days = self._next_interval(new_stability, new_difficulty)
-            lapses = state.lapses
+        # 计算下次间隔（稳定性/难度更新使用更新前的旧 state.lapses）
+        scheduled_days = self._next_interval(new_stability, new_difficulty)
+
+        # 遗忘次数：仅 AGAIN 递增，其余评分不变（显式条件，禁止无条件 +1）
+        new_lapses = state.lapses + 1 if grade == GRADE_AGAIN else state.lapses
 
         return FSRSResult(
             next_review=now + timedelta(days=scheduled_days),
             stability=new_stability,
             difficulty=new_difficulty,
             scheduled_days=scheduled_days,
+            lapses=new_lapses,
             retrievability=retrievability
         )
 
@@ -253,7 +253,8 @@ def create_fsrs_state_from_mastery_record(
         elapsed_days=0,
         scheduled_days=record.interval_days,
         reps=record.repetitions,
-        lapses=record.lapses if hasattr(record, 'lapses') else 0,
+        # None 防御：legacy 记录该字段可能为 NULL（当前无调用方，防御性修复防止未来接入时 None 进算术）
+        lapses=(record.lapses or 0) if hasattr(record, 'lapses') else 0,
         last_review=record.last_review_at if hasattr(record, 'last_review_at') else None
     )
 

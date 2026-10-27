@@ -26,6 +26,7 @@ from app.db.models import (
     TeachingSessionModel,
     UserModel,
 )
+import json
 from app.modules.sync.service import SyncService
 from app.modules.sync.schemas import SyncPackage
 
@@ -375,3 +376,50 @@ async def test_shared_round4_fixture_import_export_preserves_aid_fsrs_and_teachi
     assert exported.mastery_records[0].algorithm == "fsrs"
     assert exported.mastery_records[0].stability == 2.5
     assert exported.module_micro_plans[0].ordered_unit_ids_json == '["round4-unit-b","round4-unit-a"]'
+
+
+async def test_sync_roundtrip_preserves_mastery_lapses(db_session):
+    """P1 测试 7（同步保值闭环）：mastery lapses=3 → export → import → DB 仍为 3。
+
+    锁死"修复后 lapses 不被同步链路抹掉"；机制依据：SyncMasteryRecord 整包序列化搬运
+    （backend schemas.py / Android SyncDtos.kt 均含 lapses 字段）。
+    """
+    raw = json.loads(ROUND4_FIXTURE.read_text(encoding="utf-8"))
+    raw["mastery_records"][0]["lapses"] = 3
+    package = SyncPackage.model_validate(raw)
+    service = SyncService(db_session)
+
+    await service.import_package("anonymous", package)
+    exported = await service.export_book("anonymous", "round4-book")
+    assert exported.mastery_records[0].lapses == 3
+
+    # 回灌：把导出包再导入（delete+add 重放），DB 查询断言保值
+    await service.import_package("anonymous", exported)
+    row = (
+        await db_session.execute(
+            select(MasteryRecordModel).where(MasteryRecordModel.id == "round4-mastery")
+        )
+    ).scalar_one()
+    assert row.lapses == 3
+    assert row.algorithm == "fsrs"
+
+
+async def test_legacy_package_without_lapses_field_clears_to_zero(db_session):
+    """P1 测试 7b（既有行为锁定）：不含 lapses 字段的旧包导入后 lapses 覆盖为 0。
+
+    终裁口径（第 6-14 轮评审）：这是修复前就存在的覆盖式同步行为，本次修复不改变它；
+    归 P6 豁免类别④"既有行为风险"，"是否改契约保留旧值"为老板决策项。
+    导入后 AGAIN 提交按 0 处理（读侧 None/0 兜底），不报错。
+    """
+    raw = json.loads(ROUND4_FIXTURE.read_text(encoding="utf-8"))
+    raw["mastery_records"][0].pop("lapses", None)
+    package = SyncPackage.model_validate(raw)
+    service = SyncService(db_session)
+
+    await service.import_package("anonymous", package)
+    row = (
+        await db_session.execute(
+            select(MasteryRecordModel).where(MasteryRecordModel.id == "round4-mastery")
+        )
+    ).scalar_one()
+    assert row.lapses == 0  # schema 默认值（既有行为）

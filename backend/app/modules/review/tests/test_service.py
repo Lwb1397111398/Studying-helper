@@ -5,6 +5,8 @@ import pytest
 from datetime import datetime, timedelta, timezone
 from unittest.mock import AsyncMock, MagicMock, patch
 from app.modules.review.service import ReviewService
+from app.db.models import MasteryRecordModel
+from app.modules.review.spaced_repetition_v2 import Algorithm, SpacedRepetitionV2
 from app.modules.review.schemas import (
     MasteryRecord, ExamConfig, ExportFormat,
 )
@@ -226,6 +228,111 @@ class TestStartReview:
         # 只有 unit-1 生成了题目，nonexistent 被跳过
         unit_ids = {q.unit_id for q in session.questions}
         assert unit_ids == {"unit-1"}
+
+
+class TestFSRSLapsesPersistence:
+    """P1 修复：lapses 经 service 落库（查库断言，不是只看返回对象）。
+
+    提交链路：submit → _get_mastery(队列: mastery 行) → _upsert_mastery(队列: 同一行)
+    → 断言同一行的 lapses 属性已被正确改写。
+    """
+
+    def _make_mastery_row(self, lapses=0, review_count=3):
+        """真实 MasteryRecordModel 实例（lapses 可为 None 模拟 legacy 记录）"""
+        now = datetime.now(timezone.utc)
+        return MasteryRecordModel(
+            id="mr-lapses", user_id="user-1", knowledge_unit_id="unit-1",
+            book_id="book-1", mastery_score=0.5, mastery_level="learning",
+            last_reviewed_at=now, next_review_at=now + timedelta(days=1),
+            review_count=review_count, ease_factor=2.5, interval_days=6,
+            stability=5.0, difficulty=5.0, lapses=lapses, reps=review_count,
+            algorithm="fsrs",
+        )
+
+    def _queue_submit_flow(self, mock_db, mastery_row):
+        """submit_review_answer 的 5 步查询队列（见 TestSubmitReviewAnswer 注释）"""
+        session = None  # 由调用方先 start_review 构造
+        return session
+
+    @pytest.mark.asyncio
+    async def test_again_persists_lapses_increment(self, service, sample_units, mock_db):
+        """测试 5：mastery lapses=2 → AGAIN 提交 → DB 行 lapses == 3"""
+        session = await service.start_review("user-1", "book-1", ["unit-1"], sample_units)
+        question = session.questions[0]
+        s_row = _make_session_row(session)
+        mastery_row = self._make_mastery_row(lapses=2)
+
+        mock_db.queue_result(_make_session_result(s_row))    # session 存在
+        mock_db.queue_result(_make_session_result(s_row))    # _load_session_questions
+        mock_db.queue_result(_make_session_result(mastery_row))  # _get_mastery
+        mock_db.queue_result(_make_session_result(mastery_row))  # _upsert_mastery（同一行）
+        mock_db.queue_result(_make_session_result(None))     # _save_session
+
+        await service.submit_review_answer(
+            session.id, question.id, "完全错误的答案xyz", user_id="user-1",
+        )
+        assert mastery_row.lapses == 3
+        assert mastery_row.algorithm == "fsrs"
+
+    @pytest.mark.asyncio
+    async def test_legacy_null_lapses_starts_from_zero(self, service, sample_units, mock_db):
+        """测试 6：legacy 记录 lapses=None → AGAIN 后 DB lapses == 1"""
+        session = await service.start_review("user-1", "book-1", ["unit-1"], sample_units)
+        question = session.questions[0]
+        s_row = _make_session_row(session)
+        mastery_row = self._make_mastery_row(lapses=None)
+
+        mock_db.queue_result(_make_session_result(s_row))
+        mock_db.queue_result(_make_session_result(s_row))
+        mock_db.queue_result(_make_session_result(mastery_row))
+        mock_db.queue_result(_make_session_result(mastery_row))
+        mock_db.queue_result(_make_session_result(None))
+
+        await service.submit_review_answer(
+            session.id, question.id, "完全错误的答案xyz", user_id="user-1",
+        )
+        assert mastery_row.lapses == 1
+
+    @pytest.mark.asyncio
+    async def test_correct_answer_keeps_lapses(self, service, sample_units, mock_db):
+        """测试 8（service 层答对路径）：答对（非 AGAIN）→ DB lapses 不被触碰"""
+        session = await service.start_review("user-1", "book-1", ["unit-1"], sample_units)
+        question = session.questions[0]
+        s_row = _make_session_row(session)
+        mastery_row = self._make_mastery_row(lapses=2)
+
+        mock_db.queue_result(_make_session_result(s_row))
+        mock_db.queue_result(_make_session_result(s_row))
+        mock_db.queue_result(_make_session_result(mastery_row))
+        mock_db.queue_result(_make_session_result(mastery_row))
+        mock_db.queue_result(_make_session_result(None))
+
+        await service.submit_review_answer(
+            session.id, question.id, question.correct_answer, user_id="user-1",
+        )
+        assert mastery_row.lapses == 2
+
+    def test_sm2_schedule_carries_no_lapses(self):
+        """测试 9b（调度层）：SM-2 路径 schedule.lapses 为 None
+        → service 的 `if schedule.algorithm == Algorithm.FSRS` 分支不触发
+        → fsrs_params=None → _upsert_mastery 不触碰 row.lapses（代码级口径）。
+        （service 固定使用 FSRS 调度器，SM-2 分支由算法层保证口径。）"""
+        sched = SpacedRepetitionV2(Algorithm.SM2)
+        schedule = sched.calculate_next_review(3, 3, 2.5, 6)
+        assert schedule.algorithm == Algorithm.SM2
+        assert schedule.lapses is None
+
+    @pytest.mark.asyncio
+    async def test_upsert_without_fsrs_params_never_touches_lapses(self, mock_db):
+        """测试 9b（落库层）：fsrs_params=None（SM-2 路径）→ 既有行 lapses 保持原值"""
+        mastery_row = self._make_mastery_row(lapses=3)
+        mock_db.queue_result(_make_session_result(mastery_row))  # 既有行
+        await ReviewService(mock_db)._upsert_mastery(
+            "user-1", "unit-1", mastery_change=0.1,
+            new_interval=5, new_ease=2.5, new_rep=4,
+        )
+        assert mastery_row.lapses == 3
+        assert mastery_row.algorithm == "sm2"
 
 
 class TestSubmitReviewAnswer:
