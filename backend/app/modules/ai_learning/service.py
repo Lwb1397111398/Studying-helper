@@ -452,7 +452,7 @@ class AILearningService:
                 merge_result = self._extract_json(merge_resp.content)
                 # 质量校验：失败则重试一次
                 if not self._validate_parsed_result(merge_result):
-                    logger.warning(f"Reduce 整合结果质量不合格，重试...")
+                    logger.warning("Reduce 整合结果质量不合格，重试...")
                     merge_resp = await self.llm.chat(
                         messages=[LLMMessage(role="user", content=merge_prompt)],
                         temperature=0.2,
@@ -489,7 +489,7 @@ class AILearningService:
             final_result = self._extract_json(final_resp.content)
             # 质量校验：失败则重试一次
             if not self._validate_parsed_result(final_result):
-                logger.warning(f"最终整合结果质量不合格，重试...")
+                logger.warning("最终整合结果质量不合格，重试...")
                 final_resp = await self.llm.chat(
                     messages=[LLMMessage(role="user", content=final_prompt)],
                     temperature=0.2,

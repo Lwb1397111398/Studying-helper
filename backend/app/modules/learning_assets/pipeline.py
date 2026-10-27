@@ -63,7 +63,6 @@ def default_rule_stage1(ctx: dict[str, Any]) -> dict[str, Any]:
     text = ctx.get("unit_text") or ""
     block = (ctx.get("blocks") or [{}])[0]
     block_id = block.get("id") or "blk_unknown"
-    rev_id = ctx.get("document_revision_id") or ""
     quote = text[: min(40, len(text))] if text else ""
     start, end = 0, len(quote)
     if quote and block.get("text"):
@@ -77,7 +76,7 @@ def default_rule_stage1(ctx: dict[str, Any]) -> dict[str, Any]:
     er_id = "er_auto_1"
     return {
         "unit_type": "concept",
-        "central_question": f"本单元的核心内容是什么？",
+        "central_question": "本单元的核心内容是什么？",
         "claims": [
             {
                 "id": "c_auto_1",

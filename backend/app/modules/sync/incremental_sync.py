@@ -441,9 +441,6 @@ class IncrementalSyncService:
         book_ids = {book.id for book in package.books}
         chapter_ids = {chapter.id for chapter in package.chapters}
         unit_ids = {unit.id for unit in package.knowledge_units}
-        node_ids = {node.id for node in package.kg_nodes}
-        session_ids = {session.id for session in package.teaching_sessions}
-
         for chapter in package.chapters:
             if chapter.book_id not in book_ids:
                 raise ServiceError(ErrorCode.VALIDATION_ERROR, "同步包包含不属于导入书籍的章节")

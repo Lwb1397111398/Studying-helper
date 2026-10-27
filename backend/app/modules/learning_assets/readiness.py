@@ -40,13 +40,6 @@ def evaluate_payload_readiness(payload: UnitLearningAssetPayload) -> ReadinessDe
 
     # Blocking: required claims supported + valid refs
     for c in required_claims:
-        supported = c.support_status == "supported" and bool(c.evidence_ref_ids)
-        valid_refs = all(
-            refs.get(rid) and refs[rid].validation_status in ("valid", "ok", "ok_whitespace_normalized", "unchecked")
-            and refs[rid].validation_status != "offset_mismatch"
-            and refs[rid].validation_status != "missing_block"
-            for rid in c.evidence_ref_ids
-        ) if c.evidence_ref_ids else False
         # Prefer explicit support_status after validator pass
         ok = c.support_status == "supported" and bool(c.evidence_ref_ids)
         if c.evidence_ref_ids:

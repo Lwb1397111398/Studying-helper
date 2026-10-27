@@ -138,7 +138,6 @@ class TXTParser:
         """从文件开头提取目录段落"""
         lines = full_text.split('\n')
         toc_items: List[TOCItem] = []
-        in_toc_section = False
         toc_end_patterns = ['正文', '第一章', 'Chapter 1', '第一回']
 
         # 检查前50行是否有目录特征

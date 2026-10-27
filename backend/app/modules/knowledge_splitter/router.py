@@ -182,7 +182,7 @@ async def _execute_split(book_id: str, db: AsyncSession):
             f"拆分完成！{len(split_result.chapters)} 章节，{len(split_result.units)} 知识单元",
             done=True)
 
-    except Exception as e:
+    except Exception:
         await db.rollback()
         # 重新查 book（rollback 后 book 对象可能失效）
         try:

@@ -108,12 +108,7 @@ class BookService:
         book = await self.get_book(book_id)
         file_path = book.file_path  # 提前取出，供调用方删除物理文件
 
-        # 1. 收集所有关联 ID（2次查询）
-        chapter_ids_result = await self.db.execute(
-            select(ChapterModel.id).where(ChapterModel.book_id == book_id)
-        )
-        chapter_ids = [row[0] for row in chapter_ids_result.all()]
-
+        # 1. 收集所有关联 ID（1次查询）
         ku_ids_result = await self.db.execute(
             select(KnowledgeUnitModel.id).where(KnowledgeUnitModel.book_id == book_id)
         )
