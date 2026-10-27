@@ -1,0 +1,485 @@
+{
+ "build": {
+  "book_id": "book-1",
+  "edges": [
+   {
+    "id": "auto-edge:unit-1->auto:数组:related",
+    "metadata": null,
+    "relation_type": "related",
+    "source_id": "unit-1",
+    "target_id": "auto:数组",
+    "weight": 0.8
+   },
+   {
+    "id": "auto-edge:unit-1->auto:线性表:related",
+    "metadata": null,
+    "relation_type": "related",
+    "source_id": "unit-1",
+    "target_id": "auto:线性表",
+    "weight": 0.8
+   },
+   {
+    "id": "auto-edge:unit-1->chapter-1:part_of",
+    "metadata": null,
+    "relation_type": "part_of",
+    "source_id": "unit-1",
+    "target_id": "chapter-1",
+    "weight": 1.0
+   },
+   {
+    "id": "auto-edge:unit-2->auto:线性表:related",
+    "metadata": null,
+    "relation_type": "related",
+    "source_id": "unit-2",
+    "target_id": "auto:线性表",
+    "weight": 0.8
+   },
+   {
+    "id": "auto-edge:unit-2->auto:链表:related",
+    "metadata": null,
+    "relation_type": "related",
+    "source_id": "unit-2",
+    "target_id": "auto:链表",
+    "weight": 0.8
+   },
+   {
+    "id": "auto-edge:unit-2->chapter-1:part_of",
+    "metadata": null,
+    "relation_type": "part_of",
+    "source_id": "unit-2",
+    "target_id": "chapter-1",
+    "weight": 1.0
+   },
+   {
+    "id": "auto-edge:unit-2->unit-1:depends_on",
+    "metadata": null,
+    "relation_type": "depends_on",
+    "source_id": "unit-2",
+    "target_id": "unit-1",
+    "weight": 1.0
+   }
+  ],
+  "nodes": [
+   {
+    "book_id": "book-1",
+    "color": "#999999",
+    "content_summary": "数组是基本数据结构。",
+    "difficulty_level": 2,
+    "id": "unit-1",
+    "importance_score": 0.8,
+    "label": "数组基础",
+    "mastery_level": null,
+    "mastery_score": null,
+    "node_type": "unit",
+    "short_label": "数组基础",
+    "size": 2.5
+   },
+   {
+    "book_id": "book-1",
+    "color": "#999999",
+    "content_summary": "链表动态大小。",
+    "difficulty_level": 3,
+    "id": "unit-2",
+    "importance_score": 0.7,
+    "label": "链表结构",
+    "mastery_level": null,
+    "mastery_score": null,
+    "node_type": "unit",
+    "short_label": "链表结构",
+    "size": 2.25
+   },
+   {
+    "book_id": "book-1",
+    "color": "#999999",
+    "content_summary": null,
+    "difficulty_level": null,
+    "id": "auto:数组",
+    "importance_score": null,
+    "label": "数组",
+    "mastery_level": null,
+    "mastery_score": null,
+    "node_type": "concept",
+    "short_label": "数组",
+    "size": 1.0
+   },
+   {
+    "book_id": "book-1",
+    "color": "#999999",
+    "content_summary": null,
+    "difficulty_level": null,
+    "id": "auto:线性表",
+    "importance_score": null,
+    "label": "线性表",
+    "mastery_level": null,
+    "mastery_score": null,
+    "node_type": "concept",
+    "short_label": "线性表",
+    "size": 1.0
+   },
+   {
+    "book_id": "book-1",
+    "color": "#999999",
+    "content_summary": null,
+    "difficulty_level": null,
+    "id": "auto:链表",
+    "importance_score": null,
+    "label": "链表",
+    "mastery_level": null,
+    "mastery_score": null,
+    "node_type": "concept",
+    "short_label": "链表",
+    "size": 1.0
+   },
+   {
+    "book_id": "book-1",
+    "color": "#999999",
+    "content_summary": null,
+    "difficulty_level": null,
+    "id": "chapter-1",
+    "importance_score": null,
+    "label": "第一章",
+    "mastery_level": null,
+    "mastery_score": null,
+    "node_type": "chapter",
+    "short_label": "第一章",
+    "size": 1.0
+   }
+  ],
+  "stats": {
+   "avg_connections": 2.33,
+   "edge_type_counts": {
+    "depends_on": 1,
+    "part_of": 2,
+    "related": 4
+   },
+   "node_type_counts": {
+    "chapter": 1,
+    "concept": 3,
+    "unit": 2
+   },
+   "total_edges": 7,
+   "total_nodes": 6
+  },
+  "status": 200
+ },
+ "get": {
+  "book_id": "book-1",
+  "edges": [
+   {
+    "id": "auto-edge:unit-1->auto:下标:related",
+    "metadata": null,
+    "relation_type": "related",
+    "source_id": "unit-1",
+    "target_id": "auto:下标",
+    "weight": 0.8
+   },
+   {
+    "id": "auto-edge:unit-1->auto:数组:related",
+    "metadata": null,
+    "relation_type": "related",
+    "source_id": "unit-1",
+    "target_id": "auto:数组",
+    "weight": 0.8
+   },
+   {
+    "id": "auto-edge:unit-1->auto:线性表:related",
+    "metadata": null,
+    "relation_type": "related",
+    "source_id": "unit-1",
+    "target_id": "auto:线性表",
+    "weight": 0.8
+   },
+   {
+    "id": "auto-edge:unit-2->auto:链表:related",
+    "metadata": null,
+    "relation_type": "related",
+    "source_id": "unit-2",
+    "target_id": "auto:链表",
+    "weight": 0.8
+   },
+   {
+    "id": "auto-edge:unit-2->chapter-1:part_of",
+    "metadata": null,
+    "relation_type": "part_of",
+    "source_id": "unit-2",
+    "target_id": "chapter-1",
+    "weight": 1.0
+   }
+  ],
+  "nodes": [
+   {
+    "book_id": "book-1",
+    "color": "#999999",
+    "content_summary": "更新后的数组",
+    "difficulty_level": 2,
+    "id": "unit-1",
+    "importance_score": 0.85,
+    "label": "数组基础(更新)",
+    "mastery_level": null,
+    "mastery_score": null,
+    "node_type": "unit",
+    "short_label": null,
+    "size": 2.625
+   },
+   {
+    "book_id": "book-1",
+    "color": "#999999",
+    "content_summary": "链表动态大小。",
+    "difficulty_level": 3,
+    "id": "unit-2",
+    "importance_score": 0.7,
+    "label": "链表结构",
+    "mastery_level": null,
+    "mastery_score": null,
+    "node_type": "unit",
+    "short_label": null,
+    "size": 2.25
+   },
+   {
+    "book_id": "book-1",
+    "color": "#999999",
+    "content_summary": null,
+    "difficulty_level": null,
+    "id": "auto:下标",
+    "importance_score": null,
+    "label": "下标",
+    "mastery_level": null,
+    "mastery_score": null,
+    "node_type": "concept",
+    "short_label": null,
+    "size": 0.8
+   },
+   {
+    "book_id": "book-1",
+    "color": "#999999",
+    "content_summary": null,
+    "difficulty_level": null,
+    "id": "auto:数组",
+    "importance_score": null,
+    "label": "数组",
+    "mastery_level": null,
+    "mastery_score": null,
+    "node_type": "concept",
+    "short_label": null,
+    "size": 0.8
+   },
+   {
+    "book_id": "book-1",
+    "color": "#999999",
+    "content_summary": null,
+    "difficulty_level": null,
+    "id": "auto:线性表",
+    "importance_score": null,
+    "label": "线性表",
+    "mastery_level": null,
+    "mastery_score": null,
+    "node_type": "concept",
+    "short_label": null,
+    "size": 0.8
+   },
+   {
+    "book_id": "book-1",
+    "color": "#999999",
+    "content_summary": null,
+    "difficulty_level": null,
+    "id": "auto:链表",
+    "importance_score": null,
+    "label": "链表",
+    "mastery_level": null,
+    "mastery_score": null,
+    "node_type": "concept",
+    "short_label": null,
+    "size": 1.0
+   },
+   {
+    "book_id": "book-1",
+    "color": "#999999",
+    "content_summary": null,
+    "difficulty_level": null,
+    "id": "chapter-1",
+    "importance_score": null,
+    "label": "第一章",
+    "mastery_level": null,
+    "mastery_score": null,
+    "node_type": "chapter",
+    "short_label": null,
+    "size": 1.0
+   }
+  ],
+  "stats": {
+   "avg_connections": 1.43,
+   "edge_type_counts": {
+    "part_of": 1,
+    "related": 4
+   },
+   "node_type_counts": {
+    "chapter": 1,
+    "concept": 4,
+    "unit": 2
+   },
+   "total_edges": 5,
+   "total_nodes": 7
+  },
+  "status": 200
+ },
+ "update": {
+  "book_id": "book-1",
+  "edges": [
+   {
+    "id": "auto-edge:unit-1->auto:下标:related",
+    "metadata": null,
+    "relation_type": "related",
+    "source_id": "unit-1",
+    "target_id": "auto:下标",
+    "weight": 0.8
+   },
+   {
+    "id": "auto-edge:unit-1->auto:数组:related",
+    "metadata": null,
+    "relation_type": "related",
+    "source_id": "unit-1",
+    "target_id": "auto:数组",
+    "weight": 0.8
+   },
+   {
+    "id": "auto-edge:unit-1->auto:线性表:related",
+    "metadata": null,
+    "relation_type": "related",
+    "source_id": "unit-1",
+    "target_id": "auto:线性表",
+    "weight": 0.8
+   },
+   {
+    "id": "auto-edge:unit-2->auto:链表:related",
+    "metadata": null,
+    "relation_type": "related",
+    "source_id": "unit-2",
+    "target_id": "auto:链表",
+    "weight": 0.8
+   },
+   {
+    "id": "auto-edge:unit-2->chapter-1:part_of",
+    "metadata": null,
+    "relation_type": "part_of",
+    "source_id": "unit-2",
+    "target_id": "chapter-1",
+    "weight": 1.0
+   }
+  ],
+  "nodes": [
+   {
+    "book_id": "book-1",
+    "color": "#999999",
+    "content_summary": "更新后的数组",
+    "difficulty_level": 2,
+    "id": "unit-1",
+    "importance_score": 0.85,
+    "label": "数组基础(更新)",
+    "mastery_level": null,
+    "mastery_score": null,
+    "node_type": "unit",
+    "short_label": null,
+    "size": 2.625
+   },
+   {
+    "book_id": "book-1",
+    "color": "#999999",
+    "content_summary": "链表动态大小。",
+    "difficulty_level": 3,
+    "id": "unit-2",
+    "importance_score": 0.7,
+    "label": "链表结构",
+    "mastery_level": null,
+    "mastery_score": null,
+    "node_type": "unit",
+    "short_label": null,
+    "size": 2.25
+   },
+   {
+    "book_id": "book-1",
+    "color": "#999999",
+    "content_summary": null,
+    "difficulty_level": null,
+    "id": "auto:下标",
+    "importance_score": null,
+    "label": "下标",
+    "mastery_level": null,
+    "mastery_score": null,
+    "node_type": "concept",
+    "short_label": null,
+    "size": 0.8
+   },
+   {
+    "book_id": "book-1",
+    "color": "#999999",
+    "content_summary": null,
+    "difficulty_level": null,
+    "id": "auto:数组",
+    "importance_score": null,
+    "label": "数组",
+    "mastery_level": null,
+    "mastery_score": null,
+    "node_type": "concept",
+    "short_label": null,
+    "size": 0.8
+   },
+   {
+    "book_id": "book-1",
+    "color": "#999999",
+    "content_summary": null,
+    "difficulty_level": null,
+    "id": "auto:线性表",
+    "importance_score": null,
+    "label": "线性表",
+    "mastery_level": null,
+    "mastery_score": null,
+    "node_type": "concept",
+    "short_label": null,
+    "size": 0.8
+   },
+   {
+    "book_id": "book-1",
+    "color": "#999999",
+    "content_summary": null,
+    "difficulty_level": null,
+    "id": "auto:链表",
+    "importance_score": null,
+    "label": "链表",
+    "mastery_level": null,
+    "mastery_score": null,
+    "node_type": "concept",
+    "short_label": null,
+    "size": 1.0
+   },
+   {
+    "book_id": "book-1",
+    "color": "#999999",
+    "content_summary": null,
+    "difficulty_level": null,
+    "id": "chapter-1",
+    "importance_score": null,
+    "label": "第一章",
+    "mastery_level": null,
+    "mastery_score": null,
+    "node_type": "chapter",
+    "short_label": null,
+    "size": 1.0
+   }
+  ],
+  "stats": {
+   "avg_connections": 1.43,
+   "edge_type_counts": {
+    "part_of": 1,
+    "related": 4
+   },
+   "node_type_counts": {
+    "chapter": 1,
+    "concept": 4,
+    "unit": 2
+   },
+   "total_edges": 5,
+   "total_nodes": 7
+  },
+  "status": 200
+ }
+}

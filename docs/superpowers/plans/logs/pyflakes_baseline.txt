@@ -1,0 +1,164 @@
+app\common\time_utils.py:2:1: 'datetime.timedelta' imported but unused
+app\db\database.py:66:5: 'app.db.models.BookModel' imported but unused
+app\db\database.py:66:5: 'app.db.models.ChapterModel' imported but unused
+app\db\database.py:66:5: 'app.db.models.KnowledgeUnitModel' imported but unused
+app\db\database.py:66:5: 'app.db.models.MasteryRecordModel' imported but unused
+app\db\database.py:66:5: 'app.db.models.AnnotationModel' imported but unused
+app\db\database.py:66:5: 'app.db.models.LearningRecordModel' imported but unused
+app\db\database.py:66:5: 'app.db.models.KGNodeModel' imported but unused
+app\db\database.py:66:5: 'app.db.models.KGEdgeModel' imported but unused
+app\db\database.py:66:5: 'app.db.models.CacheEntryModel' imported but unused
+app\db\database.py:66:5: 'app.db.models.DailyStatsModel' imported but unused
+app\db\database.py:66:5: 'app.db.models.ReviewSessionModel' imported but unused
+app\db\database.py:66:5: 'app.db.models.TeachingSessionModel' imported but unused
+app\db\database.py:66:5: 'app.db.models.TeachingMessageModel' imported but unused
+app\db\database.py:66:5: 'app.db.models.UserQuestionModel' imported but unused
+app\db\database.py:66:5: 'app.db.models.SessionTestModel' imported but unused
+app\db\database.py:66:5: 'app.db.models.LearningEfficiencyModel' imported but unused
+app\db\database.py:66:5: 'app.db.models.DocumentModel' imported but unused
+app\db\database.py:66:5: 'app.db.models.DocumentRevisionModel' imported but unused
+app\db\database.py:66:5: 'app.db.models.DocumentBlockModel' imported but unused
+app\db\database.py:66:5: 'app.db.models.AnalysisJobModel' imported but unused
+app\db\database.py:66:5: 'app.db.models.UnitLearningAssetModel' imported but unused
+app\db\database.py:66:5: 'app.db.models.LearningAttemptModel' imported but unused
+app\db\database.py:66:5: 'app.db.models.LearningEvidenceModel' imported but unused
+app\db\database.py:66:5: 'app.db.models.BookConceptModel' imported but unused
+app\db\models.py:7:1: 'sqlalchemy.orm.Mapped' imported but unused
+app\db\models.py:7:1: 'sqlalchemy.orm.mapped_column' imported but unused
+app\modules\adaptive_design\profile_builder.py:9:1: 're' imported but unused
+app\modules\adaptive_design\router.py:6:1: 'pydantic.BaseModel' imported but unused
+app\modules\adaptive_design\tests\test_llm_paths.py:10:1: 'app.common.llm_client.LLMMessage' imported but unused
+app\modules\adaptive_design\tests\test_llm_paths.py:14:1: 'app.modules.adaptive_design.schemas.ProfileUpdateRequest' imported but unused
+app\modules\adaptive_design\tests\test_service_e2e.py:16:1: 'app.db.models.LearnerIntentProfileModel' imported but unused
+app\modules\adaptive_design\tests\test_service_e2e.py:187:9: local variable 'design' is assigned to but never used
+app\modules\adaptive_design\tests\test_service_e2e.py:202:9: local variable 'macro' is assigned to but never used
+app\modules\ai_learning\router.py:4:1: 'asyncio' imported but unused
+app\modules\ai_learning\router.py:316:5: 'datetime.date as date_type' imported but unused
+app\modules\ai_learning\schemas.py:6:1: 'uuid.uuid4' imported but unused
+app\modules\ai_learning\service.py:17:1: 'app.modules.ai_learning.schemas.LearningProgress' imported but unused
+app\modules\ai_learning\service.py:17:1: 'app.modules.ai_learning.schemas.LearningStatus' imported but unused
+app\modules\ai_learning\service.py:455:36: f-string is missing placeholders
+app\modules\ai_learning\service.py:492:32: f-string is missing placeholders
+app\modules\ai_learning\tests\test_schemas.py:3:1: 'pytest' imported but unused
+app\modules\ai_learning\tests\test_schemas.py:4:1: 'app.modules.ai_learning.schemas.SelfAssessment' imported but unused
+app\modules\ai_learning\tests\test_token_optimizer.py:1:1: 'pytest' imported but unused
+app\modules\document_parser\noise_cleaner\cleaner.py:9:1: 'app.modules.document_parser.noise_cleaner.header_footer.detect_header_footer' imported but unused
+app\modules\document_parser\parsers\txt_parser.py:141:9: local variable 'in_toc_section' is assigned to but never used
+app\modules\document_parser\tests\conftest.py:4:1: 'pathlib.Path' imported but unused
+app\modules\document_parser\tests\test_epub_heuristic.py:3:1: 'pytest' imported but unused
+app\modules\document_parser\tests\test_epub_heuristic.py:5:1: 'unittest.mock.patch' imported but unused
+app\modules\document_parser\tests\test_router.py:8:1: 'app.modules.document_parser.router.get_parser_llm_client' imported but unused
+app\modules\document_parser\tests\test_service.py:4:1: 'pathlib.Path' imported but unused
+app\modules\document_parser\tests\test_txt_parser.py:4:1: 'unittest.mock.patch' imported but unused
+app\modules\knowledge_graph\relation_detector.py:5:1: 'typing.Optional' imported but unused
+app\modules\knowledge_graph\router.py:12:1: 'app.modules.knowledge_graph.schemas.SubGraph' imported but unused
+app\modules\knowledge_graph\router.py:12:1: 'app.modules.knowledge_graph.schemas.VisualizationData' imported but unused
+app\modules\knowledge_graph\router.py:12:1: 'app.modules.knowledge_graph.schemas.KGEdge' imported but unused
+app\modules\knowledge_graph\service.py:12:1: 'app.modules.knowledge_graph.schemas.GraphStats' imported but unused
+app\modules\knowledge_graph\service.py:424:9: local variable 'existing_edges' is assigned to but never used
+app\modules\knowledge_splitter\router.py:21:1: 'app.modules.document_parser.schemas.ParsedDocument' imported but unused
+app\modules\knowledge_splitter\router.py:185:5: local variable 'e' is assigned to but never used
+app\modules\knowledge_splitter\router.py:281:5: 'app.modules.knowledge_splitter.schemas.SplitStats' imported but unused
+app\modules\knowledge_splitter\service.py:3:1: 'typing.Dict' imported but unused
+app\modules\knowledge_splitter\service.py:3:1: 'typing.Optional' imported but unused
+app\modules\knowledge_splitter\service.py:5:1: 'app.modules.knowledge_splitter.schemas.SubTitle' imported but unused
+app\modules\knowledge_splitter\tests\test_splitter.py:3:1: 'pytest' imported but unused
+app\modules\learning_assets\concept_mastery.py:8:1: 'json' imported but unused
+app\modules\learning_assets\context_builder.py:6:1: 'dataclasses.asdict' imported but unused
+app\modules\learning_assets\mapreduce.py:11:1: 'typing.Optional' imported but unused
+app\modules\learning_assets\mapreduce.py:13:1: 'app.modules.ai_learning.schemas.BookDeepOverview' imported but unused
+app\modules\learning_assets\pipeline.py:66:5: local variable 'rev_id' is assigned to but never used
+app\modules\learning_assets\pipeline.py:80:29: f-string is missing placeholders
+app\modules\learning_assets\readiness.py:43:9: local variable 'supported' is assigned to but never used
+app\modules\learning_assets\readiness.py:44:9: local variable 'valid_refs' is assigned to but never used
+app\modules\learning_assets\service.py:13:1: 'app.modules.learning_assets.understanding.to_legacy_view' imported but unused
+app\modules\learning_assets\understanding.py:19:1: 're' imported but unused
+app\modules\learning_assets\understanding.py:25:1: 'sqlalchemy.func' imported but unused
+app\modules\learning_assets\tests\test_concept_step4.py:6:1: 'datetime.datetime' imported but unused
+app\modules\learning_assets\tests\test_concept_step4.py:6:1: 'datetime.timezone' imported but unused
+app\modules\learning_assets\tests\test_concept_step4.py:8:1: 'unittest.mock.AsyncMock' imported but unused
+app\modules\learning_assets\tests\test_concept_step4.py:9:1: 'uuid.uuid4' imported but unused
+app\modules\learning_assets\tests\test_concept_step4.py:16:1: 'app.db.models.BookConceptModel' imported but unused
+app\modules\learning_assets\tests\test_concept_step4.py:241:5: local variable 'unit' is assigned to but never used
+app\modules\learning_assets\tests\test_understanding_v2.py:5:1: 'json' imported but unused
+app\modules\learning_assets\tests\test_understanding_v2.py:11:1: 'app.modules.learning_assets.understanding._persist_understanding_only' imported but unused
+app\modules\learning_assets\tests\test_understanding_v2.py:269:17: local variable 'idx' is assigned to but never used
+app\modules\learning_plan\service.py:15:1: 'app.db.models.UserModel' imported but unused
+app\modules\learning_plan\style_analyzer.py:3:1: 'typing.Optional' imported but unused
+app\modules\learning_plan\style_analyzer.py:159:13: local variable 'total_minutes' is assigned to but never used
+app\modules\learning_plan\style_analyzer_v2.py:13:1: 'typing.List' imported but unused
+app\modules\learning_plan\style_analyzer_v2.py:293:13: local variable 'total_minutes' is assigned to but never used
+app\modules\learning_plan\tests\test_plan_service.py:10:1: 'app.db.models.BookModel' imported but unused
+app\modules\learning_plan\tests\test_plan_service.py:10:1: 'app.db.models.DailyStatsModel' imported but unused
+app\modules\learning_plan\tests\test_plan_service.py:185:9: local variable 'update' is assigned to but never used
+app\modules\review\exam_mode.py:6:1: 'uuid.uuid4' imported but unused
+app\modules\review\mastery_evaluator.py:4:1: 'typing.Dict' imported but unused
+app\modules\review\mastery_evaluator.py:4:1: 'typing.Optional' imported but unused
+app\modules\review\question_generator.py:6:1: 'uuid.uuid4' imported but unused
+app\modules\review\router.py:4:1: 'datetime.datetime' imported but unused
+app\modules\review\router.py:12:1: 'app.common.errors.ErrorCode' imported but unused
+app\modules\review\service.py:12:1: 'app.common.llm_client.LLMClient' imported but unused
+app\modules\review\service.py:20:1: 'app.modules.review.spaced_repetition_v2.ReviewSchedule' imported but unused
+app\modules\review\service.py:20:1: 'app.modules.review.spaced_repetition_v2.calculate_next_review_v2' imported but unused
+app\modules\review\service.py:20:1: 'app.modules.review.spaced_repetition_v2.quality_from_correctness_v2' imported but unused
+app\modules\review\service.py:24:1: 'app.modules.review.fsrs.FSRSScheduler' imported but unused
+app\modules\review\service.py:24:1: 'app.modules.review.fsrs.FSRSState' imported but unused
+app\modules\review\service.py:24:1: 'app.modules.review.fsrs.migrate_sm2_to_fsrs' imported but unused
+app\modules\review\spaced_repetition_v2.py:9:1: 'typing.Tuple' imported but unused
+app\modules\review\spaced_repetition_v2.py:9:1: 'typing.Literal' imported but unused
+app\modules\review\spaced_repetition_v2.py:12:1: '.fsrs.FSRSResult' imported but unused
+app\modules\review\spaced_repetition_v2.py:12:1: '.fsrs.DEFAULT_PARAMETERS' imported but unused
+app\modules\review\exporters\anki_exporter.py:4:1: 'datetime.datetime' imported but unused
+app\modules\review\exporters\cornell_exporter.py:3:1: 'typing.Optional' imported but unused
+app\modules\review\exporters\cornell_exporter.py:32:5: local variable 'chapter_map' is assigned to but never used
+app\modules\review\exporters\markdown_exporter.py:32:5: local variable 'chapter_map' is assigned to but never used
+app\modules\review\exporters\mindmap_exporter.py:4:1: 'datetime.datetime' imported but unused
+app\modules\review\tests\test_free_recall.py:2:1: 'json' imported but unused
+app\modules\review\tests\test_free_recall.py:4:1: 'datetime.datetime' imported but unused
+app\modules\review\tests\test_free_recall.py:4:1: 'datetime.timezone' imported but unused
+app\modules\review\tests\test_free_recall.py:5:1: 'unittest.mock.AsyncMock' imported but unused
+app\modules\review\tests\test_fsrs.py:6:1: redefinition of unused 'datetime' from line 4
+app\modules\review\tests\test_fsrs.py:6:1: redefinition of unused 'timedelta' from line 4
+app\modules\review\tests\test_mastery_evaluator.py:3:1: 'pytest' imported but unused
+app\modules\review\tests\test_mastery_evaluator.py:4:1: 'datetime.datetime' imported but unused
+app\modules\review\tests\test_service.py:6:1: 'unittest.mock.AsyncMock' imported but unused
+app\modules\review\tests\test_service.py:6:1: 'unittest.mock.patch' imported but unused
+app\modules\review\tests\test_spaced_repetition.py:3:1: 'pytest' imported but unused
+app\modules\settings\tests\test_settings_service.py:2:1: 'pathlib.Path' imported but unused
+app\modules\sync\incremental_sync.py:8:1: 'datetime.timezone' imported but unused
+app\modules\sync\incremental_sync.py:444:9: local variable 'node_ids' is assigned to but never used
+app\modules\sync\incremental_sync.py:445:9: local variable 'session_ids' is assigned to but never used
+app\modules\teaching\router.py:11:1: 'app.common.errors.ErrorCode' imported but unused
+app\modules\teaching\router.py:17:1: 'app.modules.teaching.schemas.TeachingMessage' imported but unused
+app\modules\teaching\router.py:17:1: 'app.modules.teaching.schemas.UserQuestion' imported but unused
+app\modules\teaching\router.py:17:1: 'app.modules.teaching.schemas.Annotation' imported but unused
+app\modules\teaching\router.py:17:1: 'app.modules.teaching.schemas.SessionTest' imported but unused
+app\modules\teaching\service.py:26:1: 'app.modules.teaching.prompts.EXAMPLE_PROMPT' imported but unused
+app\modules\teaching\service.py:48:1: 'app.modules.teaching.teaching_plan.TeachingPlanGenerator' imported but unused
+app\modules\teaching\service.py:48:1: 'app.modules.teaching.teaching_plan.CoverageTracker' imported but unused
+app\modules\teaching\teaching_plan.py:16:1: 'app.modules.ai_learning.schemas.KeyPoint' imported but unused
+app\modules\teaching\teaching_plan.py:16:1: 'app.modules.ai_learning.schemas.Concept' imported but unused
+app\modules\teaching\v2_consumer.py:11:1: 'json' imported but unused
+app\modules\teaching\tests\test_cornell_notes.py:6:1: 'app.common.llm_client.LLMResponse' imported but unused
+app\modules\teaching\tests\test_feynman_phase.py:2:1: 'json' imported but unused
+app\modules\teaching\tests\test_feynman_phase.py:7:1: 'app.modules.ai_learning.schemas.Concept' imported but unused
+app\modules\teaching\tests\test_feynman_phase.py:7:1: 'app.modules.ai_learning.schemas.TestQuestion' imported but unused
+app\modules\teaching\tests\test_feynman_phase.py:8:1: 'app.modules.teaching.schemas.TeachingStrategy' imported but unused
+app\modules\teaching\tests\test_step5_prefs_ladder.py:45:5: 'app.modules.ai_learning.schemas.Concept as LConcept' imported but unused
+app\modules\teaching\tests\test_teaching_service.py:5:1: 'unittest.mock.patch' imported but unused
+app\modules\teaching\tests\test_teaching_service.py:7:1: 'app.common.llm_client.LLMMessage' imported but unused
+app\modules\teaching\tests\test_teaching_service.py:48:5: local variable 'original_add' is assigned to but never used
+app\modules\teaching\tests\test_teaching_service.py:74:9: 'app.modules.ai_learning.schemas.Concept as LConcept' imported but unused
+app\modules\teaching\tests\test_v2_consumer.py:5:1: 'json' imported but unused
+app\modules\teaching\tests\test_v2_consumer.py:7:1: 'pytest' imported but unused
+app\modules\teaching\tests\test_v2_consumer.py:18:1: 'app.modules.learning_assets.pipeline._stage2_from_v2' imported but unused
+app\modules\teaching\tests\test_v2_consumer.py:29:1: 'app.modules.teaching.prompts.REFLECT_PROMPT_V2' imported but unused
+app\modules\teaching\tests\test_v2_consumer.py:29:1: 'app.modules.teaching.prompts.FEYNMAN_EXPLAIN_PROMPT_V2' imported but unused
+app\modules\user_storage\services\book_service.py:3:1: 'os' imported but unused
+app\modules\user_storage\services\book_service.py:115:9: local variable 'chapter_ids' is assigned to but never used
+app\modules\user_storage\services\user_service.py:2:1: 'json' imported but unused
+app\modules\user_storage\tests\test_streak_service.py:9:1: 'app.db.models.UserModel' imported but unused
+app\tests\test_paths_packaging.py:5:1: 'os' imported but unused
+app\tests\test_paths_packaging.py:6:1: 'pathlib.Path' imported but unused
+app\tests\test_paths_packaging.py:14:5: 'app.paths.get_data_dir' imported but unused
+app\tests\test_paths_packaging.py:44:5: 'app.paths.get_env_file' imported but unused

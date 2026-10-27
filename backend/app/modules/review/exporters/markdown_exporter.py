@@ -29,7 +29,6 @@ def export_markdown(
     lines.append(f"\n导出时间：{datetime.now(timezone.utc).strftime('%Y-%m-%d %H:%M')}\n")
 
     # 按章节组织
-    chapter_map = {c['id']: c for c in chapters}
     units_by_chapter: Dict[str, list] = {}
     for unit in knowledge_units:
         cid = unit.get('chapter_id', '')

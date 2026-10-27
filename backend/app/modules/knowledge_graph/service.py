@@ -416,19 +416,6 @@ class KnowledgeGraphService:
             for n in existing_nodes_result.scalars().all()
         ]
 
-        existing_edges_result = await self.db.execute(
-            select(KGEdgeModel).where(
-                KGEdgeModel.source_id.in_([n.id for n in existing_nodes])
-            )
-        )
-        existing_edges = [
-            KGEdge(
-                id=e.id, source_id=e.source_id, target_id=e.target_id,
-                relation_type=e.relation_type, weight=e.weight,
-                metadata=json.loads(e.metadata_json) if e.metadata_json else None,
-            )
-            for e in existing_edges_result.scalars().all()
-        ]
 
         # 3. 为新单元创建节点
         builder = self.builder
