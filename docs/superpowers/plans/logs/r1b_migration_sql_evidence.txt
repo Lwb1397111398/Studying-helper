@@ -1,0 +1,10 @@
+[1] 从 Migrations.kt 解析出语句: 3
+    ALTER TABLE teaching_sessions ADD COLUMN state_v2 TEXT
+    ALTER TABLE teaching_sessions ADD COLUMN asset_id TEXT
+    ALTER TABLE teaching_sessions ADD COLUMN completion_status TEXT
+[2] v3 结构建表 + 1 行既有数据 OK
+[3] 三条 ALTER TABLE 实执行 OK（Room 迁移时将逐条 execSQL 同样语句）
+[4] PRAGMA table_info 三新列存在 OK
+[5] 既有数据保留、新列为 NULL OK: ('s1', None, None, None)
+[6] 新列可读可写 OK: ('diagnose', 'a1', 'in_progress')
+MIGRATION_SQL_EVIDENCE_PASS

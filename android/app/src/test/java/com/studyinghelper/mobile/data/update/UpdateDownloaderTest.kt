@@ -58,7 +58,7 @@ class UpdateDownloaderTest {
                 assertTrue(e.message!!.contains("不完整"))
             }
             assertTrue("必须因为字节数不符抛异常", thrown)
-            assertEquals("失败后不留任何临时/半截文件", 0, dest.parentFile.listFiles()!!.size)
+            assertEquals("失败后不留任何临时/半截文件", 0, requireNotNull(dest.parentFile).listFiles()!!.size)
         } finally {
             server.stop()
         }

@@ -1,6 +1,11 @@
 package com.studyinghelper.mobile.data.sync
 
 import com.studyinghelper.mobile.data.db.MIGRATION_1_2_STATEMENTS
+import com.studyinghelper.mobile.data.db.MIGRATION_2_3_STATEMENTS
+import com.studyinghelper.mobile.data.db.MIGRATION_3_4_STATEMENTS
+import com.studyinghelper.mobile.data.db.TeachingSessionEntity
+import com.studyinghelper.mobile.data.repository.toEntity
+import com.studyinghelper.mobile.data.repository.toSync
 import kotlinx.serialization.decodeFromString
 import kotlinx.serialization.encodeToString
 import kotlinx.serialization.json.Json
@@ -389,5 +394,66 @@ class SyncDtosTest {
         assertTrue(migrationSql.contains("ALTER TABLE mastery_records ADD COLUMN last_elapsed_days"))
         assertTrue(migrationSql.contains("ALTER TABLE mastery_records ADD COLUMN scheduled_days"))
         assertTrue(migrationSql.contains("ALTER TABLE mastery_records ADD COLUMN algorithm"))
+    }
+}
+
+class SyncTeachingSessionV2FieldsTest {
+    private val json = Json { ignoreUnknownKeys = true }
+
+    @Test
+    fun migration3To4AddsV2TeachingSessionColumns() {
+        assertEquals(
+            listOf(
+                "ALTER TABLE teaching_sessions ADD COLUMN state_v2 TEXT",
+                "ALTER TABLE teaching_sessions ADD COLUMN asset_id TEXT",
+                "ALTER TABLE teaching_sessions ADD COLUMN completion_status TEXT",
+            ),
+            MIGRATION_3_4_STATEMENTS,
+        )
+        // 既有迁移未被本轮改动
+        assertEquals(
+            listOf("ALTER TABLE books ADD COLUMN overview_json TEXT"),
+            MIGRATION_2_3_STATEMENTS,
+        )
+    }
+
+    @Test
+    fun parsesLegacyTeachingSessionWithoutV2Fields() {
+        val legacy = """
+            {
+              "id": "legacy-1",
+              "user_id": "anonymous",
+              "book_id": "book-1",
+              "started_at": "2026-07-04T12:00:00Z"
+            }
+        """.trimIndent()
+        val dto = json.decodeFromString<SyncTeachingSession>(legacy)
+        assertEquals("legacy-1", dto.id)
+        assertEquals(null, dto.stateV2)
+        assertEquals(null, dto.assetId)
+        assertEquals(null, dto.completionStatus)
+    }
+
+    @Test
+    fun v2TeachingSessionFieldsSurviveEntityRoundtrip() {
+        val dto = SyncTeachingSession(
+            id = "v2-1",
+            userId = "anonymous",
+            bookId = "book-1",
+            startedAt = "2026-07-04T12:00:00Z",
+            stateV2 = "diagnose",
+            assetId = "asset-x",
+            completionStatus = "in_progress",
+        )
+        val entity = dto.toEntity()
+        assertEquals("diagnose", entity.stateV2)
+        assertEquals("asset-x", entity.assetId)
+        assertEquals("in_progress", entity.completionStatus)
+        val back = entity.toSync()
+        assertEquals(dto, back)
+        // JSON 往返（模拟跨端传输）后仍保值
+        val wire = json.encodeToString(SyncTeachingSession.serializer(), back)
+        val reparsed = json.decodeFromString<SyncTeachingSession>(wire)
+        assertEquals(dto, reparsed)
     }
 }

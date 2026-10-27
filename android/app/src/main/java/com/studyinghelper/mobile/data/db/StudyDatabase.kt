@@ -26,7 +26,7 @@ import androidx.room.RoomDatabase
         TeachingDesignEntity::class,
         ModuleMicroPlanEntity::class,
     ],
-    version = 3,
+    version = 4,
     exportSchema = false,
 )
 abstract class StudyDatabase : RoomDatabase() {
@@ -42,7 +42,7 @@ abstract class StudyDatabase : RoomDatabase() {
                     StudyDatabase::class.java,
                     "studying_helper_mobile.db",
                 )
-                    .addMigrations(MIGRATION_1_2, MIGRATION_2_3)
+                    .addMigrations(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4)
                     .build()
                     .also { instance = it }
             }

@@ -200,6 +200,11 @@ data class SyncTeachingSession(
     val status: String? = "active",
     @SerialName("started_at") val startedAt: String,
     @SerialName("ended_at") val endedAt: String? = null,
+    // v2 状态机会话字段（与后端 SyncTeachingSession 同名 snake_case 对齐）：
+    // v1 会话为 null；默认值保证旧版包反序列化兼容
+    @SerialName("state_v2") val stateV2: String? = null,
+    @SerialName("asset_id") val assetId: String? = null,
+    @SerialName("completion_status") val completionStatus: String? = null,
 )
 
 @Serializable

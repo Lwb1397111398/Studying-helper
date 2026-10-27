@@ -174,6 +174,10 @@ data class TeachingSessionEntity(
     val status: String?,
     @ColumnInfo(name = "started_at") val startedAt: String,
     @ColumnInfo(name = "ended_at") val endedAt: String?,
+    // v2 状态机会话字段（MIGRATION_3_4 新增，可空列）：v1 会话为 null
+    @ColumnInfo(name = "state_v2") val stateV2: String? = null,
+    @ColumnInfo(name = "asset_id") val assetId: String? = null,
+    @ColumnInfo(name = "completion_status") val completionStatus: String? = null,
 )
 
 @Entity(tableName = "teaching_messages", indices = [Index("session_id")])
