@@ -31,6 +31,9 @@ class MasteryRecord(BaseModel):
     ease_factor: float = 2.5  # SM-2算法的难度因子
     interval_days: int = 1  # 当前间隔天数
     lapses: Optional[int] = None  # FSRS 遗忘次数（legacy 记录可能为 NULL）
+    # FSRS 存量状态（R4 直通）：SM-2 时代记录为 NULL，None 时算法走迁移估算
+    stability: Optional[float] = None
+    difficulty: Optional[float] = None
 
 
 class ReviewSession(BaseModel):

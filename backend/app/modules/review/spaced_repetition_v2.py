@@ -74,7 +74,10 @@ class SpacedRepetitionV2:
         interval: int,
         now: Optional[datetime] = None,
         algorithm: Optional[Algorithm] = None,
-        lapses: int = 0
+        lapses: int = 0,
+        stability: Optional[float] = None,
+        difficulty: Optional[float] = None,
+        last_review: Optional[datetime] = None
     ) -> ReviewSchedule:
         """
         计算下次复习时间
@@ -100,7 +103,11 @@ class SpacedRepetitionV2:
         if algorithm == Algorithm.SM2:
             return self._calculate_sm2(quality, repetitions, ease_factor, interval, now)
         else:
-            return self._calculate_fsrs(quality, repetitions, ease_factor, interval, now, lapses=lapses)
+            return self._calculate_fsrs(
+                quality, repetitions, ease_factor, interval, now,
+                lapses=lapses, stability=stability, difficulty=difficulty,
+                last_review=last_review,
+            )
 
     def _calculate_sm2(
         self,
@@ -135,21 +142,42 @@ class SpacedRepetitionV2:
         ease_factor: float,
         interval: int,
         now: datetime,
-        lapses: int = 0
+        lapses: int = 0,
+        stability: Optional[float] = None,
+        difficulty: Optional[float] = None,
+        last_review: Optional[datetime] = None
     ) -> ReviewSchedule:
-        """FSRS 算法计算"""
-        # 将 SM-2 参数迁移到 FSRS 状态
-        stability, difficulty = migrate_sm2_to_fsrs(ease_factor, interval, repetitions)
+        """FSRS 算法计算
+
+        存量状态直通（R4）：stability/difficulty/last_review 来自上一轮 FSRS
+        写回的真实值；任一为 None（SM-2 时代记录）时回退 migrate_sm2_to_fsrs
+        经验估算。last_review 同时驱动 elapsed_days，两者保持同源。
+        """
+        # 将 SM-2 参数迁移到 FSRS 状态（仅存量值缺失时）
+        if stability is None or difficulty is None:
+            stability, difficulty = migrate_sm2_to_fsrs(ease_factor, interval, repetitions)
+
+        # last_review 与 elapsed_days 同源：有真实值用真值，否则维持估算。
+        # 时区归一：service 未传 now 时算法内取 naive 本地时间，与 aware 的
+        # last_reviewed_at 相减会炸——naive 按本地时区解释后对齐（不改变 now
+        # 本身，next_review 输出时区行为与修复前一致）。
+        if last_review is not None:
+            nw = now if now.tzinfo else now.astimezone()
+            lr = last_review if last_review.tzinfo else last_review.astimezone()
+            elapsed_days = max((nw - lr).days, 0)
+        else:
+            last_review = now - timedelta(days=interval)
+            elapsed_days = 0
 
         # 创建 FSRS 状态（携带真实历史遗忘次数，不再硬编码 0）
         state = FSRSState(
             stability=stability,
             difficulty=difficulty,
-            elapsed_days=0,
+            elapsed_days=elapsed_days,
             scheduled_days=interval,
             reps=repetitions,
             lapses=lapses,
-            last_review=now - timedelta(days=interval)
+            last_review=last_review
         )
 
         # 将质量分数 (0-5) 转换为 FSRS 评分 (1-4)

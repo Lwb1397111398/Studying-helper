@@ -484,3 +484,86 @@ class TestFSRSLapsesFix:
 
 if __name__ == "__main__":
     pytest.main([__file__, "-v"])
+
+
+class TestFSRSExistingStatePassthrough:
+    """R4：存量 FSRS 状态直通（stability/difficulty/last_review）。
+
+    修复前：每轮 migrate_sm2_to_fsrs(ef, iv, reps) 重估，上一轮写回的真实
+    stability 被丢弃，FSRS 演进被持续污染；Android 端早已直通（ReviewRepository.kt）。
+    修复后：三参数均非 None → 直通；None → 维持旧估算路径（行为不变快照）。
+    """
+
+    FIXED_NOW = datetime(2026, 1, 1, tzinfo=timezone.utc)
+
+    def test_existing_state_bypasses_sm2_reestimate(self):
+        """单元直通：存量 stability=5.0/difficulty=6.0 参与演进，而非 (8.0, 0.0) 重估值。"""
+        sched = SpacedRepetitionV2(Algorithm.FSRS)
+        schedule = sched.calculate_next_review(
+            4, repetitions=3, ease_factor=2.5, interval=10,
+            now=self.FIXED_NOW, lapses=1,
+            stability=5.0, difficulty=6.0, last_review=self.FIXED_NOW - timedelta(days=3),
+        )
+        # SM-2 迁移估算值（修复前每轮走的路径）为 stability=8.0, difficulty=0.0
+        est_s, est_d = migrate_sm2_to_fsrs(2.5, 10, 3)
+        assert (est_s, est_d) == (8.0, 0.0)
+        # 直通路径下输出从 (5.0, 6.0) 演进，与估算路径必然不同
+        assert schedule.stability != pytest.approx(est_s)
+        assert schedule.stability > 0
+
+    def test_none_params_match_legacy_estimate_path(self):
+        """单元兼容：不传三参数时输出与"显式传估算值"完全一致（None→旧路径等价证明）。"""
+        sched = SpacedRepetitionV2(Algorithm.FSRS)
+        legacy = sched.calculate_next_review(
+            4, repetitions=3, ease_factor=2.5, interval=10,
+            now=self.FIXED_NOW, lapses=1,
+        )
+        est_s, est_d = migrate_sm2_to_fsrs(2.5, 10, 3)
+        explicit = sched.calculate_next_review(
+            4, repetitions=3, ease_factor=2.5, interval=10,
+            now=self.FIXED_NOW, lapses=1,
+            stability=est_s, difficulty=est_d,
+            last_review=self.FIXED_NOW - timedelta(days=10),
+        )
+        assert legacy.stability == pytest.approx(explicit.stability)
+        assert legacy.difficulty == pytest.approx(explicit.difficulty)
+        assert legacy.interval_days == explicit.interval_days
+
+    def test_last_review_drives_elapsed_days(self):
+        """elapsed_days 与 last_review 同源：3 天前复习 → elapsed=3。"""
+        sched = SpacedRepetitionV2(Algorithm.FSRS)
+        recent = sched.calculate_next_review(
+            4, repetitions=3, ease_factor=2.5, interval=10,
+            now=self.FIXED_NOW, lapses=1,
+            stability=5.0, difficulty=6.0, last_review=self.FIXED_NOW - timedelta(days=3),
+        )
+        stale = sched.calculate_next_review(
+            4, repetitions=3, ease_factor=2.5, interval=10,
+            now=self.FIXED_NOW, lapses=1,
+            stability=5.0, difficulty=6.0, last_review=self.FIXED_NOW - timedelta(days=9),
+        )
+        # 距上次复习越久，可提取性越低、成功回忆的稳定性增量越大
+        assert stale.stability > recent.stability
+
+    def test_future_last_review_clamps_elapsed_to_zero(self):
+        """时钟漂移防御：last_review 在未来 → elapsed 截断为 0，不产生负值异常。"""
+        sched = SpacedRepetitionV2(Algorithm.FSRS)
+        schedule = sched.calculate_next_review(
+            4, repetitions=3, ease_factor=2.5, interval=10,
+            now=self.FIXED_NOW, lapses=1,
+            stability=5.0, difficulty=6.0, last_review=self.FIXED_NOW + timedelta(days=1),
+        )
+        assert schedule.stability > 0
+
+    def test_partial_none_stability_falls_back_to_estimate(self):
+        """只传其一仍走估算（两值均非 None 才直通，保证状态对 (S, D) 一致）。"""
+        sched = SpacedRepetitionV2(Algorithm.FSRS)
+        legacy = sched.calculate_next_review(
+            4, repetitions=3, ease_factor=2.5, interval=10,
+            now=self.FIXED_NOW, lapses=1,
+        )
+        partial = sched.calculate_next_review(
+            4, repetitions=3, ease_factor=2.5, interval=10,
+            now=self.FIXED_NOW, lapses=1, stability=5.0,
+        )
+        assert partial.stability == pytest.approx(legacy.stability)

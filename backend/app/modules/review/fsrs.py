@@ -93,7 +93,11 @@ class FSRSScheduler:
 
         # 计算当前可提取性
         if state.last_review is not None:
-            elapsed_days = (now - state.last_review).days
+            # 时区归一：存量直通路径 last_review 可能为 aware（UTC），而 now 可能
+            # 为 naive 本地时间——naive 按本地时区解释后对齐，不改变 now 本身
+            now_for_elapsed = now if now.tzinfo else now.astimezone()
+            last = state.last_review if state.last_review.tzinfo else state.last_review.astimezone()
+            elapsed_days = max((now_for_elapsed - last).days, 0)
         else:
             elapsed_days = 0
 

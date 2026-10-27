@@ -7,6 +7,7 @@ from unittest.mock import AsyncMock, MagicMock, patch
 from app.modules.review.service import ReviewService
 from app.db.models import MasteryRecordModel
 from app.modules.review.spaced_repetition_v2 import Algorithm, SpacedRepetitionV2
+from app.modules.review.fsrs import migrate_sm2_to_fsrs
 from app.modules.review.schemas import (
     MasteryRecord, ExamConfig, ExportFormat,
 )
@@ -521,3 +522,70 @@ class TestExport:
             {},
         )
         assert result.format == ExportFormat.MIND_MAP_PLANTUML
+
+
+class TestFSRSExistingStatePassthrough:
+    """R4：service 层存量 FSRS 状态直通。
+
+    修复前：submit_review_answer 只传 SM-2 三件套（rep/ef/iv），上一轮写回的
+    stability/difficulty/last_reviewed_at 被忽略，每轮从 ef/iv 重估（与 Android
+    端 ReviewRepository 直通行为不一致）。修复后：三值随旧记录传入算法。
+    """
+
+    def _make_mastery_row(self, lapses=1, review_count=3, stability=5.0,
+                          difficulty=5.0, algorithm="fsrs"):
+        now = datetime.now(timezone.utc)
+        return MasteryRecordModel(
+            id="mr-passthrough", user_id="user-1", knowledge_unit_id="unit-1",
+            book_id="book-1", mastery_score=0.5, mastery_level="learning",
+            last_reviewed_at=now, next_review_at=now + timedelta(days=1),
+            review_count=review_count, ease_factor=2.5, interval_days=6,
+            stability=stability, difficulty=difficulty, lapses=lapses,
+            reps=review_count, algorithm=algorithm,
+        )
+
+    @pytest.mark.asyncio
+    async def test_second_review_bypasses_reestimate(self, service, sample_units, mock_db):
+        """第二次复习从存量 (5.0, 5.0) 直通演进，而非 ef/iv 重估路径输出。"""
+        session = await service.start_review("user-1", "book-1", ["unit-1"], sample_units)
+        question = session.questions[0]
+        s_row = _make_session_row(session)
+        mastery_row = self._make_mastery_row()  # stability=5.0, difficulty=5.0
+
+        mock_db.queue_result(_make_session_result(s_row))
+        mock_db.queue_result(_make_session_result(s_row))
+        mock_db.queue_result(_make_session_result(mastery_row))
+        mock_db.queue_result(_make_session_result(mastery_row))
+        mock_db.queue_result(_make_session_result(None))
+
+        await service.submit_review_answer(
+            session.id, question.id, question.correct_answer, user_id="user-1",
+        )
+        # 直通证据：最终 stability 与"以存量值为输入的单元计算"一致；
+        # 重估路径会给出 migrate_sm2_to_fsrs(2.5, 6, 3)=(4.8, 0.0) 起点，必然不同。
+        est_s, est_d = migrate_sm2_to_fsrs(2.5, 6, 3)
+        assert est_s == pytest.approx(4.8) and est_d == 0.0
+        assert mastery_row.stability != pytest.approx(est_s)
+        assert mastery_row.algorithm == "fsrs"
+        assert mastery_row.last_reviewed_at is not None
+
+    @pytest.mark.asyncio
+    async def test_sm2_era_record_falls_back_to_estimate(self, service, sample_units, mock_db):
+        """SM-2 时代记录（stability/difficulty 为 NULL）→ 走估算路径，落库转 FSRS。"""
+        session = await service.start_review("user-1", "book-1", ["unit-1"], sample_units)
+        question = session.questions[0]
+        s_row = _make_session_row(session)
+        mastery_row = self._make_mastery_row(stability=None, difficulty=None, algorithm="sm2")
+
+        mock_db.queue_result(_make_session_result(s_row))
+        mock_db.queue_result(_make_session_result(s_row))
+        mock_db.queue_result(_make_session_result(mastery_row))
+        mock_db.queue_result(_make_session_result(mastery_row))
+        mock_db.queue_result(_make_session_result(None))
+
+        await service.submit_review_answer(
+            session.id, question.id, question.correct_answer, user_id="user-1",
+        )
+        assert mastery_row.algorithm == "fsrs"
+        assert mastery_row.stability is not None
+        assert mastery_row.difficulty is not None
