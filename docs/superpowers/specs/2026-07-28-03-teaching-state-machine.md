@@ -1,19 +1,19 @@
 # 03 教学状态机（Teaching State Machine）
 
-> 状态：设计完整版 v1（契约修正后）  
-> 依赖：`01-domain-contracts.md`、`02-unit-analysis-pipeline.md`  
-> 目标：服务端掌权的教学循环；LLM 生成内容/辅助评分，**不**决定状态跳转。  
+> 状态：设计完整版 v1（契约修正后）
+> 依赖：`01-domain-contracts.md`、`02-unit-analysis-pipeline.md`
+> 目标：服务端掌权的教学循环；LLM 生成内容/辅助评分，**不**决定状态跳转。
 > 第一刀范围：**单单元**闭环（含前置子会话）。多单元 playlist 复用同一状态机实例序列。
 
 ---
 
 ## 0. 设计原则
 
-1. **状态 + 事件 + 守卫** 三元组，禁止前端点 `continue` 就盲进。  
-2. **目标级通过**，禁止只用会话平均分。  
-3. **用户提问 = 中断**，不是长期状态。  
-4. **连续失败 ≠ 能力标签 blocked**；用 `paused` + `needs_support`。  
-5. 会话绑定 `asset_id`；全程题目与标准来自该版本。  
+1. **状态 + 事件 + 守卫** 三元组，禁止前端点 `continue` 就盲进。
+2. **目标级通过**，禁止只用会话平均分。
+3. **用户提问 = 中断**，不是长期状态。
+4. **连续失败 ≠ 能力标签 blocked**；用 `paused` + `needs_support`。
+5. 会话绑定 `asset_id`；全程题目与标准来自该版本。
 6. 与旧阶段名兼容映射，便于渐进替换 UI。
 
 ---
@@ -146,7 +146,7 @@ session_may_complete iff
   AND no unresolved required prerequisites
 ```
 
-平均分仅用于 UI。  
+平均分仅用于 UI。
 supporting 失败 → 生成 ReviewItem，不单独阻塞 `reflect`（可配置更严策略）。
 
 ---
@@ -155,15 +155,15 @@ supporting 失败 → 生成 ReviewItem，不单独阻塞 `reflect`（可配置�
 
 ### 6.1 prepare
 
-**输入**：session 请求、unit_id  
-**动作**：解析 active/`asset_id`；若 pending 则 enqueue AnalysisJob priority=5  
-**输出**：ASSET_READY 或错误码  
+**输入**：session 请求、unit_id
+**动作**：解析 active/`asset_id`；若 pending 则 enqueue AnalysisJob priority=5
+**输出**：ASSET_READY 或错误码
 
 ### 6.2 diagnose
 
-**输入**：asset.prerequisites（required）、弱 objective  
-**出题数**：1～3，不固定 2  
-**输出**：LearningEvidence(source_type=diagnose) + diagnosis_summary  
+**输入**：asset.prerequisites（required）、弱 objective
+**出题数**：1～3，不固定 2
+**输出**：LearningEvidence(source_type=diagnose) + diagnosis_summary
 
 分支含义：
 
@@ -177,23 +177,23 @@ supporting 失败 → 生成 ReviewItem，不单独阻塞 `reflect`（可配置�
 
 ### 6.3 activate / explain
 
-**输入**：teaching_strategy、claims、examples  
-**输出**：TeachingTurn(turn_type=teaching)，content_origin 正确标记  
-**degraded_asset**：explain 以原文+模板为主，限制扩展  
+**输入**：teaching_strategy、claims、examples
+**输出**：TeachingTurn(turn_type=teaching)，content_origin 正确标记
+**degraded_asset**：explain 以原文+模板为主，限制扩展
 
 LLM **建议**下一阶段，服务端可采纳建议仅当事件合法；最终 transition 服务端做。
 
 ### 6.4 guided_practice
 
-低风险：补全、判断、辨例。  
-每题写 evidence `source_type=practice`（可权重低于 assess）。  
+低风险：补全、判断、辨例。
+每题写 evidence `source_type=practice`（可权重低于 assess）。
 默认 1～3 轮，由策略与 diagnosis 决定。
 
 ### 6.5 assess / reassess
 
-- 题来自 asset.retrieval_questions，绑定 objective  
-- reassess **禁止**同 id 原题；用 `equivalent_group_id` 或变体生成器  
-- 评分：规则优先，短答 hybrid；写 evidence `assessment|reassessment`  
+- 题来自 asset.retrieval_questions，绑定 objective
+- reassess **禁止**同 id 原题；用 `equivalent_group_id` 或变体生成器
+- 评分：规则优先，短答 hybrid；写 evidence `assessment|reassessment`
 - 产出 error_type 分类（规则+LLM 辅助，服务端枚举校验）
 
 ### 6.6 repair
@@ -222,20 +222,20 @@ Child TeachingSession:
 
 子会话完成后：
 
-- 更新父 tracker 前置状态  
-- 进入 `reassess`（若从 assess 触发）或 `diagnose`（若从 diagnose 触发）  
-- **不**覆盖父 `asset_id` 与原 objectives  
+- 更新父 tracker 前置状态
+- 进入 `reassess`（若从 assess 触发）或 `diagnose`（若从 diagnose 触发）
+- **不**覆盖父 `asset_id` 与原 objectives
 
 ### 6.8 reflect / schedule_review / completed
 
-reflect：生成掌握摘要、薄弱点、用户笔记钩子。  
+reflect：生成掌握摘要、薄弱点、用户笔记钩子。
 schedule_review：
 
-- 失败/临界 objective → ReviewItem  
-- 更新 unit 级 mastery 投影（兼容旧表）  
-- FSRS 字段由证据事件计算（服务端权威；客户端离线临时值同步后重算）  
+- 失败/临界 objective → ReviewItem
+- 更新 unit 级 mastery 投影（兼容旧表）
+- FSRS 字段由证据事件计算（服务端权威；客户端离线临时值同步后重算）
 
-completed：`completion_status=completed` 仅当 required 通过。  
+completed：`completion_status=completed` 仅当 required 通过。
 若用户 skip 评估：`completion_status` 可用 `abandoned` 或扩展 `visited_only`（实现时二选一写死，推荐 `visited_only` 进 completion_status 枚举）。
 
 ---
@@ -274,10 +274,10 @@ completed：`completion_status=completed` 仅当 required 通过。
 
 每次可评分作答创建 `LearningEvidence`：
 
-- 必填：user/book/unit/objective/attempt_id/source_type/result/score/evaluator  
-- assess/reassess 权重最高  
-- diagnose 用于路径，不单独宣布 unit mastered  
-- practice 可提升信心但不替代 required assess（配置：practice 最高折算 0.5 * score 可选；第一版可 **不**计入 best_score，仅 assess 计）  
+- 必填：user/book/unit/objective/attempt_id/source_type/result/score/evaluator
+- assess/reassess 权重最高
+- diagnose 用于路径，不单独宣布 unit mastered
+- practice 可提升信心但不替代 required assess（配置：practice 最高折算 0.5 * score 可选；第一版可 **不**计入 best_score，仅 assess 计）
 
 **第一版推荐**：`best_score` 只取 assessment + reassessment，简单可证。
 
@@ -324,29 +324,29 @@ completed：`completion_status=completed` 仅当 required 通过。
 
 ## 13. 单单元端到端验收剧本
 
-1. 资产 teachable → start → prepare → diagnose  
-2. 诊断 mixed → activate → explain → practice → assess  
-3. 一 required 失败 confusion → repair → reassess 通过  
-4. reflect → schedule_review → completed  
-5. 库中 ≥2 条 LearningEvidence，ReviewItem 或 mastery 更新  
-6. 中途 USER_ASKED 外部知识，标注 origin，状态恢复  
-7. 另测：required prereq 缺失 → child session → 回父 reassess  
-8. 另测：连续失败 → paused + needs_support，非 completed  
+1. 资产 teachable → start → prepare → diagnose
+2. 诊断 mixed → activate → explain → practice → assess
+3. 一 required 失败 confusion → repair → reassess 通过
+4. reflect → schedule_review → completed
+5. 库中 ≥2 条 LearningEvidence，ReviewItem 或 mastery 更新
+6. 中途 USER_ASKED 外部知识，标注 origin，状态恢复
+7. 另测：required prereq 缺失 → child session → 回父 reassess
+8. 另测：连续失败 → paused + needs_support，非 completed
 
 ---
 
 ## 14. 与现有 teaching service 的接入策略
 
-1. 保留旧 endpoint，增加 `engine=v2` 或 feature flag。  
-2. `current_phase` 投影自 v2 state。  
-3. `assessment_json` 逐步改为 evidence id 引用。  
-4. Android 端侧 TeachingRepository 长期应对齐同一状态枚举；第一刀可先 Web/后端。  
+1. 保留旧 endpoint，增加 `engine=v2` 或 feature flag。
+2. `current_phase` 投影自 v2 state。
+3. `assessment_json` 逐步改为 evidence id 引用。
+4. Android 端侧 TeachingRepository 长期应对齐同一状态枚举；第一刀可先 Web/后端。
 
 ---
 
 ## 15. OPEN
 
-- `visited_only` 是否加入 completion_status 枚举（推荐是）  
-- practice 是否计入 best_score（推荐否）  
-- 诊断 already_mastered 默认挑战还是建议跳过（推荐：建议跳过 + 可选挑战）  
-- 子会话 unit 找不到时 external_knowledge 迷你课深度  
+- `visited_only` 是否加入 completion_status 枚举（推荐是）
+- practice 是否计入 best_score（推荐否）
+- 诊断 already_mastered 默认挑战还是建议跳过（推荐：建议跳过 + 可选挑战）
+- 子会话 unit 找不到时 external_knowledge 迷你课深度

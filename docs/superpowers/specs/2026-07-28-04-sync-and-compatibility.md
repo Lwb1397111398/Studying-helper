@@ -1,8 +1,8 @@
 # 04 同步与兼容契约（Sync and Compatibility）
 
-> 状态：设计完整版 v1  
-> 依赖：`01-domain-contracts.md`（及 02/03 产生的对象）  
-> 目标：规定 Web / 后端 / Android 对学习资产与证据的**所有权、缓存、合并、冲突、版本兼容**。  
+> 状态：设计完整版 v1
+> 依赖：`01-domain-contracts.md`（及 02/03 产生的对象）
+> 目标：规定 Web / 后端 / Android 对学习资产与证据的**所有权、缓存、合并、冲突、版本兼容**。
 > 背景：当前同步是 **JSON 离线包**（`SCHEMA_VERSION = "1.0"`），导入以**覆盖式 upsert** 为主，不是实时 CRDT 云同步。
 
 ---
@@ -25,15 +25,15 @@
 
 ## 1. 设计原则
 
-1. **服务端权威材料 vs 多端事件**  
-   理解/资产/标准答案以服务端（或导出时的权威快照）为准；学习证据与会话事件可多端产生。  
-2. **追加事件优先于覆盖最终状态**  
-   尤其 `LearningEvidence`、`TeachingTurn`。  
-3. **FSRS 最终调度可重算**  
-   客户端离线临时 due/stability；同步后服务端按证据重算或选主。  
-4. **旧客户端可降级**  
-   未知字段忽略；未知集合忽略；不可教新状态映射到旧 phase。  
-5. **不默认同步“全书全部资产”**  
+1. **服务端权威材料 vs 多端事件**
+   理解/资产/标准答案以服务端（或导出时的权威快照）为准；学习证据与会话事件可多端产生。
+2. **追加事件优先于覆盖最终状态**
+   尤其 `LearningEvidence`、`TeachingTurn`。
+3. **FSRS 最终调度可重算**
+   客户端离线临时 due/stability；同步后服务端按证据重算或选主。
+4. **旧客户端可降级**
+   未知字段忽略；未知集合忽略；不可教新状态映射到旧 phase。
+5. **不默认同步“全书全部资产”**
    按当前模块 + 预热窗口缓存。
 
 ---
@@ -63,23 +63,23 @@
 
 ### 3.1 必须可离线
 
-- 当前书的章节树与当前模块 unit 原文  
-- 当前 + 后续 2～3 单元的 **active/degraded** 资产（若已生成）  
-- 进行中 TeachingSession + Turns  
-- 本地产生的 Evidence（未同步）  
-- 到期 Review 队列所需题目（不含未使用全书题库）  
+- 当前书的章节树与当前模块 unit 原文
+- 当前 + 后续 2～3 单元的 **active/degraded** 资产（若已生成）
+- 进行中 TeachingSession + Turns
+- 本地产生的 Evidence（未同步）
+- 到期 Review 队列所需题目（不含未使用全书题库）
 
 ### 3.2 可按需拉取/导入
 
-- 全书 DocumentBlock  
-- 非当前模块资产  
-- 完整 Understanding  
+- 全书 DocumentBlock
+- 非当前模块资产
+- 完整 Understanding
 
 ### 3.3 不要默认塞进日常同步包
 
-- Prompt 全文  
-- 模型原始 completion 日志  
-- 失败 job 调试堆栈（可另导出诊断包）  
+- Prompt 全文
+- 模型原始 completion 日志
+- 失败 job 调试堆栈（可另导出诊断包）
 
 ---
 
@@ -94,10 +94,10 @@
 
 规则：
 
-- 导出写入 `schema_version`  
-- 导入：  
-  - 主版本差 > 0 且不支持 → 明确错误  
-  - 同主版本新次版本：忽略未知字段/集合，已知集合照常  
+- 导出写入 `schema_version`
+- 导入：
+  - 主版本差 > 0 且不支持 → 明确错误
+  - 同主版本新次版本：忽略未知字段/集合，已知集合照常
 - Android 旧版：忽略 1.1 新集合，仍能导入 books/units/mastery；**不得崩溃**
 
 ---
@@ -130,9 +130,9 @@
 
 导入幂等：
 
-- 同 `id` 的 evidence/turn：**不覆盖** content，仅补 `server_received_at`  
-- 同 `attempt_id` 已存在：跳过  
-- asset 同 `id`：以 payload 为准（权威快照）  
+- 同 `id` 的 evidence/turn：**不覆盖** content，仅补 `server_received_at`
+- 同 `attempt_id` 已存在：跳过
+- asset 同 `id`：以 payload 为准（权威快照）
 
 ---
 
@@ -147,7 +147,7 @@ SyncCursor
 - last_seq by collection
 ```
 
-事件表带 `server_seq` / `client_created_at`。  
+事件表带 `server_seq` / `client_created_at`。
 第一版完整设计允许先全量导出 evidences 子集（按 book_id + since）。
 
 ---
@@ -166,9 +166,9 @@ if incoming.source_revision 与本地书不一致: 整书材料需要重导入�
 
 优先：
 
-1. 同 id 合并：取并集 turns/evidences（靠追加集合）  
-2. 状态字段：用 `updated_at` 较新，但 **completed 不被 in_progress 覆盖**（单调状态保护）  
-3. 若两端都 completed 且 asset_id 不同：保留两条？不允许同 id；导出前应避免——冲突预览让用户选  
+1. 同 id 合并：取并集 turns/evidences（靠追加集合）
+2. 状态字段：用 `updated_at` 较新，但 **completed 不被 in_progress 覆盖**（单调状态保护）
+3. 若两端都 completed 且 asset_id 不同：保留两条？不允许同 id；导出前应避免——冲突预览让用户选
 
 ### 8.3 mastery_records vs evidences
 
@@ -217,14 +217,14 @@ cached asset 若 unit.source_revision 变化 → stale，不可开新课
 
 ## 11. 安全与隐私
 
-- 同步包可含用户作答全文：导出提示  
-- 不把 API Key 写入同步包  
-- 书本原文 blocks 体积大：允许按 book 导出与“学习进度包”分离（进度包可只含 evidence/session + asset ids，缺资产则需材料包）  
+- 同步包可含用户作答全文：导出提示
+- 不把 API Key 写入同步包
+- 书本原文 blocks 体积大：允许按 book 导出与“学习进度包”分离（进度包可只含 evidence/session + asset ids，缺资产则需材料包）
 
 推荐产品层两种包：
 
-1. **材料包**：blocks + assets + understandings  
-2. **进度包**：sessions + turns + evidences + mastery + plan  
+1. **材料包**：blocks + assets + understandings
+2. **进度包**：sessions + turns + evidences + mastery + plan
 
 第一版可仍单包，但字段上可分组，便于后续拆分。
 
@@ -234,13 +234,13 @@ cached asset 若 unit.source_revision 变化 → stale，不可开新课
 
 必须自动化：
 
-1. `SYNC_COLLECTION_CONTRACT` 字段三角一致（package/preview/import）  
-2. 1.0 包在 1.1 导入器可导入  
-3. 1.1 包在“旧导入器模拟”（忽略未知）不抛  
-4. evidence 重复 id 不加倍  
-5. completed session 不被旧 in_progress 覆盖  
-6. Android DTO 序列化往返  
-7. 双写：有 asset 时旧 unit.summary 非空（过渡期）  
+1. `SYNC_COLLECTION_CONTRACT` 字段三角一致（package/preview/import）
+2. 1.0 包在 1.1 导入器可导入
+3. 1.1 包在“旧导入器模拟”（忽略未知）不抛
+4. evidence 重复 id 不加倍
+5. completed session 不被旧 in_progress 覆盖
+6. Android DTO 序列化往返
+7. 双写：有 asset 时旧 unit.summary 非空（过渡期）
 
 ---
 
@@ -248,7 +248,7 @@ cached asset 若 unit.source_revision 变化 → stale，不可开新课
 
 | 阶段 | 同步影响 |
 | --- | --- |
-| M0 DocumentBlock | 可先不同步；仅后端 | 
+| M0 DocumentBlock | 可先不同步；仅后端 |
 | M1 UnitLearningAsset | 启动 1.1 可选集合 + unit 双写 |
 | M2 LearningEvidence | 追加导入逻辑；mastery 重算 |
 | M3 Teaching state_v2 字段 | sessions 扩展列 |
@@ -258,26 +258,26 @@ cached asset 若 unit.source_revision 变化 → stale，不可开新课
 
 ## 14. 明确非目标（本阶段）
 
-- 实时多用户协作编辑同一单元  
-- 自动语义合并两段不同讲解文案  
-- 跨用户共享证据  
-- 无预览的静默毁灭性覆盖全书  
+- 实时多用户协作编辑同一单元
+- 自动语义合并两段不同讲解文案
+- 跨用户共享证据
+- 无预览的静默毁灭性覆盖全书
 
 ---
 
 ## 15. 验收标准
 
-- [ ] 所有权矩阵中每类数据有唯一冲突策略  
-- [ ] schema 1.0 / 1.1 兼容路径可测  
-- [ ] Evidence 追加幂等  
-- [ ] 资产版本与会话 pin 在同步后仍一致  
-- [ ] 旧 Android 不因新字段崩溃  
-- [ ] 文档回答：谁产生、谁可改、何时可驱动教学（与 01 一致）  
+- [ ] 所有权矩阵中每类数据有唯一冲突策略
+- [ ] schema 1.0 / 1.1 兼容路径可测
+- [ ] Evidence 追加幂等
+- [ ] 资产版本与会话 pin 在同步后仍一致
+- [ ] 旧 Android 不因新字段崩溃
+- [ ] 文档回答：谁产生、谁可改、何时可驱动教学（与 01 一致）
 
 ---
 
 ## 16. OPEN
 
-- 是否第一版就拆“材料包/进度包”两个文件（推荐设计支持，产品默认同包）  
-- Android 是否允许离线生成 degraded 资产（若允许，导出时 `model_provider=on_device`）  
-- incremental_sync 与全量包双轨时间表  
+- 是否第一版就拆“材料包/进度包”两个文件（推荐设计支持，产品默认同包）
+- Android 是否允许离线生成 degraded 资产（若允许，导出时 `model_provider=on_device`）
+- incremental_sync 与全量包双轨时间表

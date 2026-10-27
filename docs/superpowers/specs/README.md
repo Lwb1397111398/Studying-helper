@@ -11,11 +11,11 @@
 
 ## 实现顺序（文档共识）
 
-1. 钉契约（本四份）  
-2. DocumentBlock + 单单元资产管线  
-3. 教学修复闭环 + LearningEvidence  
-4. AnalysisJob 按需调度  
-5. 路径/UI 统一与 Android 同步升级  
+1. 钉契约（本四份）
+2. DocumentBlock + 单单元资产管线
+3. 教学修复闭环 + LearningEvidence
+4. AnalysisJob 按需调度
+5. 路径/UI 统一与 Android 同步升级
 
 ## 实现计划
 
@@ -31,11 +31,11 @@
 
 ## 已核对的项目事实摘要
 
-- 无持久化 DocumentBlock；PDF 仅有解析期 page_map  
-- 单元分析写在 knowledge_units 列；TestQuestion 无稳定 id  
-- 迁移：后端 ADD COLUMN；Android Room v2  
-- 同步：SCHEMA_VERSION 1.0，覆盖 upsert  
-- LLM：json_object，非 strict JSON Schema  
+- 无持久化 DocumentBlock；PDF 仅有解析期 page_map
+- 单元分析写在 knowledge_units 列；TestQuestion 无稳定 id
+- 迁移：后端 ADD COLUMN；Android Room v2
+- 同步：SCHEMA_VERSION 1.0，覆盖 upsert
+- LLM：json_object，非 strict JSON Schema
 
 ## 状态
 
