@@ -1,0 +1,13 @@
+=== P2 导入冒烟 2026-10-28 04:19:16 ===
+前置留痕 rg -l '_RR' app/ 修复前: app/modules/adaptive_design/service.py（4 处局部导入 + 4 处调用）；修复后:
+  rg '_RR' app/ -> 0 命中
+$ python -c "import app.modules.review.fsrs"
+  -> exit 0 OK
+$ python -c "import app.modules.adaptive_design.service"
+  -> exit 0 OK
+$ python -c "import app.modules.review.fsrs; import app.modules.adaptive_design.service"
+  -> exit 0 OK
+$ python -c "import app.modules.adaptive_design.service; import app.modules.review.fsrs"
+  -> exit 0 OK
+pyflakes 三文件: 0 报告
+pytest type_hints+adaptive_design+review: 见提交信息

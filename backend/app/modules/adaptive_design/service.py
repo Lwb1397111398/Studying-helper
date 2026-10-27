@@ -9,7 +9,6 @@ M2 接入 LLM，本文件保留规则化作为回退。
 import json
 from datetime import datetime, timezone
 from typing import Optional
-from uuid import uuid4
 
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -24,6 +23,7 @@ from app.db.models import (
     KnowledgeUnitModel,
 )
 from app.modules.adaptive_design.kg_adapter import KGAdapter, UnitBrief
+from app.modules.adaptive_design.schemas import ReplanResult, StageFeedback
 from app.modules.adaptive_design.profile_builder import infer_profile
 from app.modules.adaptive_design.prompts import (
     MACRO_DESIGN_PROMPT, MICRO_PLAN_PROMPT, REPLAN_PROMPT,
@@ -385,7 +385,6 @@ class AIDService:
         保守原则：跳过需 mastery>=0.85；revisit<=2。
         LLM 不可用回退为"按 mastery 阈值的规则化"。
         """
-        from app.modules.adaptive_design.schemas import ReplanResult as _RR
 
         design = await self._load_active_design(book_id, user_id)
         if not design:
@@ -393,7 +392,7 @@ class AIDService:
         macro = MacroDesignSchema.model_validate_json(design.macro_design_json)
         next_idx = design.current_module_index + 1
         if next_idx >= len(macro.modules):
-            return _RR(next_module_index=design.current_module_index,
+            return ReplanResult(next_module_index=design.current_module_index,
                        revisit_unit_ids=[], skip_unit_ids=[], rationale="已是最后模块")
 
         # 收集刚结束模块 + 下一模块的掌握度
@@ -515,7 +514,6 @@ class AIDService:
         weak_claims_block: str = "（无）",
         weak_claims: list | None = None,
     ):
-        from app.modules.adaptive_design.schemas import ReplanResult as _RR
         prompt = REPLAN_PROMPT.format(
             weak_points=", ".join(feedback.weak_points[:5]) or "无",
             user_feedback=(feedback.user_feedback or "无")[:200],
@@ -539,7 +537,7 @@ class AIDService:
                     if len(revisit) >= 2:
                         break
         skip = [u for u in data.get("skip_unit_ids", []) if u in next_skel.unit_ids]
-        return _RR(
+        return ReplanResult(
             next_module_index=next_skel.index,
             revisit_unit_ids=revisit[:2], skip_unit_ids=skip,
             rationale=data.get("rationale", ""),
@@ -547,9 +545,8 @@ class AIDService:
 
     def _replan_rulebased(self, next_skel, feedback, mastery_map: dict):
         """规则化 replan：按 mastery 阈值跳过，无 revisit（保守）—— 同步兼容入口。"""
-        from app.modules.adaptive_design.schemas import ReplanResult as _RR
         skip = [u for u, m in mastery_map.items() if m >= 0.85 and u in next_skel.unit_ids]
-        return _RR(
+        return ReplanResult(
             next_module_index=next_skel.index,
             revisit_unit_ids=[], skip_unit_ids=skip[:2],
             rationale="规则化：跳过已高分掌握单元",
@@ -560,7 +557,6 @@ class AIDService:
         *, book_id: str, user_id: str, weak_claims: list | None = None,
     ):
         """规则化 replan + Step4：弱核心 claim 单元 revisit / hint 上调。"""
-        from app.modules.adaptive_design.schemas import ReplanResult as _RR
         from app.db.models import KnowledgeUnitModel
         from sqlalchemy import update as sql_update
 
@@ -588,7 +584,7 @@ class AIDService:
         rationale = "规则化：跳过已高分掌握单元"
         if revisit:
             rationale += f"；弱核心 claim 单元优先回访: {revisit}"
-        return _RR(
+        return ReplanResult(
             next_module_index=next_skel.index,
             revisit_unit_ids=revisit[:2],
             skip_unit_ids=skip[:2],

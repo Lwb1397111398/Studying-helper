@@ -13,6 +13,8 @@ from datetime import datetime, timedelta
 from typing import Tuple, Optional
 import math
 
+from app.db.models import MasteryRecordModel  # noqa: F401 —— 注解引用（get_type_hints 可解析）
+
 # FSRS v4 默认参数（经过大量数据验证）
 DEFAULT_PARAMETERS = [
     0.4, 0.6, 2.4, 5.8, 4.93, 0.94, 0.86, 0.01,
@@ -244,7 +246,7 @@ class FSRSScheduler:
 
 
 def create_fsrs_state_from_mastery_record(
-    record: 'MasteryRecordModel'
+    record: MasteryRecordModel
 ) -> FSRSState:
     """从现有掌握度记录创建 FSRS 状态"""
     return FSRSState(
