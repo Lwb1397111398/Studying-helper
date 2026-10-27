@@ -1,0 +1,6 @@
+PREFLIGHT_PASS  (2026-10-28 04:34:37)
+openapi: PASS（91 条路径 → preflight_paths.txt）
+core-chain(analyze→asset→v2 start→export→回灌): PASS
+e2e 基建: PASS（test:e2e script=True, playwright.config.ts=True）
+playwright 版本: Version 1.61.1
+chromium 启动冒烟: PASS（install 输出 → preflight_playwright_install.txt）

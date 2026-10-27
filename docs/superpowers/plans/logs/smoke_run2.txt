@@ -1,0 +1,22 @@
+  [PASS] smoke: openapi 含全部关键路径 — 91 条路径
+  [PASS] smoke: GET /api/v1/books 200 — status=200
+  [PASS] smoke: sync/preview 200 — status=200
+  [PASS] smoke: sync/import 200 — status=200
+  [PASS] smoke: 同库重放 import 不膨胀（delete+add 语义） — units 2 -> 2
+  [PASS] smoke: import 后 books 含 round4-book — books=1
+  [PASS] smoke: sync/export 200 — status=200
+  [PASS] smoke: round4-book units 非空 — 选取 round4-unit-a
+  [PASS] smoke: 导出计数 ≥ 导入 — books 1≥1 units 2≥2
+  [PASS] smoke: analyze 2xx（同步产出资产） — status=200 body={'asset_id': '107364c5-ea45-4571-b117-281366a771b0', 'unit_id': 'round4-unit-a', 'version': 1, 'status': 'active', 'read
+  [PASS] smoke: AnalyzeResponse 关键字段 — {'status': 'active', 'readiness_status': 'degraded_teachable'}
+  [PASS] smoke: GET asset 200 — status=200
+  [PASS] smoke: asset status=active 且 readiness 可教 — status=active readiness=degraded_teachable
+  [PASS] smoke: 资产内容非空（claims/assessment_items 防假绿） — claims=1 items=2
+  [PASS] smoke: teaching v2 start 2xx — status=200 body={'id': 'f7a3215e-c8ee-482e-b03a-3829426c6356', 'engine': 'v2', 'book_id': 'round4-book', 'unit_ids': ['round4-unit-a'], 'asset_id': '107364c5-ea45-457
+  [PASS] smoke: session 结构（id 非空 + state_v2） — id=f7a3215e-c8ee-482e… state=diagnose
+  [PASS] smoke: 导出包含该 v2 会话（契约含 teaching_sessions） — sessions=2
+  [PASS] smoke: 导出包回灌 import 200 — status=200
+  [PASS] smoke: 回灌后计数不膨胀 — units 2 vs 2
+  [PASS] smoke: 回灌后 session 仍可查且契约字段保值 — {'current_phase': 'activate', 'status': 'active'} vs {'current_phase': 'activate', 'status': 'active'}
+
+SMOKE_PASS：20 项全过
