@@ -53,8 +53,7 @@ def main() -> int:
     parser.add_argument("--out", default="docs/superpowers/plans/logs/final_gate.md")
     parser.add_argument("--dry-run", action="store_true")
     parser.add_argument("--source-sha256", default="", help="真实库当前 hash（外部算好传入）")
-    parser.add_argument("--pre-sha256", default="",
-                        default_missing="", help="开工前记录的源库 hash")
+    parser.add_argument("--pre-sha256", default="", help="开工前记录的源库 hash")
     parser.add_argument("--backup-sha256", default="", help="备份库 hash")
     args = parser.parse_args()
 
