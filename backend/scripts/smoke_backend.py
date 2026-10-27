@@ -262,17 +262,15 @@ def run_core_chain(step_prefix: str) -> dict:
     session_id = sess.get("id", "")
 
     # 7) 导出回灌：session 保值 + 计数不膨胀
-    # 前置核对（计划案）：sync 契约 SyncTeachingSession 只有 v1 字段
-    # （current_phase/status/strategy_json），无 state/primary_unit_id/state_v2
-    # → 按计划案降级为"回灌后 session 仍可查、未被误删"，白名单用契约真实字段
-    #   current_phase+status。v2 专属字段（state_v2/asset_id）不在 sync 契约 =
-    # 覆盖缺口，按 P4 边界不改业务代码，上报止损流程。
+    # R1a 后 sync 契约 SyncTeachingSession 含 v1 字段 + v2 三字段
+    # （state_v2/asset_id/completion_status，默认 None）→ 保值断言升级为五字段；
+    # v2 会话的 state_v2/asset_id 在 start 后非空，回灌必须保值。
     status, exported2 = http_req("GET", "/api/v1/sync/export")
     sessions = [s for s in (exported2.get("teaching_sessions") or []) if s.get("id") == session_id]
     check(f"{step_prefix}: 导出包含该 v2 会话（契约含 teaching_sessions）",
           status == 200 and bool(sessions),
           f"sessions={len(exported2.get('teaching_sessions') or [])}")
-    saved_state = {k: sessions[0].get(k) for k in ("current_phase", "status")} if sessions else {}
+    saved_state = {k: sessions[0].get(k) for k in ("current_phase", "status", "state_v2", "asset_id", "completion_status")} if sessions else {}
 
     # 回灌导出包（落临时文件 → multipart）
     reimport_file = Path(tempfile.mkdtemp(prefix="smoke_reimport_")) / "reimport.json"
@@ -286,7 +284,7 @@ def run_core_chain(step_prefix: str) -> dict:
               f"units {reimp.get('units_imported')} vs {imp1.get('units_imported')}")
         status, exported3 = http_req("GET", "/api/v1/sync/export")
         s2 = [s for s in (exported3.get("teaching_sessions") or []) if s.get("id") == session_id]
-        got_state = {k: s2[0].get(k) for k in ("current_phase", "status")} if s2 else {}
+        got_state = {k: s2[0].get(k) for k in ("current_phase", "status", "state_v2", "asset_id", "completion_status")} if s2 else {}
         check(f"{step_prefix}: 回灌后 session 仍可查且契约字段保值",
               bool(s2) and got_state == saved_state and bool(saved_state),
               f"{got_state} vs {saved_state}")

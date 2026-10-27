@@ -88,6 +88,21 @@ def main() -> int:
     todo = "TODO_P6" in PROGRESS_FILE.read_text(encoding="utf-8") if PROGRESS_FILE.exists() else True
     checks.append(("当前进度.md 无 TODO_P6 残留", not todo, ""))
 
+    # 6b) pyflakes 过滤白名单后 = 0（C1 门禁固化，round2）
+    pyflakes_out = run(f'"{sys.executable}" -m pyflakes app')
+    pyflakes_lines = [l for l in pyflakes_out.strip().splitlines() if l.strip()]
+    wl = PROJECT_ROOT / "docs" / "superpowers" / "plans" / "logs" / "pyflakes_whitelist.txt"
+    wl_files = set()
+    if wl.exists():
+        for wl_line in wl.read_text(encoding="utf-8").splitlines():
+            if wl_line.startswith("#") or not wl_line.strip():
+                continue
+            wl_files.add(wl_line.split()[0].replace("/", "\\"))
+    residual = [l for l in pyflakes_lines if l.split(":")[0] not in wl_files]
+    checks.append(("pyflakes 过滤白名单后为 0（C1 门禁固化）", not residual,
+                   f"共 {len(pyflakes_lines)} 条 / 白名单外残留 {len(residual)} 条" +
+                   ("" if not residual else "；首条: " + residual[0][:120])))
+
     # 7) 真实库三方 hash
     if args.source_sha256:
         trio = f"开工前={args.pre_sha256 or '未记录'} / 当前={args.source_sha256} / 备份={args.backup_sha256 or '未记录'}"
@@ -101,6 +116,10 @@ def main() -> int:
     pn = [c for c in commits if any(c.split(" ", 1)[-1].startswith(p)
           for p in ("P1:", "P2:", "P3a", "P4:", "P5:", "P6"))]
     checks.append((f"log {args.base}..HEAD 含 P1~P6 commit", len(pn) >= 5, f"{len(commits)} commits, Pn={len(pn)}"))
+    r2 = [c for c in commits if any(c.split(" ", 1)[-1].startswith(p)
+          for p in ("R1a:", "R1b:", "R4:", "W1:", "C1-a:", "C1-b:", "D1:", "P6'"))]
+    checks.append((f"log {args.base}..HEAD 含 round2 计划 commit（R1a/R1b/R4/C1/D1）",
+                   len(r2) >= 4, f"round2 前缀 commit={len(r2)}"))
     checks.append(("git status -sb（工作区状态，人工确认干净）", True, status_sb[0] if status_sb else ""))
 
     lines = [
