@@ -1,5 +1,5 @@
 import client from './client';
-import type { KnowledgeUnit, LearningRecord, LearningStats, LearningReport, KeyPoint } from '../types';
+import type { KnowledgeUnit, LearningRecord, LearningStats, LearningReport, KeyPoint, BookDeepOverview } from '../types';
 
 // 获取知识单元详情
 export const getKnowledgeUnit = (unitId: string): Promise<KnowledgeUnit> => {
@@ -34,6 +34,42 @@ export const getLearningStats = (): Promise<LearningStats> => {
 // 获取学习报告
 export const getLearningReport = (period: string = 'week'): Promise<LearningReport> => {
   return client.get('/v1/learning/report', { params: { period } });
+};
+
+// 获取全书鸟瞰
+export const getDeepOverview = (
+  bookId: string,
+): Promise<{ book_id: string; overview: BookDeepOverview | null }> => {
+  return client.get(`/v1/learning/${bookId}/overview-deep`);
+};
+
+// 全书概念词典
+export const getBookConcepts = (
+  bookId: string,
+): Promise<{
+  book_id: string;
+  total: number;
+  concepts: Array<{
+    id: string;
+    name: string;
+    definition?: string | null;
+    aliases?: string[];
+    first_unit_id?: string | null;
+    first_chapter_id?: string | null;
+    source: string;
+  }>;
+}> => {
+  return client.get(`/v1/learning/${bookId}/concepts`);
+};
+
+// 手动触发生成全书鸟瞰
+export const generateDeepOverview = (
+  bookId: string,
+  force: boolean = true,
+): Promise<{ book_id: string; status: string; message: string }> => {
+  return client.post(`/v1/learning/${bookId}/overview-deep`, null, {
+    params: { force },
+  });
 };
 
 // ── 以下为新接口 ──
@@ -107,22 +143,6 @@ export const restoreUnit = (
   return client.post(`/v1/learning/units/${unitId}/restore`, snapshot);
 };
 
-// 选择性学习（按章节）
-export const startSelectedLearning = (
-  bookId: string,
-  chapterIds: string[],
-): Promise<{
-  book_id: string;
-  total_units: number;
-  learned_count: number;
-  failed_count: number;
-  skipped_count: number;
-  total_token_cost: number;
-  duration_seconds: number;
-}> => {
-  return client.post(`/v1/learning/${bookId}/learn-selected`, { chapter_ids: chapterIds }, { timeout: 1800000 });
-};
-
 // 获取学习进度
 export const getLearningProgress = (
   bookId: string,
@@ -148,20 +168,3 @@ export const getAILearningProgress = (
   return client.get(`/v1/learning/${bookId}/learn-progress`);
 };
 
-// 获取书籍概览（含难度、预计时长）
-export const getBookOverview = (
-  bookId: string,
-): Promise<{
-  book_id: string;
-  title: string;
-  total_chapters: number;
-  chapters: Array<{
-    chapter_id: string;
-    title: string;
-    unit_count: number;
-    estimated_minutes: number;
-    difficulty_level: number;
-  }>;
-}> => {
-  return client.get(`/v1/learning/${bookId}/overview`);
-};

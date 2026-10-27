@@ -402,18 +402,37 @@ class AIDService:
         )
         next_mastery = await self._read_module_mastery(design.id, next_idx, user_id)
 
+        # Step4：claim 级薄弱清单（当前模块 unit_ids）
+        cur_unit_ids = list(macro.modules[design.current_module_index].unit_ids or [])
+        weak_claims: list = []
+        try:
+            from app.modules.learning_assets.concept_mastery import (
+                weak_required_claims,
+                format_weak_claims_for_prompt,
+            )
+            weak_claims = await weak_required_claims(
+                self.db, book_id, user_id=user_id, unit_ids=cur_unit_ids or None
+            )
+            weak_block = format_weak_claims_for_prompt(weak_claims)
+        except Exception:
+            weak_block = "（无 claim 级薄弱证据，按常规规划）"
+            weak_claims = []
+
         # LLM replan（保守），失败回退规则化
         result = None
         if self._llm_enabled():
             try:
                 result = await self._replan_with_llm(
-                    macro.modules[next_idx], feedback, cur_mastery, design
+                    macro.modules[next_idx], feedback, cur_mastery, design,
+                    weak_claims_block=weak_block,
+                    weak_claims=weak_claims,
                 )
             except Exception:
                 result = None
         if result is None:
-            result = self._replan_rulebased(
-                macro.modules[next_idx], feedback, next_mastery
+            result = await self._replan_rulebased_async(
+                macro.modules[next_idx], feedback, next_mastery,
+                book_id=book_id, user_id=user_id, weak_claims=weak_claims,
             )
 
         # 把 revisit 单元插到下一模块开头（落库到 micro 的 ordered_unit_ids）
@@ -493,6 +512,8 @@ class AIDService:
 
     async def _replan_with_llm(
         self, next_skel: ModuleSkeleton, feedback, mastery_map: dict, design,
+        weak_claims_block: str = "（无）",
+        weak_claims: list | None = None,
     ):
         from app.modules.adaptive_design.schemas import ReplanResult as _RR
         prompt = REPLAN_PROMPT.format(
@@ -501,28 +522,77 @@ class AIDService:
             time_spent=feedback.time_spent_minutes or "未知",
             next_module_skeleton=f"{next_skel.title}: {next_skel.unit_ids}",
             goal_depth="",  # 可从 design.profile 取，简化
+            weak_claims_block=weak_claims_block or "（无 claim 级薄弱证据，按常规规划）",
         )
         resp = await self.llm.chat_json(
             messages=[LLMMessage(role="user", content=prompt)], temperature=0.2,
         )
         data = parse_llm_json(resp)
         revisit = [u for u in data.get("revisit_unit_ids", []) if u][:2]  # 上限2
+        # 若 LLM 未给 revisit，用弱核心 claim 的 unit 兜底
+        if not revisit and weak_claims:
+            for w in weak_claims:
+                if w.get("role_in_book") in ("core_thesis_support", "key_mechanism"):
+                    uid = w.get("unit_id")
+                    if uid and uid not in revisit:
+                        revisit.append(uid)
+                    if len(revisit) >= 2:
+                        break
         skip = [u for u in data.get("skip_unit_ids", []) if u in next_skel.unit_ids]
         return _RR(
             next_module_index=next_skel.index,
-            revisit_unit_ids=revisit, skip_unit_ids=skip,
+            revisit_unit_ids=revisit[:2], skip_unit_ids=skip,
             rationale=data.get("rationale", ""),
         )
 
     def _replan_rulebased(self, next_skel, feedback, mastery_map: dict):
-        """规则化 replan：按 mastery 阈值跳过，无 revisit（保守）"""
+        """规则化 replan：按 mastery 阈值跳过，无 revisit（保守）—— 同步兼容入口。"""
         from app.modules.adaptive_design.schemas import ReplanResult as _RR
-        # 下一模块中前置已被高分掌握的单元可跳过（阈值 0.85）
         skip = [u for u, m in mastery_map.items() if m >= 0.85 and u in next_skel.unit_ids]
         return _RR(
             next_module_index=next_skel.index,
             revisit_unit_ids=[], skip_unit_ids=skip[:2],
             rationale="规则化：跳过已高分掌握单元",
+        )
+
+    async def _replan_rulebased_async(
+        self, next_skel, feedback, mastery_map: dict,
+        *, book_id: str, user_id: str, weak_claims: list | None = None,
+    ):
+        """规则化 replan + Step4：弱核心 claim 单元 revisit / hint 上调。"""
+        from app.modules.adaptive_design.schemas import ReplanResult as _RR
+        from app.db.models import KnowledgeUnitModel
+        from sqlalchemy import update as sql_update
+
+        skip = [u for u, m in mastery_map.items() if m >= 0.85 and u in next_skel.unit_ids]
+        revisit: list[str] = []
+        for w in weak_claims or []:
+            if w.get("role_in_book") in ("core_thesis_support", "key_mechanism"):
+                uid = w.get("unit_id")
+                if uid and uid not in revisit:
+                    revisit.append(uid)
+                if len(revisit) >= 2:
+                    break
+
+        # 复用现有字段：弱核心单元 ai_cognitive_hint 上调为 memorize（更仔细）
+        for uid in revisit:
+            try:
+                await self.db.execute(
+                    sql_update(KnowledgeUnitModel)
+                    .where(KnowledgeUnitModel.id == uid)
+                    .values(ai_cognitive_hint="memorize")
+                )
+            except Exception:
+                pass
+
+        rationale = "规则化：跳过已高分掌握单元"
+        if revisit:
+            rationale += f"；弱核心 claim 单元优先回访: {revisit}"
+        return _RR(
+            next_module_index=next_skel.index,
+            revisit_unit_ids=revisit[:2],
+            skip_unit_ids=skip[:2],
+            rationale=rationale,
         )
 
     async def _inject_revisit_into_next_module(

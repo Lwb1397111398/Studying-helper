@@ -127,6 +127,9 @@ REPLAN_PROMPT = """你是教学顾问。某学习模块刚结束，根据反馈�
 - 用户反馈: {user_feedback}
 - 用时(分钟): {time_spent}
 
+## claim 级薄弱证据（Step4，优先处理核心 role）
+{weak_claims_block}
+
 ## 下一模块骨架
 {next_module_skeleton}
 
@@ -134,9 +137,9 @@ REPLAN_PROMPT = """你是教学顾问。某学习模块刚结束，根据反馈�
 - 目标深度: {goal_depth}
 
 ## 任务（保守原则）
-1. revisit_unit_ids: 本模块薄弱点对应的旧单元，需在下一模块开头回访精讲（最多2个）
+1. revisit_unit_ids: 本模块薄弱点 / 未达标核心 claim 所在旧单元，需在下一模块开头回访精讲（最多2个）
 2. skip_unit_ids: 下一模块中已被本模块高分掌握前置的单元可跳过（仅当确有把握）
-3. rationale: 调整理由
+3. rationale: 调整理由（若有弱核心 claim，请说明优先保留/提前/重学哪些单元）
 
 ## 输出（严格 JSON）
 {{

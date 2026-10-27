@@ -208,8 +208,8 @@ data class ImportResult(
     val overwrittenBooks: List<String>,
 )
 
-private fun SyncBook.toEntity() = BookEntity(id, "anonymous", title, author, filePath, fileType, fileSizeBytes, parseStatus, splitStatus, learnStatus, totalChapters, totalUnits, learnedUnits, readingMotivation, createdAt, updatedAt)
-private fun BookEntity.toSync() = SyncBook(id, userId, title, author, filePath, fileType, fileSizeBytes, parseStatus, splitStatus, learnStatus, totalChapters, totalUnits, learnedUnits, readingMotivation, createdAt, updatedAt)
+private fun SyncBook.toEntity() = BookEntity(id, "anonymous", title, author, filePath, fileType, fileSizeBytes, parseStatus, splitStatus, learnStatus, totalChapters, totalUnits, learnedUnits, readingMotivation, overviewJson, createdAt, updatedAt)
+private fun BookEntity.toSync() = SyncBook(id, userId, title, author, filePath, fileType, fileSizeBytes, parseStatus, splitStatus, learnStatus, totalChapters, totalUnits, learnedUnits, readingMotivation, overviewJson, createdAt, updatedAt)
 private fun SyncChapter.toEntity() = ChapterEntity(id, bookId, title, chapterNumber, parentId, level, orderIndex, summary)
 private fun ChapterEntity.toSync() = SyncChapter(id, bookId, title, chapterNumber, parentId, level, orderIndex, summary)
 private fun SyncKnowledgeUnit.toEntity() = KnowledgeUnitEntity(id, bookId, chapterId, sectionId, title, content, orderIndex, charOffsetStart, charOffsetEnd, summary, explanation, keyPoints, concepts, prerequisites, difficultyLevel, importanceScore, aiCognitiveHint)

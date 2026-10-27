@@ -10,3 +10,4 @@ export * from './plans';
 export * from './settings';
 export * from './sync';
 export * from './aid';
+export * from './learningAssets';

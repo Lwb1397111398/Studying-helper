@@ -1,6 +1,7 @@
 """数据同步服务测试"""
 
 from datetime import datetime, timezone
+from pathlib import Path
 
 import pytest
 import pytest_asyncio
@@ -26,6 +27,10 @@ from app.db.models import (
     UserModel,
 )
 from app.modules.sync.service import SyncService
+from app.modules.sync.schemas import SyncPackage
+
+
+ROUND4_FIXTURE = Path(__file__).resolve().parents[5] / "docs" / "samples" / "round4_sync_package.json"
 
 
 @pytest_asyncio.fixture
@@ -339,3 +344,34 @@ async def test_import_package_replaces_existing_book(db_session):
     assert len(edges) == 1
     assert len(stats) == 1
     assert len(messages) == 1
+
+
+@pytest.mark.asyncio
+async def test_shared_round4_fixture_import_export_preserves_aid_fsrs_and_teaching_order(db_session):
+    raw = ROUND4_FIXTURE.read_text(encoding="utf-8")
+    package = SyncPackage.model_validate_json(raw)
+    service = SyncService(db_session)
+
+    preview = await service.preview_package(package)
+    result = await service.import_package("anonymous", package)
+    exported = await service.export_book("anonymous", "round4-book")
+
+    assert preview.source == "android"
+    assert preview.books_count == 1
+    assert preview.units_count == 2
+    assert preview.mastery_records_count == 1
+    assert preview.learner_intent_profiles_count == 1
+    assert preview.teaching_designs_count == 1
+    assert preview.module_micro_plans_count == 1
+    assert result.books_imported == 1
+    assert result.units_imported == 2
+    assert result.mastery_records_imported == 1
+    assert result.learner_intent_profiles_imported == 1
+    assert result.teaching_designs_imported == 1
+    assert result.module_micro_plans_imported == 1
+    assert [unit.id for unit in exported.knowledge_units] == ["round4-unit-a", "round4-unit-b"]
+    assert exported.knowledge_units[0].ai_cognitive_hint == "understand"
+    assert exported.knowledge_units[1].ai_cognitive_hint == "memorize"
+    assert exported.mastery_records[0].algorithm == "fsrs"
+    assert exported.mastery_records[0].stability == 2.5
+    assert exported.module_micro_plans[0].ordered_unit_ids_json == '["round4-unit-b","round4-unit-a"]'

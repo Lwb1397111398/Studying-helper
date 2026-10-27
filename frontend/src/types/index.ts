@@ -8,9 +8,31 @@ export interface Book {
   total_units: number;
   learned_units: number;
   reading_motivation?: string;
+  overview_json?: string | null;
   parse_status: string;
   split_status: string;
+  learn_status?: string;
   created_at: string;
+}
+
+/** 全书鸟瞰（深度精读层） */
+export interface BookDeepOverview {
+  core_thesis: string;
+  main_thread: string;
+  chapter_roles: Array<{
+    chapter_id: string;
+    role: string;
+    one_liner: string;
+  }>;
+  key_concepts: Array<{
+    name: string;
+    definition: string;
+    first_chapter_id?: string;
+    aliases?: string[];
+  }>;
+  reading_guide: string;
+  degraded: boolean;
+  version?: string;
 }
 
 // 章节 — 支持多级层级（编>章>节>...）

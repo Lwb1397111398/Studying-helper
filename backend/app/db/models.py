@@ -41,6 +41,7 @@ class BookModel(Base):
     total_units = Column(Integer, default=0)
     learned_units = Column(Integer, default=0)
     reading_motivation = Column(Text, nullable=True)
+    overview_json = Column(Text, nullable=True)
     created_at = Column(DateTime, nullable=False, default=_utc_now)
     updated_at = Column(DateTime, nullable=False, default=_utc_now, onupdate=_utc_now)
 
@@ -258,6 +259,14 @@ class TeachingSessionModel(Base):
     status = Column(String(20), default="active")
     started_at = Column(DateTime, nullable=False, default=_utc_now)
     ended_at = Column(DateTime)
+    # Teaching session v2
+    asset_id = Column(String(64), nullable=True)
+    parent_session_id = Column(String(64), nullable=True)
+    state_v2 = Column(String(40), nullable=True)
+    completion_status = Column(String(40), nullable=True)
+    pause_reason = Column(String(60), nullable=True)
+    plan_snapshot_json = Column(Text, nullable=True)
+    primary_unit_id = Column(String(64), nullable=True)
 
     __table_args__ = (
         Index("ix_teaching_sessions_user_id", "user_id"),
@@ -404,3 +413,179 @@ class ModuleMicroPlanModel(Base):
         UniqueConstraint("design_id", "module_index", name="uq_micro_plan_design_module"),
         Index("ix_module_micro_plans_book_status", "book_id", "module_status"),
     )
+
+
+class DocumentModel(Base):
+    __tablename__ = "documents"
+    id = Column(String, primary_key=True, default=lambda: str(uuid4()))
+    book_id = Column(String, ForeignKey("books.id"), nullable=False, index=True)
+    source_type = Column(String(20), nullable=False)
+    source_uri = Column(String(500), nullable=False)
+    status = Column(String(20), default="active")
+    created_at = Column(DateTime, nullable=False, default=_utc_now)
+
+
+class DocumentRevisionModel(Base):
+    __tablename__ = "document_revisions"
+    id = Column(String, primary_key=True, default=lambda: str(uuid4()))
+    document_id = Column(String, ForeignKey("documents.id"), nullable=False, index=True)
+    revision_no = Column(Integer, nullable=False)
+    source_hash = Column(String(128), nullable=False)
+    parser_version = Column(String(50), nullable=False)
+    normalization_version = Column(String(50), nullable=False)
+    status = Column(String(20), default="processing")
+    created_at = Column(DateTime, nullable=False, default=_utc_now)
+
+
+class DocumentBlockModel(Base):
+    __tablename__ = "document_blocks"
+    id = Column(String, primary_key=True, default=lambda: str(uuid4()))
+    document_revision_id = Column(String, ForeignKey("document_revisions.id"), nullable=False, index=True)
+    chapter_id = Column(String, ForeignKey("chapters.id"), nullable=True, index=True)
+    parent_block_id = Column(String, nullable=True)
+    block_type = Column(String(30), nullable=False, default="paragraph")
+    ordinal = Column(Integer, nullable=False)
+    text = Column(Text, nullable=False)
+    text_hash = Column(String(128), nullable=False)
+    page_index = Column(Integer, nullable=True)
+    page_label = Column(String(50), nullable=True)
+    metadata_json = Column(Text, default="{}")
+
+
+class AnalysisJobModel(Base):
+    __tablename__ = "analysis_jobs"
+    id = Column(String, primary_key=True, default=lambda: str(uuid4()))
+    scope_type = Column(String(20), nullable=False)
+    scope_id = Column(String, nullable=False, index=True)
+    status = Column(String(30), nullable=False, default="queued")
+    wait_reason = Column(String(50), nullable=True)
+    priority = Column(Integer, default=5)
+    attempt_count = Column(Integer, default=0)
+    max_attempts = Column(Integer, default=3)
+    idempotency_key = Column(String(200), nullable=True, unique=True)
+    lease_owner = Column(String(100), nullable=True)
+    lease_expires_at = Column(DateTime, nullable=True)
+    quality_result_json = Column(Text, nullable=True)
+    error_code = Column(String(50), nullable=True)
+    error_message = Column(Text, nullable=True)
+    created_at = Column(DateTime, nullable=False, default=_utc_now)
+    started_at = Column(DateTime, nullable=True)
+    finished_at = Column(DateTime, nullable=True)
+
+    __table_args__ = (
+        Index("ix_analysis_jobs_scope", "scope_type", "scope_id"),
+    )
+
+
+class UnitLearningAssetModel(Base):
+    """不可变版本的单元教学资产。"""
+    __tablename__ = "unit_learning_assets"
+
+    id = Column(String, primary_key=True, default=lambda: str(uuid4()))
+    unit_id = Column(String, ForeignKey("knowledge_units.id"), nullable=False)
+    version = Column(Integer, nullable=False)
+    status = Column(String(20), nullable=False, default="draft")
+    readiness_status = Column(String(30), nullable=False, default="pending")
+    freshness_status = Column(String(30), nullable=False, default="current")
+    quality_score = Column(Float, nullable=True)
+    quality_profile = Column(String(80), nullable=True)
+    quality_algorithm_version = Column(String(40), nullable=True)
+    document_revision_id = Column(String, nullable=True)
+    payload_json = Column(Text, nullable=False, default="{}")
+    schema_version = Column(String(40), nullable=False, default="unit-asset-v1")
+    prompt_version = Column(String(40), nullable=True)
+    model_provider = Column(String(40), nullable=True)
+    model_name = Column(String(80), nullable=True)
+    analysis_job_id = Column(String, nullable=True)
+    created_at = Column(DateTime, nullable=False, default=_utc_now)
+    published_at = Column(DateTime, nullable=True)
+
+    __table_args__ = (
+        Index("ix_unit_learning_assets_unit_id", "unit_id"),
+        Index("ix_ula_unit_status", "unit_id", "status"),
+        UniqueConstraint("unit_id", "version", name="uq_ula_unit_version"),
+    )
+
+
+class LearningAttemptModel(Base):
+    """用户一次作答（不可覆盖）。"""
+    __tablename__ = "learning_attempts"
+
+    id = Column(String, primary_key=True, default=lambda: str(uuid4()))
+    user_id = Column(String, nullable=False)
+    session_id = Column(String, nullable=True)
+    assessment_item_id = Column(String, nullable=False)
+    attempt_no = Column(Integer, nullable=False, default=1)
+    response_json = Column(Text, nullable=False)
+    submitted_at = Column(DateTime, nullable=False, default=_utc_now)
+    device_id = Column(String, nullable=True)
+    idempotency_key = Column(String(200), nullable=False)
+    client_created_at = Column(DateTime, nullable=True)
+    server_received_at = Column(DateTime, nullable=False, default=_utc_now)
+    status = Column(String(30), nullable=False, default="submitted")
+
+    __table_args__ = (
+        UniqueConstraint("user_id", "idempotency_key", name="uq_attempt_user_idem"),
+        Index("ix_learning_attempts_session_id", "session_id"),
+        Index("ix_learning_attempts_user_id", "user_id"),
+    )
+
+
+class LearningEvidenceModel(Base):
+    """对作答的评价结果（追加新版本，不改 Attempt）。"""
+    __tablename__ = "learning_evidences"
+
+    id = Column(String, primary_key=True, default=lambda: str(uuid4()))
+    attempt_id = Column(String, ForeignKey("learning_attempts.id"), nullable=False)
+    user_id = Column(String, nullable=False)
+    book_id = Column(String, nullable=False)
+    unit_id = Column(String, nullable=False)
+    objective_id = Column(String, nullable=False)
+    criterion_id = Column(String, nullable=True)
+    session_id = Column(String, nullable=True)
+    source_type = Column(String(30), nullable=False)
+    question_id = Column(String, nullable=True)
+    claim_id = Column(String, nullable=True)
+    ability = Column(String(30), nullable=True)
+    result = Column(String(20), nullable=False)
+    score = Column(Float, nullable=False)
+    error_type = Column(String(40), nullable=True)
+    evaluator_type = Column(String(20), nullable=False)
+    evaluator_version = Column(String(40), nullable=True)
+    evaluation_revision = Column(Integer, nullable=False, default=1)
+    supersedes_evidence_id = Column(String, nullable=True)
+    status = Column(String(20), nullable=False, default="active")
+    invalid_reason = Column(String(100), nullable=True)
+    hints_used = Column(Integer, nullable=False, default=0)
+    response_time_ms = Column(Integer, nullable=True)
+    created_at = Column(DateTime, nullable=False, default=_utc_now)
+
+    __table_args__ = (
+        Index("ix_learning_evidences_attempt_id", "attempt_id"),
+        Index("ix_learning_evidences_user_id", "user_id"),
+        Index("ix_learning_evidences_unit_id", "unit_id"),
+        Index("ix_learning_evidences_session_id", "session_id"),
+        Index("ix_learning_evidences_objective", "objective_id"),
+    )
+
+
+class BookConceptModel(Base):
+    """全书概念词典（Step4）。"""
+    __tablename__ = "book_concepts"
+
+    id = Column(String, primary_key=True, default=lambda: str(uuid4()))
+    book_id = Column(String, ForeignKey("books.id"), nullable=False)
+    name = Column(String(200), nullable=False)
+    definition = Column(Text, nullable=True)
+    aliases = Column(Text, nullable=True, default="[]")
+    first_unit_id = Column(String, nullable=True)
+    first_chapter_id = Column(String, nullable=True)
+    source = Column(String(20), nullable=False)  # overview | unit_harvest
+    created_at = Column(DateTime, nullable=False, default=_utc_now)
+    updated_at = Column(DateTime, nullable=False, default=_utc_now, onupdate=_utc_now)
+
+    __table_args__ = (
+        UniqueConstraint("book_id", "name", name="uq_book_concept_name"),
+        Index("ix_book_concepts_book_id", "book_id"),
+    )
+

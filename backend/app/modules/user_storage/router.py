@@ -1,30 +1,20 @@
 """用户与存储模块的REST端点"""
 import json
 import logging
-from fastapi import APIRouter, Depends, UploadFile, File, Form, HTTPException
-from typing import Optional
-from uuid import uuid4
+from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.db.database import get_db
-from app.db.models import UserModel, MasteryRecordModel
-from app.deps import get_user_service, get_book_service, get_record_service, get_file_storage
-from app.modules.user_storage.services import UserService, BookService, LearningRecordService, FileStorage
+from app.db.models import MasteryRecordModel
+from app.deps import get_user_service, get_book_service
+from app.modules.user_storage.services import UserService, BookService
 from app.modules.user_storage.schemas import (
     UserUpdate, User, UserProfile,
-    Book, BookStatusUpdate, BookMotivationUpdate,
-    LearningRecordCreate, LearningRecordComplete, LearningRecord,
-    DailyStats,
+    Book, BookInfoUpdate, BookMotivationUpdate,
 )
 
 logger = logging.getLogger(__name__)
-
-# 文件头魔数校验表
-_MAGIC_BYTES = {
-    b'%PDF': 'pdf',
-    b'PK': 'epub',  # EPUB 是 ZIP 格式
-}
 
 router = APIRouter(prefix="/api/v1", tags=["user_storage"])
 
@@ -42,10 +32,17 @@ def _safe_json_list(raw: str | None) -> list:
 
 # ========== 用户端点 ==========
 
-@router.get("/users/{user_id}", response_model=User)
-async def get_user(user_id: str, svc: UserService = Depends(get_user_service)):
-    """获取用户"""
-    return await svc.get_user(user_id)
+@router.get("/users/profile", response_model=UserProfile)
+async def get_profile(svc: UserService = Depends(get_user_service)):
+    """获取当前用户画像"""
+    profile = await svc.get_profile("anonymous")
+    return UserProfile(
+        user=User.model_validate(profile["user"]),
+        total_books=profile["total_books"],
+        total_learning_minutes=profile["total_learning_minutes"],
+        total_units_learned=profile["total_units_learned"],
+        current_streak=profile["current_streak"],
+    )
 
 
 @router.put("/users/preferences", response_model=User)
@@ -60,67 +57,7 @@ async def update_preferences(body: UserUpdate,
     )
 
 
-@router.get("/users/profile", response_model=UserProfile)
-async def get_profile(svc: UserService = Depends(get_user_service)):
-    """获取当前用户画像"""
-    profile = await svc.get_profile("anonymous")
-    return UserProfile(
-        user=User.model_validate(profile["user"]),
-        total_books=profile["total_books"],
-        total_learning_minutes=profile["total_learning_minutes"],
-        total_units_learned=profile["total_units_learned"],
-        current_streak=profile["current_streak"],
-    )
-
-
 # ========== 书籍端点 ==========
-
-MAX_FILE_SIZE = 100 * 1024 * 1024
-
-
-@router.post("/books", response_model=Book, status_code=201)
-async def upload_book(
-    title: str = Form(...),
-    author: Optional[str] = Form(None),
-    file_type: str = Form(...),
-    file_size_bytes: int = Form(...),
-    file: UploadFile = File(...),
-    svc: BookService = Depends(get_book_service),
-    storage: FileStorage = Depends(get_file_storage),
-    db: AsyncSession = Depends(get_db),
-):
-    """上传书籍"""
-    content = await file.read()
-    if len(content) > MAX_FILE_SIZE:
-        raise HTTPException(status_code=413, detail="文件大小超过100MB限制")
-
-    # 魔数校验：验证实际文件内容与声明的 file_type 一致
-    if file_type.lower() != "txt":  # TXT 无固定魔数，跳过
-        header = content[:8]
-        expected_type = None
-        for magic, fmt in _MAGIC_BYTES.items():
-            if header.startswith(magic):
-                expected_type = fmt
-                break
-        if expected_type and file_type.lower() != expected_type:
-            raise HTTPException(
-                status_code=400,
-                detail=f"文件类型不匹配：声明为 {file_type}，实际为 {expected_type}",
-            )
-
-    file_path = await storage.store("anonymous", file.filename or f"{uuid4()}.{file_type}", content)
-
-    book = await svc.upload_book(
-        user_id="anonymous",
-        title=title,
-        file_path=file_path,
-        file_type=file_type,
-        file_size_bytes=len(content),  # 使用实际文件大小，不信任客户端
-        author=author,
-    )
-    await db.flush()
-    return book
-
 
 @router.get("/books")
 async def list_books(page: int = 1, page_size: int = 20,
@@ -158,6 +95,13 @@ async def get_book(book_id: str, svc: BookService = Depends(get_book_service)):
     return await svc.get_book(book_id)
 
 
+@router.put("/books/{book_id}", response_model=Book)
+async def update_book_info(book_id: str, body: BookInfoUpdate,
+                           svc: BookService = Depends(get_book_service)):
+    """更新书籍基本信息（标题/作者）"""
+    return await svc.update_info(book_id, title=body.title, author=body.author)
+
+
 @router.delete("/books/{book_id}", status_code=204)
 async def delete_book(book_id: str, svc: BookService = Depends(get_book_service)):
     """删除书籍（级联删除关联数据）"""
@@ -169,8 +113,7 @@ async def delete_book(book_id: str, svc: BookService = Depends(get_book_service)
         try:
             os.remove(file_path)
         except OSError as e:
-            import logging
-            logging.getLogger(__name__).warning(f"文件删除失败: {file_path}, 原因: {e}")
+            logger.warning(f"文件删除失败: {file_path}, 原因: {e}")
 
 
 @router.get("/books/{book_id}/chapters")
@@ -238,72 +181,11 @@ async def get_book_chapters(book_id: str, db: AsyncSession = Depends(get_db)):
     return result
 
 
-@router.put("/books/{book_id}/status", response_model=Book)
-async def update_book_status(book_id: str, body: BookStatusUpdate,
-                             svc: BookService = Depends(get_book_service)):
-    """更新书籍状态"""
-    return await svc.update_status(
-        book_id,
-        parse_status=body.parse_status,
-        split_status=body.split_status,
-        learn_status=body.learn_status,
-        total_chapters=body.total_chapters,
-        total_units=body.total_units,
-        learned_units=body.learned_units,
-    )
-
-
 @router.put("/books/{book_id}/motivation", response_model=Book)
 async def update_book_motivation(book_id: str, body: BookMotivationUpdate,
                                  svc: BookService = Depends(get_book_service)):
     """更新阅读动机"""
     return await svc.update_status(book_id, reading_motivation=body.reading_motivation)
-
-
-# ========== 学习记录端点 ==========
-
-@router.post("/records", response_model=LearningRecord, status_code=201)
-async def create_record(body: LearningRecordCreate, svc: LearningRecordService = Depends(get_record_service)):
-    """创建学习记录"""
-    record = await svc.create_record(
-        user_id="anonymous",
-        book_id=body.book_id,
-        session_id=body.session_id,
-    )
-    return record
-
-
-@router.put("/records/{record_id}/complete", response_model=LearningRecord)
-async def complete_record(record_id: str, body: LearningRecordComplete,
-                          svc: LearningRecordService = Depends(get_record_service)):
-    """完成学习记录"""
-    return await svc.complete_record(
-        record_id,
-        duration_minutes=body.duration_minutes,
-        units_covered=body.units_covered,
-        questions_asked=body.questions_asked,
-        test_score=body.test_score,
-        annotations_created=body.annotations_created,
-    )
-
-
-# ========== 统计端点 ==========
-
-@router.get("/stats/daily/{date}", response_model=Optional[DailyStats])
-async def get_daily_stats(date: str,
-                          svc: LearningRecordService = Depends(get_record_service)):
-    """获取当前用户每日统计"""
-    stats = await svc.get_daily_stats("anonymous", date)
-    if stats is None:
-        return DailyStats(user_id="anonymous", date=date)
-    return stats
-
-
-@router.get("/stats/streak")
-async def get_streak(svc: LearningRecordService = Depends(get_record_service)):
-    """获取当前用户连续学习天数"""
-    streak = await svc.get_streak("anonymous")
-    return {"user_id": "anonymous", "streak": streak}
 
 
 @router.get("/books/{book_id}/mastery")

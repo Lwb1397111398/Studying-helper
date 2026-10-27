@@ -71,12 +71,24 @@ class BookService:
             "has_next": offset + page_size < total,
         }
 
+    async def update_info(self, book_id: str, title: str | None = None,
+                          author: str | None = None) -> BookModel:
+        """更新书籍基本信息；author 传空字符串表示清除"""
+        book = await self.get_book(book_id)
+        if title is not None and title.strip():
+            book.title = title.strip()
+        if author is not None:
+            book.author = author.strip() or None
+        book.updated_at = utc_now()
+        await self.db.flush()
+        return book
+
     async def update_status(self, book_id: str, **kwargs) -> BookModel:
         book = await self.get_book(book_id)
         allowed_fields = {
             "parse_status", "split_status", "learn_status",
             "total_chapters", "total_units", "learned_units",
-            "reading_motivation",
+            "reading_motivation", "overview_json",
         }
         for key, value in kwargs.items():
             if key in allowed_fields and value is not None:

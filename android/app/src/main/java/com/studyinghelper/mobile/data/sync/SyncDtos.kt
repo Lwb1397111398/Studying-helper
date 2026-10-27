@@ -47,6 +47,7 @@ data class SyncBook(
     @SerialName("total_units") val totalUnits: Int? = 0,
     @SerialName("learned_units") val learnedUnits: Int? = 0,
     @SerialName("reading_motivation") val readingMotivation: String? = null,
+    @SerialName("overview_json") val overviewJson: String? = null,
     @SerialName("created_at") val createdAt: String,
     @SerialName("updated_at") val updatedAt: String,
 )

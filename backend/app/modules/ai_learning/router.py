@@ -48,11 +48,6 @@ class LearnRequest(BaseModel):
     force_relearn: bool = False  # 是否强制重新学习已学习的单元
 
 
-class LearnSelectedRequest(BaseModel):
-    chapter_ids: List[str]
-    on_progress_url: Optional[str] = None
-
-
 class StartSessionRequest(BaseModel):
     unit_id: str
 
@@ -219,20 +214,6 @@ async def save_note(
 
     await db.flush()
     return {"success": True, "message": "笔记已保存"}
-
-
-@router.get("/units/{unit_id}/notes")
-async def get_note(unit_id: str, db: AsyncSession = Depends(get_db)):
-    """获取学习笔记"""
-    note_result = await db.execute(
-        select(AnnotationModel).where(
-            AnnotationModel.user_id == DEFAULT_USER_ID,
-            AnnotationModel.knowledge_unit_id == unit_id,
-            AnnotationModel.annotation_type == "note",
-        )
-    )
-    note = note_result.scalar_one_or_none()
-    return {"unit_id": unit_id, "content": note.content if note else ""}
 
 
 @router.post("/units/{unit_id}/mark")
@@ -536,6 +517,42 @@ async def _run_learning_job(
             )
             await db.commit()
 
+            # Step1：全书鸟瞰（失败不影响学习主流程）
+            try:
+                from app.modules.ai_learning.book_overview import generate_book_deep_overview
+                async with async_session_factory() as overview_db:
+                    await generate_book_deep_overview(
+                        overview_db, book_id, llm_client=llm_client, force=True
+                    )
+                    await overview_db.commit()
+            except Exception as overview_exc:
+                logging.getLogger(__name__).warning(
+                    "全书鸟瞰生成失败（已忽略）book=%s: %s", book_id, overview_exc
+                )
+
+            # Step2：单元精读理解阶段预生成（仅理解，不跑教学设计；失败不阻塞）
+            try:
+                from app.modules.learning_assets.understanding import (
+                    precompute_book_understanding,
+                    precompute_enabled,
+                )
+                if precompute_enabled():
+                    async with async_session_factory() as understand_db:
+                        stats = await precompute_book_understanding(
+                            understand_db,
+                            book_id,
+                            llm_client=llm_client,
+                            force=False,
+                        )
+                        await understand_db.commit()
+                        logging.getLogger(__name__).info(
+                            "单元精读预生成完成 book=%s stats=%s", book_id, stats
+                        )
+            except Exception as understand_exc:
+                logging.getLogger(__name__).warning(
+                    "单元精读预生成失败（已忽略）book=%s: %s", book_id, understand_exc
+                )
+
             _learning_progress[book_id] = {
                 "status": "completed",
                 "current": result.total_units,
@@ -607,75 +624,94 @@ async def start_learning(
     }
 
 
-@router.post("/{book_id}/learn-selected")
-async def start_selected_learning(
+@router.get("/{book_id}/overview-deep")
+async def get_deep_overview(book_id: str, db: AsyncSession = Depends(get_db)):
+    """获取全书鸟瞰（深度精读层）。无数据返回 null 字段。"""
+    from app.modules.ai_learning.book_overview import get_book_deep_overview
+
+    overview = await get_book_deep_overview(db, book_id)
+    if overview is None:
+        return {"book_id": book_id, "overview": None}
+    return {"book_id": book_id, "overview": overview.model_dump()}
+
+
+@router.get("/{book_id}/concepts")
+async def list_book_concepts_api(book_id: str, db: AsyncSession = Depends(get_db)):
+    """全书概念词典只读列表（Step4）。"""
+    import json as _json
+    from app.modules.learning_assets.concept_harvest import list_book_concepts
+
+    rows = await list_book_concepts(db, book_id)
+    items = []
+    for r in rows:
+        try:
+            aliases = _json.loads(r.aliases or "[]")
+            if not isinstance(aliases, list):
+                aliases = []
+        except Exception:
+            aliases = []
+        items.append(
+            {
+                "id": r.id,
+                "name": r.name,
+                "definition": r.definition,
+                "aliases": aliases,
+                "first_unit_id": r.first_unit_id,
+                "first_chapter_id": r.first_chapter_id,
+                "source": r.source,
+            }
+        )
+    return {"book_id": book_id, "concepts": items, "total": len(items)}
+
+
+@router.post("/{book_id}/overview-deep", status_code=202)
+async def generate_deep_overview(
     book_id: str,
-    request: LearnSelectedRequest,
+    background_tasks: BackgroundTasks,
+    force: bool = True,
     db: AsyncSession = Depends(get_db),
     llm_client: LLMClient = Depends(get_ai_analysis_llm),
 ):
-    """选择性学习"""
-    from app.modules.ai_learning.service import SelectiveLearningService
-    from app.modules.knowledge_splitter.schemas import KnowledgeUnit, Chapter
+    """手动触发全书鸟瞰生成（异步）。失败走 degraded，不阻塞。"""
+    book = (
+        await db.execute(select(BookModel).where(BookModel.id == book_id))
+    ).scalar_one_or_none()
+    if book is None:
+        raise HTTPException(status_code=404, detail=f"书籍 {book_id} 不存在")
 
-    units_result = await db.execute(
-        select(KnowledgeUnitModel).where(KnowledgeUnitModel.book_id == book_id)
-    )
-    db_units = units_result.scalars().all()
-    chapters_result = await db.execute(
-        select(ChapterModel).where(ChapterModel.book_id == book_id)
-    )
-    db_chapters = chapters_result.scalars().all()
-
-    units = [
-        KnowledgeUnit(
-            id=u.id, book_id=u.book_id, chapter_id=u.chapter_id,
-            title=u.title, content=u.content,
-            order_index=u.order_index or 0,
-            char_offset_start=u.char_offset_start or 0,
-            char_offset_end=u.char_offset_end or 0,
+    units_count = (
+        await db.execute(
+            select(func.count(KnowledgeUnitModel.id)).where(
+                KnowledgeUnitModel.book_id == book_id
+            )
         )
-        for u in db_units
-    ]
-    chapters = [
-        Chapter(
-            id=c.id, book_id=c.book_id, title=c.title,
-            chapter_number=c.chapter_number or 0,
-            order_index=c.order_index or 0,
-        )
-        for c in db_chapters
-    ]
+    ).scalar() or 0
+    if units_count == 0:
+        raise HTTPException(status_code=400, detail="书籍尚无知识单元，请先完成拆分")
 
-    service = SelectiveLearningService(llm_client=llm_client, db_session=db)
-    result = await service.learn_selected(
-        book_id, request.chapter_ids, units, chapters
-    )
+    async def _job():
+        from app.db.database import async_session_factory
+        from app.modules.ai_learning.book_overview import generate_book_deep_overview
+        import logging
 
-    # 更新书籍的 learned_units 统计
-    from sqlalchemy import update as sql_update
-    learned_count_result = await db.execute(
-        select(func.count(KnowledgeUnitModel.id)).where(
-            KnowledgeUnitModel.book_id == book_id,
-            KnowledgeUnitModel.summary.isnot(None),
-            KnowledgeUnitModel.summary != "",
-        )
-    )
-    actual_learned = learned_count_result.scalar() or 0
-    await db.execute(
-        sql_update(BookModel)
-        .where(BookModel.id == book_id)
-        .values(learned_units=actual_learned)
-    )
-    await db.flush()
+        if async_session_factory is None:
+            return
+        try:
+            async with async_session_factory() as session:
+                await generate_book_deep_overview(
+                    session, book_id, llm_client=llm_client, force=force
+                )
+                await session.commit()
+        except Exception as exc:
+            logging.getLogger(__name__).warning(
+                "手动鸟瞰任务失败 book=%s: %s", book_id, exc
+            )
 
+    background_tasks.add_task(_job)
     return {
-        "book_id": result.book_id,
-        "total_units": result.total_units,
-        "learned_count": result.learned_count,
-        "failed_count": result.failed_count,
-        "skipped_count": result.skipped_count,
-        "total_token_cost": result.total_token_cost,
-        "duration_seconds": round(result.duration_seconds, 2),
+        "book_id": book_id,
+        "status": "accepted",
+        "message": "全书鸟瞰生成任务已启动",
     }
 
 
@@ -712,82 +748,6 @@ async def get_progress(book_id: str, db: AsyncSession = Depends(get_db)):
         "total_units": total_units,
         "learned_units": learned_units,
         "progress_percent": round(learned_units / total_units * 100, 1) if total_units > 0 else 0,
-    }
-
-
-@router.get("/{book_id}/overview")
-async def get_overview(book_id: str, db: AsyncSession = Depends(get_db)):
-    """获取书籍概览"""
-    from app.modules.knowledge_splitter.schemas import KnowledgeUnit, Chapter
-
-    chapters_result = await db.execute(
-        select(ChapterModel).where(ChapterModel.book_id == book_id)
-    )
-    db_chapters = chapters_result.scalars().all()
-    units_result = await db.execute(
-        select(KnowledgeUnitModel).where(KnowledgeUnitModel.book_id == book_id)
-    )
-    db_units = units_result.scalars().all()
-
-    chapters = [
-        Chapter(
-            id=c.id, book_id=c.book_id, title=c.title,
-            chapter_number=c.chapter_number or 0,
-            order_index=c.order_index or 0,
-        )
-        for c in db_chapters
-    ]
-    units = [
-        KnowledgeUnit(
-            id=u.id, book_id=u.book_id, chapter_id=u.chapter_id,
-            title=u.title, content=u.content,
-            order_index=u.order_index or 0,
-            char_offset_start=u.char_offset_start or 0,
-            char_offset_end=u.char_offset_end or 0,
-        )
-        for u in db_units
-    ]
-
-    # 直接构造概览，无需 LLM client
-    from app.modules.ai_learning.schemas import BookOverview, ChapterOverview
-
-    chapter_overviews = []
-    for chapter in chapters:
-        chapter_units = [u for u in units if u.chapter_id == chapter.id]
-        avg_difficulty = sum(
-            u.difficulty_level or 3 for u in chapter_units
-        ) / max(len(chapter_units), 1)
-        chapter_overviews.append(
-            ChapterOverview(
-                chapter_id=chapter.id,
-                title=chapter.title,
-                key_concepts_preview=[],
-                estimated_minutes=len(chapter_units) * 12,
-                difficulty_level=round(avg_difficulty),
-                unit_count=len(chapter_units),
-            )
-        )
-    overview = BookOverview(
-        book_id=book_id,
-        title="",
-        total_chapters=len(chapters),
-        chapters=chapter_overviews,
-    )
-
-    return {
-        "book_id": overview.book_id,
-        "title": overview.title,
-        "total_chapters": overview.total_chapters,
-        "chapters": [
-            {
-                "chapter_id": ch.chapter_id,
-                "title": ch.title,
-                "unit_count": ch.unit_count,
-                "estimated_minutes": ch.estimated_minutes,
-                "difficulty_level": ch.difficulty_level,
-            }
-            for ch in overview.chapters
-        ],
     }
 
 

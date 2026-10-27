@@ -43,6 +43,10 @@ class TeachingStrategy(BaseModel):
     cognitive_level: str = "understand"  # CognitiveLevel
     scaffold_level: str = "full"  # 'full' | 'partial' | 'minimal'
     feedback_style: str = "immediate"  # 'immediate' | 'delayed' | 'guided'
+    # Step5 偏好落地（可序列化进 strategy_json）
+    teaching_style: str = "explain_then_probe"  # 'explain_then_probe' | 'socratic' | 'direct'
+    hint_policy: str = "ladder"  # 'ladder' | 'hint_only' | 'answer_first'
+    preferred_session_minutes: int = 25
     phases: List[TeachingPhase] = Field(default_factory=lambda: [
         TeachingPhase.ACTIVATE, TeachingPhase.INTRO, TeachingPhase.CORE,
         TeachingPhase.EXAMPLE, TeachingPhase.FEYNMAN, TeachingPhase.RETRIEVAL,
@@ -50,13 +54,27 @@ class TeachingStrategy(BaseModel):
     ])
 
 
+# 确认的教学偏好默认值（新画像 / 推荐偏好入口）
+DEFAULT_TEACHING_PREFS = {
+    "teaching_style": "explain_then_probe",
+    "hint_policy": "ladder",
+    "preferred_session_minutes": 25,
+    "example_style": "example_first",
+}
+
+
 class UserTeachingProfile(BaseModel):
     """用户教学画像（教学策略选择的输入）"""
     avg_mastery_score: float = 0.5
     total_sessions: int = 0
-    preferred_style: str = ""
+    preferred_style: str = ""  # 直接覆盖 explanation_style（最高优先级）
     weakness_tags: List[str] = []
     avg_test_score: float = 0.5
+    # Step5：教导方式偏好（空字符串表示未设置 → 策略层回退到类型推断或 DEFAULT）
+    teaching_style: str = "explain_then_probe"
+    hint_policy: str = "ladder"
+    preferred_session_minutes: int = 25
+    example_style: str = "example_first"  # 映射到 explanation_style（次于 preferred_style）
 
 
 class TeachingMessage(BaseModel):

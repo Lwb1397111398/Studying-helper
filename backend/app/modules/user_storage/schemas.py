@@ -1,6 +1,6 @@
 """用户与存储模块的Pydantic模型"""
 from pydantic import BaseModel, Field
-from typing import List, Optional, Any
+from typing import Optional
 from datetime import datetime
 
 
@@ -52,20 +52,10 @@ class UserProfile(BaseModel):
 
 # ========== 书籍相关 ==========
 
-class BookCreate(BaseModel):
-    title: str = Field(..., max_length=255)
+class BookInfoUpdate(BaseModel):
+    """书籍基本信息更新（标题/作者）"""
+    title: Optional[str] = Field(None, max_length=255)
     author: Optional[str] = Field(None, max_length=255)
-    file_type: str = Field(..., max_length=50)
-    file_size_bytes: int
-
-
-class BookStatusUpdate(BaseModel):
-    parse_status: Optional[str] = None
-    split_status: Optional[str] = None
-    learn_status: Optional[str] = None
-    total_chapters: Optional[int] = None
-    total_units: Optional[int] = None
-    learned_units: Optional[int] = None
 
 
 class BookMotivationUpdate(BaseModel):
@@ -87,63 +77,10 @@ class Book(BaseModel):
     total_units: int = 0
     learned_units: int = 0
     reading_motivation: Optional[str] = None
+    overview_json: Optional[str] = None
     created_at: datetime
     updated_at: datetime
 
     model_config = {"from_attributes": True}
 
 
-# ========== 学习记录相关 ==========
-
-class LearningRecordCreate(BaseModel):
-    book_id: str
-    session_id: str
-
-
-class LearningRecordComplete(BaseModel):
-    duration_minutes: Optional[int] = None
-    units_covered: Optional[List[str]] = None
-    questions_asked: int = 0
-    test_score: Optional[float] = None
-    annotations_created: int = 0
-
-
-class LearningRecord(BaseModel):
-    id: str
-    user_id: str
-    book_id: str
-    session_id: str
-    started_at: str
-    ended_at: Optional[str] = None
-    duration_minutes: Optional[int] = None
-    units_covered: Optional[str] = None
-    questions_asked: int = 0
-    test_score: Optional[float] = None
-    annotations_created: int = 0
-
-    model_config = {"from_attributes": True}
-
-
-class DailyStats(BaseModel):
-    user_id: str
-    date: str
-    total_minutes: int = 0
-    units_learned: int = 0
-    units_reviewed: int = 0
-    tests_taken: int = 0
-    avg_test_score: float = 0
-    streak_day: int = 0
-
-    model_config = {"from_attributes": True}
-
-
-# ========== 缓存相关 ==========
-
-class CacheEntry(BaseModel):
-    key: str
-    value: str
-    created_at: str
-    expires_at: str
-    access_count: int = 0
-
-    model_config = {"from_attributes": True}

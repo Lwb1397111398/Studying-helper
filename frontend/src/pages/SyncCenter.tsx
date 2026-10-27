@@ -2,6 +2,9 @@ import { useEffect, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import Card from '../components/Card';
 import Loading from '../components/Loading';
+import Icon from '../components/ui/Icon';
+import Button from '../components/ui/Button';
+import EmptyState from '../components/ui/EmptyState';
 import { getBooks } from '../api/books';
 import {
   exportAllSyncPackage,
@@ -31,6 +34,10 @@ function StatPill({ label, value }: { label: string; value: number }) {
       {label}：{value}
     </span>
   );
+}
+
+function SyncIcon({ direction }: { direction: 'down' | 'up' }) {
+  return <Icon name={direction === 'down' ? 'download' : 'upload'} className="w-6 h-6" />;
 }
 
 export default function SyncCenter() {
@@ -95,7 +102,8 @@ export default function SyncCenter() {
     } catch (error) {
       if (previewRequestRef.current !== requestId) return;
       console.error('同步包预览失败:', error);
-      alert('同步包预览失败，请检查文件是否正确');
+      const message = error instanceof Error ? error.message : '请检查文件是否正确';
+      alert(`同步包预览失败：${message}`);
       setSelectedFile(null);
       if (fileInputRef.current) fileInputRef.current.value = '';
     }
@@ -129,45 +137,35 @@ export default function SyncCenter() {
           <h1 className="text-2xl font-bold text-gray-800">同步中心</h1>
           <p className="text-sm text-gray-400 mt-1">在电脑端和 Android 端之间双向导入导出学习数据</p>
         </div>
-        <button
-          onClick={() => navigate('/')}
-          className="px-4 py-2 text-gray-500 rounded-xl text-sm font-medium hover:bg-gray-100 transition-colors"
-        >
-          返回首页
-        </button>
+        <Button variant="secondary" onClick={() => navigate('/')}>返回首页</Button>
       </div>
 
-      <div className="grid grid-cols-2 gap-5 mb-6">
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-5 mb-6">
         <Card hover={false} gradient>
           <div className="flex items-start justify-between gap-4">
             <div>
-              <div className="w-12 h-12 rounded-xl bg-emerald-50 text-emerald-600 flex items-center justify-center text-xl mb-4">⇩</div>
+              <div className="w-12 h-12 rounded-xl bg-emerald-50 text-emerald-600 flex items-center justify-center mb-4">
+                <SyncIcon direction="down" />
+              </div>
               <h2 className="text-lg font-semibold text-gray-800">导出到手机</h2>
               <p className="text-sm text-gray-400 mt-2">导出电脑端全部书籍、学习进度、复习记录和教学记录。</p>
             </div>
-            <button
-              onClick={handleExportAll}
-              disabled={exporting === 'all'}
-              className="px-4 py-2 rounded-xl text-sm font-medium bg-gradient-to-r from-emerald-500 to-emerald-600 text-white hover:shadow-lg hover:shadow-emerald-500/25 disabled:bg-gray-100 disabled:text-gray-400 disabled:shadow-none"
-            >
-              {exporting === 'all' ? '导出中...' : '导出全部'}
-            </button>
+            <Button variant="success" onClick={handleExportAll} loading={exporting === 'all'}>
+              导出全部
+            </Button>
           </div>
         </Card>
 
         <Card hover={false} gradient>
           <div className="flex items-start justify-between gap-4">
             <div>
-              <div className="w-12 h-12 rounded-xl bg-blue-50 text-blue-600 flex items-center justify-center text-xl mb-4">⇧</div>
+              <div className="w-12 h-12 rounded-xl bg-blue-50 text-blue-600 flex items-center justify-center mb-4">
+                <SyncIcon direction="up" />
+              </div>
               <h2 className="text-lg font-semibold text-gray-800">从手机导入</h2>
               <p className="text-sm text-gray-400 mt-2">先预览同步包内容，再确认覆盖导入对应书籍进度。</p>
             </div>
-            <button
-              onClick={() => fileInputRef.current?.click()}
-              className="px-4 py-2 rounded-xl text-sm font-medium bg-gradient-to-r from-blue-500 to-blue-600 text-white hover:shadow-lg hover:shadow-blue-500/25"
-            >
-              选择同步包
-            </button>
+            <Button onClick={() => fileInputRef.current?.click()}>选择同步包</Button>
             <input
               ref={fileInputRef}
               type="file"
@@ -206,13 +204,7 @@ export default function SyncCenter() {
                 <StatPill label="模块编排" value={preview.module_micro_plans_count} />
               </div>
             </div>
-            <button
-              onClick={handleImport}
-              disabled={importing}
-              className="px-4 py-2 rounded-xl text-sm font-medium bg-gradient-to-r from-blue-500 to-blue-600 text-white hover:shadow-lg hover:shadow-blue-500/25 disabled:bg-gray-100 disabled:text-gray-400 disabled:shadow-none"
-            >
-              {importing ? '导入中...' : '确认导入'}
-            </button>
+            <Button onClick={handleImport} loading={importing}>确认导入</Button>
           </div>
           <div className="space-y-2">
             {preview.books.map((book) => (
@@ -227,7 +219,7 @@ export default function SyncCenter() {
               </div>
             ))}
           </div>
-          <p className="text-xs text-amber-600 mt-4">导入会覆盖同 ID 书籍在电脑端的本地数据，请确认后继续。</p>
+          <p className="text-xs text-amber-600 mt-4">导入会覆盖同 ID 书籍在电脑端的本地学习进度、复习记录和教学记录，请确认后继续。</p>
         </Card>
       )}
 
@@ -266,15 +258,10 @@ export default function SyncCenter() {
             <h2 className="text-lg font-semibold text-gray-800">按书籍导出</h2>
             <p className="text-sm text-gray-400 mt-1">只同步某一本书时使用。</p>
           </div>
-          <button
-            onClick={() => navigate('/upload')}
-            className="text-sm text-blue-600 hover:text-blue-700 font-medium"
-          >
-            上传新书
-          </button>
+          <Button variant="ghost" size="sm" onClick={() => navigate('/upload')}>上传新书</Button>
         </div>
         {books.length === 0 ? (
-          <p className="text-sm text-gray-400 py-6 text-center">还没有书籍，上传或从手机导入后即可同步。</p>
+          <EmptyState icon="share" title="还没有书籍" description="上传或从手机导入后即可同步" />
         ) : (
           <div className="space-y-2">
             {books.map((book) => (
@@ -283,13 +270,9 @@ export default function SyncCenter() {
                   <p className="text-sm font-medium text-gray-800">{book.title}</p>
                   <p className="text-xs text-gray-400">{book.total_chapters} 章节 · {book.total_units} 知识单元 · 已学 {book.learned_units}</p>
                 </div>
-                <button
-                  onClick={() => handleExportBook(book)}
-                  disabled={exporting === book.id}
-                  className="px-3 py-1.5 rounded-lg text-xs font-medium bg-gray-100 text-gray-600 hover:bg-gray-200 disabled:text-gray-400"
-                >
-                  {exporting === book.id ? '导出中...' : '导出本书'}
-                </button>
+                <Button variant="secondary" size="sm" onClick={() => handleExportBook(book)} loading={exporting === book.id}>
+                  导出本书
+                </Button>
               </div>
             ))}
           </div>

@@ -199,7 +199,11 @@ async function fulfillJson(route: Route, body: unknown, status = 200) {
   });
 }
 
-async function installMockApi(page: Page) {
+type MockApiOptions = {
+  syncPreviewServiceError?: boolean;
+};
+
+async function installMockApi(page: Page, options: MockApiOptions = {}) {
   await page.addInitScript(({ book }) => {
     class MockEventSource {
       static CONNECTING = 0;
@@ -349,6 +353,13 @@ async function installMockApi(page: Page) {
       return fulfillJson(route, { schema_version: '1.0', source: 'web', books: [sampleBook] });
     }
     if (method === 'POST' && endpoint === '/api/v1/sync/preview') {
+      if (options.syncPreviewServiceError) {
+        return fulfillJson(route, {
+          code: 'VALIDATION_ERROR',
+          message: '同步包结构无效',
+          details: { reason: 'fixture' },
+        }, 400);
+      }
       return fulfillJson(route, syncPreview);
     }
     if (method === 'POST' && endpoint === '/api/v1/sync/import') {
@@ -424,4 +435,21 @@ test('round3 web smoke covers upload, design, teaching, and sync routes', async 
   await expect(page.getByText('教学会话：1')).toBeVisible();
   await expect(page.getByText('学习画像：1')).toBeVisible();
   await expect(page.getByText('模块编排：1')).toBeVisible();
+  await expect(page.getByText(/会覆盖同 ID 书籍.*学习进度/)).toBeVisible();
+});
+
+test('sync preview displays backend ServiceError message', async ({ page }) => {
+  await installMockApi(page, { syncPreviewServiceError: true });
+  await page.goto('/sync');
+
+  const dialogPromise = page.waitForEvent('dialog');
+  await page.locator('input[type="file"]').setInputFiles({
+    name: 'bad-sync.json',
+    mimeType: 'application/json',
+    buffer: Buffer.from(JSON.stringify({ schema_version: '1.0' })),
+  });
+
+  const dialog = await dialogPromise;
+  expect(dialog.message()).toContain('同步包结构无效');
+  await dialog.dismiss();
 });

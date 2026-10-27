@@ -29,44 +29,23 @@ export default function TocConfirm() {
   const [error, setError] = useState('');
   const [selectedId, setSelectedId] = useState<string | null>(null);
 
-  useEffect(() => {
-    let cancelled = false;
-    if (bookId) {
-      (async () => {
-        try {
-          setLoading(true);
-          const response = await getTocPreview(bookId);
-          if (cancelled) return;
-          const flatItems = flattenTocTree(response.toc);
-          setTocItems(flatItems);
-          if (flatItems.length > 0) {
-            setSelectedId(flatItems[0].id);
-          }
-        } catch (err: any) {
-          if (!cancelled) setError(err.message || '加载目录失败');
-        } finally {
-          if (!cancelled) setLoading(false);
-        }
-      })();
-    }
-    return () => { cancelled = true; };
-  }, [bookId]);
-
-  const loadToc = async () => {
+  const loadToc = useCallback(async () => {
+    if (!bookId) return;
     try {
       setLoading(true);
-      const response = await getTocPreview(bookId!);
+      setError('');
+      const response = await getTocPreview(bookId);
       const flatItems = flattenTocTree(response.toc);
       setTocItems(flatItems);
-      if (flatItems.length > 0) {
-        setSelectedId(flatItems[0].id);
-      }
+      setSelectedId(flatItems.length > 0 ? flatItems[0].id : null);
     } catch (err: any) {
       setError(err.message || '加载目录失败');
     } finally {
       setLoading(false);
     }
-  };
+  }, [bookId]);
+
+  useEffect(() => { loadToc(); }, [loadToc]);
 
   // 扁平化树形结构为可编辑列表
   const flattenTocTree = (items: TocItem[]): EditableTocItem[] => {

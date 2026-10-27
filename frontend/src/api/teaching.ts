@@ -12,16 +12,18 @@ export const getActiveTeachingSession = (
   return client.get(`/v1/teaching/sessions/active?book_id=${bookId}`);
 };
 
-// 开始教学会话
+// 开始教学会话（默认 v1；可传 engine:'v2' 走资产闭环）
 export const startTeachingSession = (
   bookId: string,
   unitIds: string[],
   userProfile?: UserTeachingProfile,
+  engine: 'v1' | 'v2' = 'v1',
 ): Promise<TeachingSession> => {
   return client.post('/v1/teaching/sessions/start', {
     book_id: bookId,
     unit_ids: unitIds,
     user_profile: userProfile,
+    engine,
   });
 };
 

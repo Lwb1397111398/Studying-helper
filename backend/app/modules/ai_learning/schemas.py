@@ -118,8 +118,34 @@ class ChapterOverview(BaseModel):
 
 
 class BookOverview(BaseModel):
-    """书籍概览"""
+    """书籍概览（学习进度用：章节列表视角）"""
     book_id: str
     title: str
     total_chapters: int
     chapters: List[ChapterOverview]
+
+
+class ChapterRoleItem(BaseModel):
+    """全书鸟瞰中的章节角色"""
+    chapter_id: str
+    role: str  # 立论|展开|例证|应用|总结|其他
+    one_liner: str = ""
+
+
+class KeyConceptItem(BaseModel):
+    """全书鸟瞰中的关键概念"""
+    name: str
+    definition: str = ""
+    first_chapter_id: str = ""
+    aliases: List[str] = []
+
+
+class BookDeepOverview(BaseModel):
+    """全书鸟瞰（深度精读层 Step1）：全局视角理解，存 books.overview_json"""
+    core_thesis: str = ""
+    main_thread: str = ""
+    chapter_roles: List[ChapterRoleItem] = []
+    key_concepts: List[KeyConceptItem] = []
+    reading_guide: str = ""
+    degraded: bool = False
+    version: str = "v1"

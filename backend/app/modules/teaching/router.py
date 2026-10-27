@@ -25,6 +25,7 @@ class StartSessionRequest(BaseModel):
     plan_session_id: str = ""
     book_id: str
     unit_ids: List[str]
+    engine: str = "v1"  # v1=legacy TeachingService; v2=asset-bound state machine
 
 
 class AskQuestionRequest(BaseModel):
@@ -139,7 +140,38 @@ async def start_session(
     """开始教学会话（自动排序）
 
     优先级：AID 教学设计（含跨章节重组+拓扑+重构标注）> KG 拓扑排序 > 原始请求顺序
+
+    engine=v2 时走单单元资产闭环（需 unit 已有 active UnitLearningAsset）。
     """
+    if (request.engine or "v1").lower() == "v2":
+        from app.modules.teaching.session_v2_service import SessionV2Error, start_session_v2
+
+        if not request.unit_ids:
+            raise HTTPException(status_code=400, detail="v2 engine requires unit_ids")
+        try:
+            ts = await start_session_v2(
+                db,
+                user_id=DEFAULT_USER_ID,
+                book_id=request.book_id,
+                unit_id=request.unit_ids[0],
+            )
+        except SessionV2Error as e:
+            raise HTTPException(
+                status_code=400,
+                detail={"code": e.code, "message": e.message},
+            ) from e
+        return {
+            "id": ts.id,
+            "engine": "v2",
+            "book_id": ts.book_id,
+            "unit_ids": json.loads(ts.unit_ids or "[]"),
+            "asset_id": ts.asset_id,
+            "state_v2": ts.state_v2,
+            "completion_status": ts.completion_status,
+            "status": ts.status,
+            "current_phase": ts.current_phase,
+        }
+
     try:
         # 1. 优先使用 AID 教学设计的当前模块重排单元（若已生成设计）
         unit_ids = request.unit_ids
@@ -463,26 +495,3 @@ async def get_teaching_stats(
         raise HTTPException(status_code=500, detail="获取教学统计失败")
 
 
-@router.get("/sessions/{session_id}/units/{unit_id}/coverage")
-async def get_teaching_plan_coverage(
-    session_id: str,
-    unit_id: str,
-    svc: TeachingService = Depends(_get_service),
-):
-    """获取教学计划的覆盖报告
-
-    返回：
-    - total_items: 总内容项数
-    - covered_items: 已覆盖的内容项数
-    - coverage_rate: 覆盖率 (0-1)
-    - is_complete: 是否完成（严格模式下需要 100% 覆盖）
-    - missing_items: 未覆盖的内容项列表
-    - phase_coverage: 每个阶段的覆盖情况
-    """
-    try:
-        coverage_report = svc.get_teaching_plan_coverage(session_id, unit_id)
-        return coverage_report
-    except Exception as e:
-        import logging
-        logging.getLogger(__name__).error(f"获取教学计划覆盖报告异常: {e}", exc_info=True)
-        raise HTTPException(status_code=500, detail="获取教学计划覆盖报告失败")

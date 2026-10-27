@@ -1,4 +1,9 @@
-"""增量同步服务 - 基于时间戳的智能同步"""
+"""Experimental incremental sync service.
+
+This module is not wired to `/api/v1/sync` and is not part of the current
+offline SyncPackage contract. It does not yet cover the full AID/FSRS sync
+surface, so production import/export must continue to use `service.py`.
+"""
 
 from datetime import datetime, timezone
 from typing import Optional, List, Dict, Any

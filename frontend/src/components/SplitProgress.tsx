@@ -167,28 +167,31 @@ export default function SplitProgress({ bookId, onComplete, onError }: SplitProg
 
           {/* 阶段步骤 */}
           <div className="flex items-center gap-1 mb-4">
-            {STAGES_ORDER.filter(s => s !== 'pending' && s !== 'done').map((s, i) => {
-              const cfg = STAGE_CONFIG[s];
-              const status = getStageStatus(s);
-              return (
-                <div key={s} className="flex items-center flex-1">
-                  <div className={`flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs font-medium transition-all ${
-                    status === 'done' ? 'bg-emerald-500/20 text-emerald-300' :
-                    status === 'active' ? 'bg-blue-500/20 text-blue-300 ring-1 ring-blue-400/30' :
-                    status === 'error' ? 'bg-red-500/20 text-red-300' :
-                    'bg-white/5 text-slate-500'
-                  }`}>
-                    <span>{status === 'done' ? '✓' : cfg.icon}</span>
-                    <span className="hidden sm:inline">{cfg.label}</span>
+            {(() => {
+              const visibleStages = STAGES_ORDER.filter(s => s !== 'pending' && s !== 'done');
+              return visibleStages.map((s, i) => {
+                const cfg = STAGE_CONFIG[s];
+                const status = getStageStatus(s);
+                return (
+                  <div key={s} className="flex items-center flex-1">
+                    <div className={`flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs font-medium transition-all ${
+                      status === 'done' ? 'bg-emerald-500/20 text-emerald-300' :
+                      status === 'active' ? 'bg-blue-500/20 text-blue-300 ring-1 ring-blue-400/30' :
+                      status === 'error' ? 'bg-red-500/20 text-red-300' :
+                      'bg-white/5 text-slate-500'
+                    }`}>
+                      <span>{status === 'done' ? '✓' : cfg.icon}</span>
+                      <span className="hidden sm:inline">{cfg.label}</span>
+                    </div>
+                    {i < visibleStages.length - 1 && (
+                      <div className={`flex-1 h-px mx-1 ${
+                        getStageStatus(visibleStages[i + 1]) === 'done' ? 'bg-emerald-500/40' : 'bg-white/10'
+                      }`} />
+                    )}
                   </div>
-                  {i < 4 && (
-                    <div className={`flex-1 h-px mx-1 ${
-                      getStageStatus(STAGES_ORDER[i + 2]) === 'done' ? 'bg-emerald-500/40' : 'bg-white/10'
-                    }`} />
-                  )}
-                </div>
-              );
-            })}
+                );
+              });
+            })()}
           </div>
 
           {/* 进度条 */}

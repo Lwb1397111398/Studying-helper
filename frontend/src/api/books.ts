@@ -27,7 +27,6 @@ export interface ConfirmTocRequest {
 export interface ConfirmTocResponse {
   book_id: string;
   chapters_count: number;
-  sections_count: number;
   units_count: number;
 }
 
@@ -39,9 +38,9 @@ export interface SplitResult {
   message: string;
 }
 
-// 获取书籍列表
+// 获取书籍列表（个人库规模，一次拉取足够大的分页）
 export const getBooks = async (): Promise<Book[]> => {
-  const res: any = await client.get('/v1/books');
+  const res: any = await client.get('/v1/books', { params: { page_size: 100 } });
   if (res && Array.isArray(res.items)) {
     return res.items;
   }
@@ -157,40 +156,12 @@ export function parseProgressSSE(
   return createProgressSSE(apiPath(`/v1/documents/parse/${uploadId}/progress`), onProgress, onError);
 }
 
-// 获取每日学习统计
-export const getDailyStats = (
-  date: string,
-): Promise<{
-  user_id: string;
-  date: string;
-  total_minutes: number;
-  units_learned: number;
-  units_reviewed: number;
-  tests_taken: number;
-  avg_test_score: number;
-  streak_day: number;
-}> => {
-  return client.get(`/v1/stats/daily/${date}`);
-};
-
-// 获取连续学习天数
-export const getStreak = (): Promise<{ user_id: string; streak: number }> => {
-  return client.get('/v1/stats/streak');
-};
-
-// 更新书籍状态
-export const updateBookStatus = (
+// 更新书籍基本信息（标题/作者，author 传空字符串表示清除）
+export const updateBookInfo = (
   bookId: string,
-  status: {
-    parse_status?: string;
-    split_status?: string;
-    learn_status?: string;
-    total_chapters?: number;
-    total_units?: number;
-    learned_units?: number;
-  },
+  info: { title?: string; author?: string },
 ): Promise<Book> => {
-  return client.put(`/v1/books/${bookId}/status`, status);
+  return client.put(`/v1/books/${bookId}`, info);
 };
 
 // 更新阅读动机

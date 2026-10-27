@@ -5,9 +5,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.db.database import get_db
 from app.config import settings
 from app.common.llm_client import OpenAIClient
-from app.modules.user_storage.services import (
-    UserService, BookService, LearningRecordService, CacheService, FileStorage,
-)
+from app.modules.user_storage.services import UserService, BookService
 
 # 模块级 LLM 客户端缓存 {module_name: OpenAIClient}
 _module_clients: dict[str, OpenAIClient] = {}
@@ -87,18 +85,6 @@ async def get_user_service(db: AsyncSession = Depends(get_db)) -> UserService:
 
 async def get_book_service(db: AsyncSession = Depends(get_db)) -> BookService:
     return BookService(db)
-
-
-async def get_record_service(db: AsyncSession = Depends(get_db)) -> LearningRecordService:
-    return LearningRecordService(db)
-
-
-async def get_cache_service(db: AsyncSession = Depends(get_db)) -> CacheService:
-    return CacheService(db)
-
-
-async def get_file_storage() -> FileStorage:
-    return FileStorage(settings.FILE_STORAGE_DIR)
 
 
 async def get_current_user() -> str:

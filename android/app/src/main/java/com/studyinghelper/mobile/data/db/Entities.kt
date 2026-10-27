@@ -21,6 +21,7 @@ data class BookEntity(
     @ColumnInfo(name = "total_units") val totalUnits: Int?,
     @ColumnInfo(name = "learned_units") val learnedUnits: Int?,
     @ColumnInfo(name = "reading_motivation") val readingMotivation: String?,
+    @ColumnInfo(name = "overview_json") val overviewJson: String? = null,
     @ColumnInfo(name = "created_at") val createdAt: String,
     @ColumnInfo(name = "updated_at") val updatedAt: String,
 )

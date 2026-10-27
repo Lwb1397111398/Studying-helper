@@ -136,3 +136,98 @@ class DocumentParserService:
                     if parser.can_parse(f"test.{ext}"):
                         formats.append(ext)
         return sorted(set(formats))
+
+
+def resolve_user_toc_offsets(items, full_text: str) -> None:
+    """逐项修正用户确认目录的 char_offset（原地修改）。
+
+    目录预览接口和用户新增的章节 offset 可能为 0。拆分服务只在
+    所有 offset 全为 0 时才做全局标题搜索，混合场景（部分有真实
+    offset、部分为 0）会把 offset=0 的章节内容错位到全书开头。
+    这里按列表顺序逐项解析：offset 为 0 的非首项先按标题搜索定位，
+    找不到则退回前一项的偏移。
+    """
+    prev = 0
+    for i, item in enumerate(items):
+        if item.char_offset == 0 and i > 0:
+            pos = full_text.find(item.title, prev)
+            item.char_offset = pos if pos != -1 else prev
+        prev = max(prev, item.char_offset)
+
+
+async def rebuild_book_from_toc(db, book, parsed, toc_items) -> dict:
+    """按用户确认的目录重建章节与知识单元。
+
+    流程：修正目录偏移 -> 删除旧章节/单元/关联记录 -> 重新拆分 -> 入库。
+    commit 由调用方的会话管理负责。
+    """
+    import json
+    from sqlalchemy import select, delete
+    from app.common.time_utils import utc_now
+    from app.db.models import (
+        ChapterModel, KnowledgeUnitModel, MasteryRecordModel, AnnotationModel,
+    )
+    from app.modules.knowledge_splitter.service import KnowledgeSplitterService
+
+    resolve_user_toc_offsets(toc_items, parsed.full_text)
+    parsed.toc = toc_items
+
+    # 删除旧数据
+    old_units = await db.execute(
+        select(KnowledgeUnitModel.id).where(KnowledgeUnitModel.book_id == book.id)
+    )
+    old_unit_ids = [row[0] for row in old_units.all()]
+    if old_unit_ids:
+        await db.execute(delete(AnnotationModel).where(
+            AnnotationModel.knowledge_unit_id.in_(old_unit_ids)))
+        await db.execute(delete(MasteryRecordModel).where(
+            MasteryRecordModel.knowledge_unit_id.in_(old_unit_ids)))
+    await db.execute(delete(KnowledgeUnitModel).where(KnowledgeUnitModel.book_id == book.id))
+    await db.execute(delete(ChapterModel).where(ChapterModel.book_id == book.id))
+
+    # 重新拆分
+    splitter = KnowledgeSplitterService()
+    split_result = splitter.split(parsed, book.id)
+
+    # 保存新数据
+    for chapter in split_result.chapters:
+        db.add(ChapterModel(
+            id=chapter.id,
+            book_id=book.id,
+            title=chapter.title,
+            chapter_number=chapter.chapter_number,
+            order_index=chapter.order_index,
+            level=chapter.level,
+            summary=chapter.summary,
+        ))
+
+    for unit in split_result.units:
+        db.add(KnowledgeUnitModel(
+            id=unit.id,
+            book_id=book.id,
+            chapter_id=unit.chapter_id,
+            title=unit.title,
+            content=unit.content,
+            order_index=unit.order_index,
+            char_offset_start=unit.char_offset_start,
+            char_offset_end=unit.char_offset_end,
+            summary=unit.summary,
+            key_points=json.dumps(unit.key_points, ensure_ascii=False) if unit.key_points else None,
+            concepts=json.dumps(unit.concepts, ensure_ascii=False) if unit.concepts else None,
+            difficulty_level=unit.difficulty_level,
+            importance_score=unit.importance_score,
+        ))
+
+    # 更新书籍状态
+    book.parse_status = "completed"
+    book.split_status = "completed"
+    book.total_chapters = len(split_result.chapters)
+    book.total_units = len(split_result.units)
+    book.updated_at = utc_now()
+    await db.flush()
+
+    return {
+        "book_id": book.id,
+        "chapters_count": len(split_result.chapters),
+        "units_count": len(split_result.units),
+    }

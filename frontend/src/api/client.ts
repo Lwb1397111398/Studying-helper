@@ -26,7 +26,8 @@ client.interceptors.request.use((config) => {
 client.interceptors.response.use(
   (response) => response.data,
   (error) => {
-    const message = error.response?.data?.detail || error.message || '请求失败';
+    const data = error.response?.data;
+    const message = data?.message || data?.detail || error.message || '请求失败';
     return Promise.reject(new Error(message));
   }
 );

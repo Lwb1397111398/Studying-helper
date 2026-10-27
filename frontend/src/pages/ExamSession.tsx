@@ -3,6 +3,8 @@ import { useParams, useNavigate } from 'react-router-dom';
 import Card from '../components/Card';
 import Loading from '../components/Loading';
 import ProgressBar from '../components/ProgressBar';
+import EmptyState from '../components/ui/EmptyState';
+import Button from '../components/ui/Button';
 import { startExam, submitExam } from '../api/review';
 import type { ReviewSession, ReviewQuestion, ExamResult } from '../types';
 
@@ -111,14 +113,8 @@ export default function ExamSession() {
           )}
 
           <div className="flex gap-3 justify-center">
-            <button onClick={() => navigate(`/books/${bookId}`)}
-              className="px-5 py-2.5 bg-gray-100 text-gray-600 rounded-xl text-sm font-medium hover:bg-gray-200 transition-all">
-              返回书籍
-            </button>
-            <button onClick={() => { setResult(null); setLoading(true); initExam(); }}
-              className="px-5 py-2.5 bg-gradient-to-r from-orange-500 to-amber-500 text-white rounded-xl text-sm font-medium hover:shadow-lg hover:shadow-orange-500/25 transition-all">
-              再考一次
-            </button>
+            <Button variant="secondary" onClick={() => navigate(`/books/${bookId}`)}>返回书籍</Button>
+            <Button variant="warning" onClick={() => { setResult(null); setLoading(true); initExam(); }}>再考一次</Button>
           </div>
         </Card>
       </div>
@@ -127,14 +123,11 @@ export default function ExamSession() {
 
   if (!session || !session.questions || session.questions.length === 0 || !currentQuestion) {
     return (
-      <div className="max-w-lg mx-auto text-center py-20 animate-fade-in">
-        <div className="text-6xl mb-5 animate-float">📝</div>
-        <h2 className="text-xl font-bold text-gray-800 mb-2">暂无可考内容</h2>
-        <p className="text-sm text-gray-400 mb-8">请先完成知识拆分和学习</p>
-        <button onClick={() => navigate(`/books/${bookId}`)}
-          className="px-5 py-2.5 bg-gradient-to-r from-blue-500 to-blue-600 text-white rounded-xl text-sm font-medium hover:shadow-lg hover:shadow-blue-500/25 transition-all">
-          返回书籍详情
-        </button>
+      <div className="max-w-lg mx-auto">
+        <Card hover={false}>
+          <EmptyState icon="documentText" title="暂无可考内容" description="请先完成知识拆分和学习"
+            action={<Button onClick={() => navigate(`/books/${bookId}`)}>返回书籍详情</Button>} />
+        </Card>
       </div>
     );
   }
@@ -200,14 +193,10 @@ export default function ExamSession() {
 
       {/* 操作按钮 */}
       <div className="flex justify-between items-center">
-        <button onClick={() => navigate(`/books/${bookId}`)}
-          className="px-4 py-2.5 text-gray-500 rounded-xl text-sm font-medium hover:bg-gray-100 transition-colors">
-          退出考试
-        </button>
-        <button onClick={handleSubmitAnswer} disabled={!answers[currentQuestion.id] || submitting}
-          className="flex items-center gap-2 px-6 py-2.5 bg-gradient-to-r from-orange-500 to-amber-500 text-white rounded-xl text-sm font-medium hover:shadow-lg hover:shadow-orange-500/25 disabled:opacity-40 disabled:cursor-not-allowed transition-all">
+        <Button variant="secondary" onClick={() => navigate(`/books/${bookId}`)}>退出考试</Button>
+        <Button variant="warning" onClick={handleSubmitAnswer} disabled={!answers[currentQuestion.id] || submitting}>
           {submitting ? '提交中...' : currentIndex + 1 < total ? '下一题 →' : '📋 交卷'}
-        </button>
+        </Button>
       </div>
     </div>
   );

@@ -77,3 +77,13 @@ internal val MIGRATION_1_2 = object : Migration(1, 2) {
         MIGRATION_1_2_STATEMENTS.forEach(db::execSQL)
     }
 }
+
+internal val MIGRATION_2_3_STATEMENTS = listOf(
+    "ALTER TABLE books ADD COLUMN overview_json TEXT",
+)
+
+internal val MIGRATION_2_3 = object : Migration(2, 3) {
+    override fun migrate(db: SupportSQLiteDatabase) {
+        MIGRATION_2_3_STATEMENTS.forEach(db::execSQL)
+    }
+}

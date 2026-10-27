@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import Card from '../components/Card';
-import Loading from '../components/Loading';
+import Button from '../components/ui/Button';
 import { exportReview } from '../api/review';
 import { getBook } from '../api/books';
 import { exportSyncPackage } from '../api/sync';
@@ -85,10 +85,7 @@ export default function Export() {
           <h1 className="text-xl font-bold text-gray-800">导出复习资料</h1>
           <p className="text-xs text-gray-400 mt-0.5">选择格式导出，随时随地复习</p>
         </div>
-        <button onClick={() => navigate(`/books/${bookId}`)}
-          className="px-4 py-2 text-gray-500 rounded-xl text-sm font-medium hover:bg-gray-100 transition-colors">
-          ← 返回
-        </button>
+        <Button variant="secondary" onClick={() => navigate(`/books/${bookId}`)}>← 返回</Button>
       </div>
 
       <div className="space-y-3">
@@ -101,30 +98,15 @@ export default function Export() {
               <h3 className="text-sm font-semibold text-gray-800">{format.label}</h3>
               <p className="text-xs text-gray-400 mt-0.5">{format.desc}</p>
             </div>
-            <button
+            <Button
+              size="sm"
               onClick={() => handleExport(format)}
-              disabled={exporting === format.id || !bookTitle}
-              className={`flex items-center gap-1.5 px-4 py-2 rounded-xl text-sm font-medium transition-all shrink-0 ${done === format.id
-                ? 'bg-emerald-100 text-emerald-700'
-                : exporting === format.id
-                  ? 'bg-gray-100 text-gray-400 cursor-wait'
-                  : 'bg-gradient-to-r from-blue-500 to-blue-600 text-white hover:shadow-lg hover:shadow-blue-500/25'
-                }`}
+              loading={exporting === format.id}
+              disabled={!bookTitle}
+              variant={done === format.id ? 'success' : 'primary'}
             >
-              {exporting === format.id ? (
-                <>
-                  <span className="animate-spin">⏳</span> 导出中...
-                </>
-              ) : done === format.id ? (
-                <>
-                  ✓ 已下载
-                </>
-              ) : (
-                <>
-                  📥 导出{format.ext}
-                </>
-              )}
-            </button>
+              {done === format.id ? '✓ 已下载' : `导出${format.ext}`}
+            </Button>
           </Card>
         ))}
       </div>
@@ -139,24 +121,10 @@ export default function Export() {
             <p className="text-xs text-gray-400 mt-0.5">导出本书同步包；导入请到同步中心预览覆盖影响</p>
           </div>
           <div className="flex gap-2 shrink-0">
-            <button
-              onClick={handleSyncExport}
-              disabled={exporting === 'sync'}
-              className={`px-4 py-2 rounded-xl text-sm font-medium transition-all ${done === 'sync'
-                ? 'bg-emerald-100 text-emerald-700'
-                : exporting === 'sync'
-                  ? 'bg-gray-100 text-gray-400 cursor-wait'
-                  : 'bg-gradient-to-r from-emerald-500 to-emerald-600 text-white hover:shadow-lg hover:shadow-emerald-500/25'
-                }`}
-            >
-              {exporting === 'sync' ? '导出中...' : done === 'sync' ? '已下载' : '导出 JSON'}
-            </button>
-            <button
-              onClick={() => navigate('/sync')}
-              className="px-4 py-2 rounded-xl text-sm font-medium bg-gray-100 text-gray-600 hover:bg-gray-200 transition-colors"
-            >
-              去同步中心导入
-            </button>
+            <Button size="sm" variant="success" onClick={handleSyncExport} loading={exporting === 'sync'}>
+              {done === 'sync' ? '已下载' : '导出 JSON'}
+            </Button>
+            <Button size="sm" variant="secondary" onClick={() => navigate('/sync')}>去同步中心导入</Button>
           </div>
         </div>
       </Card>

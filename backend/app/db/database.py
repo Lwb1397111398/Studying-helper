@@ -20,9 +20,13 @@ def init_engine(db_url: str):
     """初始化数据库引擎"""
     global engine, async_session_factory
     if "sqlite" in db_url:
-        db_path = db_url.split("///")[-1]
-        if db_path.startswith("./"):
-            Path(db_path).parent.mkdir(parents=True, exist_ok=True)
+        # 支持 sqlite+aiosqlite:///./rel 与 sqlite+aiosqlite:///C:/abs
+        raw = db_url.split(":///")[-1] if ":///" in db_url else ""
+        if raw and raw != ":memory:":
+            try:
+                Path(raw).parent.mkdir(parents=True, exist_ok=True)
+            except OSError as exc:
+                logger.warning("无法创建数据库目录 %s: %s", raw, exc)
     engine = create_async_engine(
         db_url,
         echo=False,
@@ -59,12 +63,16 @@ async def init_db():
     """创建所有表"""
     if engine is None:
         raise RuntimeError("数据库引擎未初始化，请先调用 init_engine()")
-    from app.db.models import (
+    from app.db.models import (  # noqa: F401 — imported for metadata.create_all
         UserModel, BookModel, ChapterModel, KnowledgeUnitModel,
         MasteryRecordModel, AnnotationModel, LearningRecordModel,
         KGNodeModel, KGEdgeModel, CacheEntryModel, DailyStatsModel,
         ReviewSessionModel, TeachingSessionModel, TeachingMessageModel,
         UserQuestionModel, SessionTestModel, LearningEfficiencyModel,
+        DocumentModel, DocumentRevisionModel, DocumentBlockModel,
+        AnalysisJobModel, UnitLearningAssetModel,
+        LearningAttemptModel, LearningEvidenceModel,
+        BookConceptModel,
     )
     async with engine.begin() as conn:
         await conn.run_sync(Base.metadata.create_all)
@@ -93,6 +101,13 @@ async def _run_migrations(conn):
     import sqlalchemy as sa
 
     async def _add_column_if_missing(table: str, column: str, col_type):
+        # 表不存在时跳过（增量迁移测试可能只建部分表）
+        try:
+            rows = (await conn.execute(sa.text(f"PRAGMA table_info({table})"))).all()
+            if not rows:
+                return
+        except Exception:
+            return
         try:
             await conn.execute(sa.text(f"ALTER TABLE {table} ADD COLUMN {column} {col_type}"))
             logger.info(f"迁移：已添加 {table}.{column}")
@@ -103,6 +118,7 @@ async def _run_migrations(conn):
             raise
 
     await _add_column_if_missing("knowledge_units", "explanation", "TEXT")
+    await _add_column_if_missing("knowledge_units", "ai_cognitive_hint", "VARCHAR(30)")
     # Task #10: 结构化笔记 - 给 annotations 表添加新列
     await _add_column_if_missing("annotations", "related_concepts_json", "TEXT DEFAULT '[]'")
     await _add_column_if_missing("annotations", "example", "TEXT")
@@ -111,6 +127,8 @@ async def _run_migrations(conn):
     await _add_column_if_missing("teaching_messages", "assessment_json", "TEXT")
     # 书籍阅读动机
     await _add_column_if_missing("books", "reading_motivation", "TEXT")
+    # 全书鸟瞰（Book Overview）
+    await _add_column_if_missing("books", "overview_json", "TEXT")
     # FSRS 复习算法字段，兼容已有本地库
     await _add_column_if_missing("mastery_records", "stability", "FLOAT DEFAULT 0.0")
     await _add_column_if_missing("mastery_records", "difficulty", "FLOAT DEFAULT 5.0")
@@ -119,3 +137,13 @@ async def _run_migrations(conn):
     await _add_column_if_missing("mastery_records", "last_elapsed_days", "INTEGER DEFAULT 0")
     await _add_column_if_missing("mastery_records", "scheduled_days", "INTEGER DEFAULT 0")
     await _add_column_if_missing("mastery_records", "algorithm", "VARCHAR(20) DEFAULT 'sm2'")
+    # Teaching session v2（单单元闭环）
+    await _add_column_if_missing("teaching_sessions", "asset_id", "VARCHAR(64)")
+    await _add_column_if_missing("teaching_sessions", "parent_session_id", "VARCHAR(64)")
+    await _add_column_if_missing("teaching_sessions", "state_v2", "VARCHAR(40)")
+    await _add_column_if_missing("teaching_sessions", "completion_status", "VARCHAR(40)")
+    await _add_column_if_missing("teaching_sessions", "pause_reason", "VARCHAR(60)")
+    await _add_column_if_missing("teaching_sessions", "plan_snapshot_json", "TEXT")
+    await _add_column_if_missing("teaching_sessions", "primary_unit_id", "VARCHAR(64)")
+    # Step3：LearningEvidence 挂 claim_id
+    await _add_column_if_missing("learning_evidences", "claim_id", "VARCHAR(64)")

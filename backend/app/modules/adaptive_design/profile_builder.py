@@ -75,6 +75,8 @@ async def infer_profile(
                     goal_depth=llm_result["goal_depth"],
                     cognitive_pref=llm_result["cognitive_pref"],
                     restructure_tolerance=llm_result["restructure_tolerance"],
+                    time_budget_minutes=25,
+                    extra_json=_default_teaching_extra_json(),
                     source="ai_inferred",
                     status="draft",
                 )
@@ -160,6 +162,54 @@ def _infer_rulebased(
         goal_depth=goal,
         cognitive_pref=cognitive,
         restructure_tolerance=tolerance,
+        time_budget_minutes=25,
+        extra_json=_default_teaching_extra_json(),
         source="ai_inferred",
         status="draft",
     )
+
+
+def _default_teaching_extra_json() -> str:
+    """Step5：新画像默认教学偏好（已有画像不覆盖，仅初始化写入）。"""
+    return json.dumps(
+        {
+            "teaching_style": "explain_then_probe",
+            "hint_policy": "ladder",
+            "preferred_session_minutes": 25,
+            "example_style": "example_first",
+        },
+        ensure_ascii=False,
+    )
+
+
+def teaching_prefs_from_profile(profile: Optional[LearnerIntentProfileSchema] | dict | None) -> dict:
+    """从画像 extra_json / time_budget 提取教学偏好；缺省回退推荐值。"""
+    defaults = {
+        "teaching_style": "explain_then_probe",
+        "hint_policy": "ladder",
+        "preferred_session_minutes": 25,
+        "example_style": "example_first",
+    }
+    if profile is None:
+        return dict(defaults)
+    extra_raw = "{}"
+    time_budget = None
+    if isinstance(profile, dict):
+        extra_raw = profile.get("extra_json") or "{}"
+        time_budget = profile.get("time_budget_minutes")
+    else:
+        extra_raw = getattr(profile, "extra_json", None) or "{}"
+        time_budget = getattr(profile, "time_budget_minutes", None)
+    try:
+        extra = json.loads(extra_raw) if isinstance(extra_raw, str) else (extra_raw or {})
+    except Exception:
+        extra = {}
+    if not isinstance(extra, dict):
+        extra = {}
+    out = dict(defaults)
+    for k in defaults:
+        if k in extra and extra[k] not in (None, ""):
+            out[k] = extra[k]
+    if time_budget:
+        out["preferred_session_minutes"] = int(time_budget)
+    return out

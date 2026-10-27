@@ -86,9 +86,15 @@ async def test_save_note_persists_annotation(client, db_session):
     assert annotation is not None
     assert annotation.content == "我的笔记"
 
-    get_resp = client.get("/api/v1/learning/units/unit-1/notes")
-    assert get_resp.status_code == 200
-    assert get_resp.json() == {"unit_id": "unit-1", "content": "我的笔记"}
+    # 验证笔记确实持久化到数据库（get_note 端点已移除，直接查库）
+    result2 = await db_session.execute(
+        select(AnnotationModel).where(
+            AnnotationModel.user_id == "anonymous",
+            AnnotationModel.knowledge_unit_id == "unit-1",
+            AnnotationModel.annotation_type == "note",
+        )
+    )
+    assert result2.scalar_one_or_none().content == "我的笔记"
 
 
 @pytest.mark.asyncio

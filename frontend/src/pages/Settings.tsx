@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import Card from '../components/Card';
+import Button from '../components/ui/Button';
 import { useAppState, defaultSettings } from '../contexts/AppContext';
 import type { AIConfigUpdate } from '../types';
 
@@ -82,7 +83,16 @@ export default function Settings() {
   };
 
   if (!settingsLoaded) {
-    return <div className="max-w-2xl mx-auto p-10 text-center text-gray-400">加载中...</div>;
+    return (
+      <div className="max-w-2xl mx-auto">
+        <div className="h-8 w-48 bg-gray-100 rounded-lg animate-pulse mb-8" />
+        <div className="space-y-5">
+          <div className="h-40 bg-gray-100 rounded-2xl animate-pulse" />
+          <div className="h-40 bg-gray-100 rounded-2xl animate-pulse" />
+          <div className="h-40 bg-gray-100 rounded-2xl animate-pulse" />
+        </div>
+      </div>
+    );
   }
 
   return (
@@ -152,13 +162,9 @@ export default function Settings() {
 
       {/* 保存按钮 */}
       <div className="flex justify-end mb-8">
-        <button onClick={handleSave} disabled={saving}
-          className={`flex items-center gap-2 px-6 py-2.5 rounded-xl text-sm font-medium transition-all ${saved
-              ? 'bg-emerald-500 text-white shadow-lg shadow-emerald-500/25'
-              : 'bg-gradient-to-r from-blue-500 to-blue-600 text-white hover:shadow-lg hover:shadow-blue-500/25 disabled:opacity-50'
-            }`}>
-          {saved ? '✓ 已保存' : saving ? '保存中...' : '💾 保存设置'}
-        </button>
+        <Button onClick={handleSave} loading={saving} variant={saved ? 'success' : 'primary'}>
+          {saved ? '✓ 已保存' : '保存设置'}
+        </Button>
       </div>
 
       {/* 并发控制 */}
@@ -276,13 +282,9 @@ export default function Settings() {
 
             {/* AI 配置保存按钮 */}
             <div className="flex justify-end mt-5">
-              <button onClick={handleAISave} disabled={aiSaving}
-                className={`flex items-center gap-2 px-6 py-2.5 rounded-xl text-sm font-medium transition-all ${aiSaved
-                    ? 'bg-emerald-500 text-white shadow-lg shadow-emerald-500/25'
-                    : 'bg-gradient-to-r from-purple-500 to-purple-600 text-white hover:shadow-lg hover:shadow-purple-500/25 disabled:opacity-50'
-                  }`}>
-                {aiSaved ? '✓ 已保存' : aiSaving ? '保存中...' : '💾 保存 AI 配置'}
-              </button>
+              <Button onClick={handleAISave} loading={aiSaving} variant={aiSaved ? 'success' : 'primary'}>
+                {aiSaved ? '✓ 已保存' : '保存 AI 配置'}
+              </Button>
             </div>
           </>
         ) : (

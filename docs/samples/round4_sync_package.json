@@ -1,0 +1,304 @@
+{
+  "schema_version": "1.0",
+  "exported_at": "2026-07-04T12:00:00Z",
+  "source": "android",
+  "user_id": "anonymous",
+  "books": [
+    {
+      "id": "round4-book",
+      "user_id": "anonymous",
+      "title": "第四轮同步回归样例",
+      "author": "Studying-helper",
+      "file_path": "android://manual/round4-book",
+      "file_type": "manual",
+      "file_size_bytes": 0,
+      "parse_status": "completed",
+      "split_status": "completed",
+      "learn_status": "learning",
+      "total_chapters": 1,
+      "total_units": 2,
+      "learned_units": 1,
+      "reading_motivation": "验证跨端同步",
+      "created_at": "2026-07-04T12:00:00Z",
+      "updated_at": "2026-07-04T12:00:00Z"
+    }
+  ],
+  "chapters": [
+    {
+      "id": "round4-chapter",
+      "book_id": "round4-book",
+      "title": "默认章节",
+      "chapter_number": 1,
+      "parent_id": null,
+      "level": 0,
+      "order_index": 0,
+      "summary": "同步回归章节"
+    }
+  ],
+  "knowledge_units": [
+    {
+      "id": "round4-unit-a",
+      "book_id": "round4-book",
+      "chapter_id": "round4-chapter",
+      "section_id": null,
+      "title": "主动提问",
+      "content": "主动提问可以暴露理解缺口。",
+      "order_index": 0,
+      "char_offset_start": 0,
+      "char_offset_end": 14,
+      "summary": "用问题定位缺口。",
+      "explanation": "先提出具体问题，再回到材料验证。",
+      "key_points": "[\"提出具体问题\"]",
+      "concepts": "[{\"name\":\"主动提问\"}]",
+      "prerequisites": "[]",
+      "difficulty_level": 2,
+      "importance_score": 0.8,
+      "ai_cognitive_hint": "understand"
+    },
+    {
+      "id": "round4-unit-b",
+      "book_id": "round4-book",
+      "chapter_id": "round4-chapter",
+      "section_id": null,
+      "title": "关键术语",
+      "content": "关键术语需要准确记忆。",
+      "order_index": 1,
+      "char_offset_start": 15,
+      "char_offset_end": 26,
+      "summary": "术语要记准。",
+      "explanation": "先记定义，再用例子区分。",
+      "key_points": "[\"记忆定义\"]",
+      "concepts": "[{\"name\":\"术语\"}]",
+      "prerequisites": "[]",
+      "difficulty_level": 1,
+      "importance_score": 0.7,
+      "ai_cognitive_hint": "memorize"
+    }
+  ],
+  "kg_nodes": [
+    {
+      "id": "round4-node-a",
+      "node_type": "unit",
+      "label": "主动提问",
+      "book_id": "round4-book",
+      "content_summary": "用问题定位缺口",
+      "difficulty_level": 2,
+      "importance_score": 0.8,
+      "mastery_score": 0.72,
+      "mastery_level": "familiar",
+      "size": 1.0,
+      "color": "#10b981"
+    },
+    {
+      "id": "round4-node-b",
+      "node_type": "unit",
+      "label": "关键术语",
+      "book_id": "round4-book",
+      "content_summary": "术语要记准",
+      "difficulty_level": 1,
+      "importance_score": 0.7,
+      "mastery_score": 0.4,
+      "mastery_level": "learning",
+      "size": 1.0,
+      "color": "#f59e0b"
+    }
+  ],
+  "kg_edges": [
+    {
+      "id": "round4-edge",
+      "source_id": "round4-node-a",
+      "target_id": "round4-node-b",
+      "relation_type": "related",
+      "weight": 0.6,
+      "metadata_json": "{\"reason\":\"same fixture\"}"
+    }
+  ],
+  "mastery_records": [
+    {
+      "id": "round4-mastery",
+      "user_id": "anonymous",
+      "knowledge_unit_id": "round4-unit-a",
+      "book_id": "round4-book",
+      "mastery_score": 0.72,
+      "mastery_level": "familiar",
+      "last_reviewed_at": "2026-07-04T12:00:00Z",
+      "next_review_at": "2026-07-05T12:00:00Z",
+      "review_count": 1,
+      "ease_factor": 2.5,
+      "interval_days": 1,
+      "stability": 2.5,
+      "difficulty": 5.5,
+      "lapses": 0,
+      "reps": 1,
+      "last_elapsed_days": 0,
+      "scheduled_days": 1,
+      "algorithm": "fsrs"
+    }
+  ],
+  "annotations": [
+    {
+      "id": "round4-annotation",
+      "user_id": "anonymous",
+      "knowledge_unit_id": "round4-unit-a",
+      "annotation_type": "note",
+      "content": "这里适合用自己的问题做索引。",
+      "related_concepts_json": "[\"主动提问\"]",
+      "example": "为什么这个概念重要？",
+      "cornell_cues": "[\"主动提问\"]",
+      "cornell_summary": "用问题组织学习。",
+      "created_at": "2026-07-04T12:00:00Z",
+      "updated_at": "2026-07-04T12:00:00Z"
+    }
+  ],
+  "learning_records": [
+    {
+      "id": "round4-learning",
+      "user_id": "anonymous",
+      "book_id": "round4-book",
+      "session_id": "round4-session",
+      "started_at": "2026-07-04T12:00:00Z",
+      "ended_at": "2026-07-04T12:20:00Z",
+      "duration_minutes": 20,
+      "units_covered": "[\"round4-unit-a\"]",
+      "questions_asked": 1,
+      "test_score": 80,
+      "annotations_created": 1
+    }
+  ],
+  "daily_stats": [
+    {
+      "user_id": "anonymous",
+      "date": "2026-07-04",
+      "total_minutes": 20,
+      "units_learned": 1,
+      "units_reviewed": 1,
+      "tests_taken": 1,
+      "avg_test_score": 80,
+      "streak_day": 1
+    }
+  ],
+  "review_sessions": [
+    {
+      "id": "round4-review",
+      "user_id": "anonymous",
+      "book_id": "round4-book",
+      "review_type": "exam",
+      "questions_json": "[]",
+      "started_at": "2026-07-04T12:00:00Z",
+      "ended_at": "2026-07-04T12:10:00Z",
+      "score": 80
+    }
+  ],
+  "teaching_sessions": [
+    {
+      "id": "round4-teaching",
+      "user_id": "anonymous",
+      "plan_session_id": "",
+      "book_id": "round4-book",
+      "unit_ids": "[\"round4-unit-b\",\"round4-unit-a\"]",
+      "current_unit_index": 0,
+      "current_phase": "activate",
+      "strategy_json": "{\"source\":\"android\"}",
+      "status": "active",
+      "started_at": "2026-07-04T12:00:00Z",
+      "ended_at": null
+    }
+  ],
+  "teaching_messages": [
+    {
+      "id": "round4-message",
+      "session_id": "round4-teaching",
+      "unit_id": "round4-unit-b",
+      "phase": "activate",
+      "content": "先回想你如何记术语。",
+      "content_type": "text",
+      "assessment_json": null,
+      "created_at": "2026-07-04T12:00:00Z"
+    }
+  ],
+  "user_questions": [
+    {
+      "id": "round4-question",
+      "session_id": "round4-teaching",
+      "question": "为什么先记术语？",
+      "answer": "为了避免后续理解偏差。",
+      "intent": "ask",
+      "follow_up_json": "[]",
+      "asked_at": "2026-07-04T12:05:00Z"
+    }
+  ],
+  "session_tests": [
+    {
+      "id": "round4-test",
+      "session_id": "round4-teaching",
+      "questions_json": "[]",
+      "user_answers_json": "[]",
+      "score": 80,
+      "weak_points_json": "[]",
+      "completed_at": "2026-07-04T12:08:00Z"
+    }
+  ],
+  "learning_efficiency": [
+    {
+      "id": "round4-efficiency",
+      "session_id": "round4-teaching",
+      "unit_id": "round4-unit-b",
+      "phase": "activate",
+      "duration_seconds": 120,
+      "interaction_count": 1,
+      "efficiency_score": 0.8,
+      "created_at": "2026-07-04T12:00:00Z"
+    }
+  ],
+  "learner_intent_profiles": [
+    {
+      "id": "round4-profile",
+      "user_id": "anonymous",
+      "book_id": "round4-book",
+      "identity_background": "unknown",
+      "goal_depth": "apply_understand",
+      "cognitive_pref": "rigorous_system",
+      "restructure_tolerance": "moderate",
+      "time_budget_minutes": 30,
+      "source": "ai_inferred",
+      "status": "confirmed",
+      "extra_json": "{}",
+      "created_at": "2026-07-04T12:00:00Z",
+      "updated_at": "2026-07-04T12:00:00Z"
+    }
+  ],
+  "teaching_designs": [
+    {
+      "id": "round4-design",
+      "user_id": "anonymous",
+      "book_id": "round4-book",
+      "profile_id": "round4-profile",
+      "macro_design_json": "{\"modules\":[{\"index\":0,\"unit_ids\":[\"round4-unit-b\",\"round4-unit-a\"]}]}",
+      "current_module_index": 0,
+      "generated_module_count": 1,
+      "adjustments_json": "[]",
+      "status": "active",
+      "version": 1,
+      "created_at": "2026-07-04T12:00:00Z",
+      "updated_at": "2026-07-04T12:00:00Z"
+    }
+  ],
+  "module_micro_plans": [
+    {
+      "id": "round4-micro",
+      "design_id": "round4-design",
+      "book_id": "round4-book",
+      "user_id": "anonymous",
+      "module_index": 0,
+      "module_title": "术语先行模块",
+      "ordered_unit_ids_json": "[\"round4-unit-b\",\"round4-unit-a\"]",
+      "unit_annotations_json": "[{\"unit_id\":\"round4-unit-b\",\"cognitive_mode\":\"memorize\"}]",
+      "module_intro": "先记准术语，再用问题理解。",
+      "module_status": "active",
+      "module_summary_json": null,
+      "parent_design_version": 1,
+      "created_at": "2026-07-04T12:00:00Z",
+      "updated_at": "2026-07-04T12:00:00Z"
+    }
+  ]
+}

@@ -3,6 +3,8 @@ import { useParams, useNavigate } from 'react-router-dom';
 import Card from '../components/Card';
 import Loading from '../components/Loading';
 import ProgressBar from '../components/ProgressBar';
+import EmptyState from '../components/ui/EmptyState';
+import Button from '../components/ui/Button';
 import { startReviewSession, submitAnswer, submitFreeRecallAnswer } from '../api/review';
 import type { ReviewSession as ReviewSessionType, ReviewQuestion, ReviewFeedback, FreeRecallResult } from '../types';
 
@@ -73,14 +75,11 @@ export default function ReviewSession() {
   if (loading) return <Loading />;
   if (!session || !session.questions || session.questions.length === 0 || !currentQuestion) {
     return (
-      <div className="max-w-lg mx-auto text-center py-20 animate-fade-in">
-        <div className="text-6xl mb-5 animate-float">🎉</div>
-        <h2 className="text-xl font-bold text-gray-800 mb-2">没有待复习的内容</h2>
-        <p className="text-sm text-gray-400 mb-8">完成学习后即可开始复习</p>
-        <button onClick={() => navigate(`/books/${bookId}`)}
-          className="px-5 py-2.5 bg-gradient-to-r from-blue-500 to-blue-600 text-white rounded-xl text-sm font-medium hover:shadow-lg hover:shadow-blue-500/25 transition-all">
-          返回书籍详情
-        </button>
+      <div className="max-w-lg mx-auto">
+        <Card hover={false}>
+          <EmptyState icon="checkCircle" title="没有待复习的内容" description="完成学习后即可开始复习"
+            action={<Button onClick={() => navigate(`/books/${bookId}`)}>返回书籍详情</Button>} />
+        </Card>
       </div>
     );
   }
@@ -251,24 +250,13 @@ export default function ReviewSession() {
 
       {/* 操作按钮 */}
       <div className="flex justify-between items-center">
-        <button onClick={() => navigate(`/books/${bookId}`)}
-          className="px-4 py-2.5 text-gray-500 rounded-xl text-sm font-medium hover:bg-gray-100 transition-colors">
-          退出复习
-        </button>
+        <Button variant="secondary" onClick={() => navigate(`/books/${bookId}`)}>退出复习</Button>
         {(feedback || freeRecallResult) ? (
-          <button onClick={handleNext}
-            className="flex items-center gap-2 px-6 py-2.5 bg-gradient-to-r from-blue-500 to-blue-600 text-white rounded-xl text-sm font-medium hover:shadow-lg hover:shadow-blue-500/25 transition-all">
-            {currentIndex + 1 < total ? '下一题 →' : '✓ 完成复习'}
-          </button>
+          <Button onClick={handleNext}>{currentIndex + 1 < total ? '下一题 →' : '✓ 完成复习'}</Button>
         ) : (
-          <button onClick={handleSubmit} disabled={!selectedAnswer}
-            className={`flex items-center gap-2 px-6 py-2.5 text-white rounded-xl text-sm font-medium hover:shadow-lg disabled:opacity-40 disabled:cursor-not-allowed transition-all ${
-              isFreeRecall
-                ? 'bg-gradient-to-r from-purple-500 to-violet-500 hover:shadow-purple-500/25'
-                : 'bg-gradient-to-r from-emerald-500 to-green-500 hover:shadow-emerald-500/25'
-            }`}>
+          <Button onClick={handleSubmit} disabled={!selectedAnswer} variant={isFreeRecall ? 'primary' : 'success'}>
             {isFreeRecall ? '提交回忆' : '提交答案'}
-          </button>
+          </Button>
         )}
       </div>
     </div>

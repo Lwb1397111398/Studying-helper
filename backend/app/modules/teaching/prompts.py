@@ -49,6 +49,9 @@ ANSWER_PROMPT = """你是一位专业的教师，请回答学生的问题。
 ## 当前学习内容
 {current_content}
 
+## 本单元预存资产（优先引用；没有则忽略）
+{asset_block}
+
 ## 学生问题
 {question}
 
@@ -57,7 +60,7 @@ ANSWER_PROMPT = """你是一位专业的教师，请回答学生的问题。
 
 ## 任务
 请回答学生的问题，要求：
-1. 直接回答问题
+1. 直接回答问题；若 asset_block 中有相关 claim / 概念定义，**优先引用**（可意译，勿编造未出现的定义）
 2. 提供例子或类比帮助理解
 3. 最后给出2-3个建议的追问方向
 
@@ -399,3 +402,162 @@ EXAMPLE_PROMPT = """你是一位专业的教师，请通过例子帮助学生理
 4. 最后引导学生思考例子与知识点的关系
 
 请直接返回例子说明，不需要JSON格式。"""
+
+
+# ========== Step3：v2 资产消费 prompt ==========
+
+EXPLAIN_PROMPT_V2 = """你是一位专业的教师，请按「讲解预算」讲解本单元。
+
+## 知识点
+标题：{title}
+摘要：{summary}
+
+## 核心概念
+{concepts}
+
+## 教学策略
+讲解风格：{explanation_style}
+教导方式：{teaching_style}
+脚手架级别：{scaffold_level}
+
+{budget_block}
+
+## 风格指令（必须遵守）
+- 若 explanation_style=example_first：每个 **core_thesis_support / key_mechanism** 命题按
+  「① 具体例子 → ② 抽象定义/机制 → ③ 为什么重要（挂到全书核心论点）」顺序展开
+- 若命题明显是数学推导/形式化证明：允许该条 **理论先行**，但仍需在段末补一个直观例子
+- 若 teaching_style=explain_then_probe：每个 core/key_mechanism 讲完后，**立即附一个轻思考题**
+  （源自该条 mastery_check，用「想一想：…」标注；不要求学生现在作答，正式检验在 CHECK）
+- 其他 role 不必强行例子先行，也无需每条都追问
+
+## 任务
+请生成讲解文本，要求：
+1. **开头用 1 句话**点明本单元在全书论证中的位置（结合「单元角色」与「全书核心论点」）
+2. 严格遵守讲解预算：
+   - core_thesis_support / key_mechanism：详细讲，必须有例子+类比，并按风格指令展开
+   - supporting_detail：正常讲
+   - example：融入其他命题作例证
+   - tangential：**跳过或最多一句带过**
+3. 总篇幅按 required 命题数量弹性控制（每条详细命题约 100–150 字），不要无限膨胀；建议总长 300–800 字
+4. 结尾可再给 1 句总引导（可呼应最弱的 mastery_check）
+
+请直接返回讲解文本，不需要JSON格式。"""
+
+
+REPAIR_PROMPT_V2 = """你是一位专业的教师，学生刚才答错了检验题。请按「三级提示阶梯」给出本轮修复辅导。
+
+## 原题
+{question}
+
+## 学生答案
+{student_answer}
+
+## 评分摘要
+score={score}；已有反馈：{feedback}
+
+## 阶梯指令
+{repair_instruction}
+
+## 任务
+严格按阶梯指令生成**给学生看的**辅导文本（不要 JSON）：
+- 只输出辅导正文
+- 不要重复粘贴整段命题当答案（level 1/2）
+- level 3 才给完整示范
+"""
+
+
+CHECK_PROMPT_V2 = """你是一位专业的教师，需要按预存掌握标准出检验题。
+
+## 学习内容
+{summary}
+
+{claims_block}
+
+## 任务
+请为上面**每一个待检验命题**各生成 **恰好一道** 检验题：
+1. 一 claim 一题，题干必须能检验对应的 mastery_check
+2. 题型严格按 cognitive_level 的「题型要求」
+3. 不要给 tangential 出题（列表中已排除）
+4. 题干中不要直接泄露标准答案原文
+
+请以 JSON 返回：
+```json
+{{
+  "questions": [
+    {{
+      "claim_id": "c_v2_1",
+      "mastery_check": "对应的掌握标准",
+      "cognitive_level": "understand",
+      "question": "题干",
+      "question_type": "short_answer"
+    }}
+  ]
+}}
+```
+"""
+
+
+REFLECT_PROMPT_V2 = """你是一位专业的教师，刚完成一轮教学，请生成反思与跨章联结问题。
+
+## 本轮学习内容
+{summary}
+
+## 单元角色
+{unit_gist}
+
+{connect_block}
+
+## 任务
+请生成 2–3 个问题：
+1. 至少 1 个针对本单元掌握标准的自我检验
+2. 若「可跨章联结的概念」非空，再生成 1–2 个跨章联结提问（必须引用清单中的定义/章节；查不到的概念不要硬编）
+3. 若联结清单为空，则全部做单元内反思，不要编造跨章关系
+
+请直接返回问题列表，每个问题一行，用数字编号。"""
+
+
+GRADE_PROMPT_V2 = """你是一位专业的教师，请**对照预存掌握标准（mastery_check）**评分。
+
+## 问题
+{question}
+
+## 掌握标准（rubric / mastery_check）
+{mastery_check}
+
+## 命题原文（参考，不是唯一表述）
+{claim_text}
+
+## 学生答案
+{student_answer}
+
+## 任务
+以 mastery_check 为通过标准评估，返回 JSON：
+```json
+{{
+  "score": <0-100的整数>,
+  "is_correct": <true或false>,
+  "feedback": "<对照 mastery_check 指出达到了哪几点、缺哪几点>",
+  "claim_id": "{claim_id}"
+}}
+```
+
+评分：
+- 达到 mastery_check 所述可观察行为 → 80–100
+- 部分达到 → 50–79
+- 基本未体现 → 0–49
+关注语义，不要求与命题原文逐字一致。"""
+
+
+FEYNMAN_EXPLAIN_PROMPT_V2 = """你是一位专业的教师，正在用费曼学习法巩固知识。
+
+## 学习内容
+{summary}
+
+## 请学生用自己的话完成下列掌握标准
+{mastery_checks}
+
+## 任务
+用亲切语气请学生「假装讲给我听」，并**直接把上面的 mastery_check 作为费曼任务提示**。
+要求简短（50–120 字），鼓励举例，禁止照搬原文。
+
+请直接返回引导文本。"""

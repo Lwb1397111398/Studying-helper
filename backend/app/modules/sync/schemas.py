@@ -56,6 +56,7 @@ class SyncBook(BaseModel):
     total_units: int | None = 0
     learned_units: int | None = 0
     reading_motivation: str | None = None
+    overview_json: str | None = None
     created_at: datetime
     updated_at: datetime
 

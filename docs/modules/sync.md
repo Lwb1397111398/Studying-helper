@@ -11,9 +11,12 @@
 | `router.py` | `/api/v1/sync` 路由 |
 | `schemas.py` | SyncPackage、各表 Sync DTO、预览/导入结果 |
 | `service.py` | 导出、预览、导入、scope 校验、删除旧书数据 |
-| `incremental_sync.py` | 增量同步实验/扩展 |
+| `incremental_sync.py` | 增量同步实验/扩展；当前未接入路由，不覆盖完整 AID/FSRS 合约 |
 | `tests/test_sync_service.py` | 同步服务测试 |
 | `tests/test_sync_contract.py` | 同步字段合约测试 |
+
+> 注意：当前主同步路径仍是 `service.py` 的离线包导入/导出。`incremental_sync.py`
+> 只是实验扩展，未纳入 `/api/v1/sync` 公共接口，也不要用于当前 Web/Android 同步包主流程。
 
 ## API 入口
 

@@ -33,11 +33,13 @@ async def test_migrations_add_fsrs_columns_to_existing_mastery_records():
         )
 
         await _run_migrations(conn)
-        rows = (await conn.execute(sa.text("PRAGMA table_info(mastery_records)"))).all()
+        mastery_rows = (await conn.execute(sa.text("PRAGMA table_info(mastery_records)"))).all()
+        unit_rows = (await conn.execute(sa.text("PRAGMA table_info(knowledge_units)"))).all()
 
     await engine.dispose()
 
-    columns = {row[1] for row in rows}
+    mastery_columns = {row[1] for row in mastery_rows}
+    unit_columns = {row[1] for row in unit_rows}
     assert {
         "stability",
         "difficulty",
@@ -46,4 +48,5 @@ async def test_migrations_add_fsrs_columns_to_existing_mastery_records():
         "last_elapsed_days",
         "scheduled_days",
         "algorithm",
-    }.issubset(columns)
+    }.issubset(mastery_columns)
+    assert "ai_cognitive_hint" in unit_columns

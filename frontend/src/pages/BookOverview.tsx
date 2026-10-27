@@ -1,399 +1,180 @@
-import { useEffect, useState, useMemo } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import Card from '../components/Card';
-import Loading from '../components/Loading';
-import ProgressBar from '../components/ProgressBar';
-import { getBook, getBookChapters, deleteBook, updateBookMotivation } from '../api/books';
+import Icon from '../components/ui/Icon';
+import Button from '../components/ui/Button';
+import Badge from '../components/ui/Badge';
+import EmptyState from '../components/ui/EmptyState';
+import { BookOverviewSkeleton } from '../components/ui/Skeleton';
+import { ConfirmDialog } from '../components/ui/Modal';
+import { useToast } from '../components/ui/Toast';
+import { getBook, getBookChapters, deleteBook, updateBookInfo, updateBookMotivation } from '../api/books';
 import SplitProgress from '../components/SplitProgress';
+import ChapterNode from '../components/book/ChapterNode';
 import { getMasteryRecords } from '../api/review';
-import { relearnUnit, enrichUnit, getLearningProgress, getKnowledgeUnit } from '../api/learning';
-import type { Book, Chapter, MasteryRecord, LearningProgress, KnowledgeUnit } from '../types';
+import { relearnUnit, enrichUnit, getLearningProgress, getDeepOverview, generateDeepOverview, getBookConcepts } from '../api/learning';
+import { prepareAndStartUnitLoop } from '../api/learningAssets';
+import { saveLastBook } from '../utils/lastBook';
+import type { Book, Chapter, MasteryRecord, LearningProgress, BookDeepOverview } from '../types';
 
-// 根据层级深度生成样式标记，不硬编码名称
-const getLevelBadge = (level: number) => {
-  const colors = [
-    'bg-blue-100 text-blue-700',
-    'bg-indigo-100 text-indigo-700',
-    'bg-violet-100 text-violet-700',
-    'bg-purple-100 text-purple-700',
-    'bg-fuchsia-100 text-fuchsia-700',
-  ];
-  return colors[Math.min(level, colors.length - 1)];
-};
-
-// 根据层级深度生成渐变色
-const getLevelGradient = (depth: number) => {
-  const gradients = [
-    'from-blue-500 to-purple-500',
-    'from-indigo-500 to-blue-500',
-    'from-violet-500 to-indigo-500',
-    'from-purple-500 to-violet-500',
-    'from-fuchsia-500 to-purple-500',
-  ];
-  return gradients[Math.min(depth, gradients.length - 1)];
-};
-
-// 层级标题字体大小
-const getLevelTitleClass = (level: number): string => {
-  switch (level) {
-    case 0: return 'text-xl font-bold text-gray-900';
-    case 1: return 'text-lg font-semibold text-gray-800';
-    case 2: return 'text-base font-medium text-gray-700';
-    default: return 'text-sm font-medium text-gray-600';
-  }
-};
-
-// 中文层级名称
-const getLevelName = (level: number): string => {
-  const names = ['编', '章', '节', '小节', '条'];
-  return names[Math.min(level, names.length - 1)] || `L${level}`;
-};
-
-// 递归章节组件
-function ChapterNode({
-  chapter,
-  depth,
-  index,
-  mastery,
-  expandedUnitId,
-  onUnitClick,
-  onRelearn,
-  onEnrich,
+// 章节基本信息编辑模态框
+function BookInfoDialog({
+  open, initialTitle, initialAuthor, loading, onClose, onSave,
 }: {
-  chapter: Chapter;
-  depth: number;
-  index: number;
-  mastery: MasteryRecord[];
-  expandedUnitId: string | null;
-  onUnitClick: (unitId: string) => void;
-  onRelearn: (unitId: string) => Promise<void>;
-  onEnrich: (unitId: string) => Promise<void>;
+  open: boolean; initialTitle: string; initialAuthor: string | null;
+  loading: boolean; onClose: () => void;
+  onSave: (data: { title: string; author: string }) => void;
 }) {
-  const getUnitMastery = (unitId: string) => {
-    const record = mastery.find((m) => m.knowledge_unit_id === unitId);
-    return Math.round((record?.mastery_score ?? 0) * 100);
-  };
-
-  const getMasteryLevelLabel = (level: string) => {
-    const map: Record<string, { label: string; color: string }> = {
-      mastered: { label: '已掌握', color: 'bg-emerald-100 text-emerald-700' },
-      proficient: { label: '熟练', color: 'bg-blue-100 text-blue-700' },
-      familiar: { label: '熟悉', color: 'bg-amber-100 text-amber-700' },
-      beginner: { label: '初学', color: 'bg-red-100 text-red-700' },
-    };
-    return map[level] || { label: '未学习', color: 'bg-gray-100 text-gray-500' };
-  };
-
-  const unitCount = chapter.knowledge_units?.length || 0;
-  const hasChildren = chapter.children && chapter.children.length > 0;
-  const hasUnits = unitCount > 0;
-  const isContainer = chapter.is_container;
-  const gradientClass = getLevelGradient(depth);
-  const badgeClass = getLevelBadge(chapter.level);
-  const [collapsed, setCollapsed] = useState(false);
-
-  return (
-    <Card className={`animate-fade-in delay-${Math.min((index + 1) * 100, 400)} ${isContainer ? 'bg-gradient-to-r from-slate-50 to-gray-50 border-l-4 border-l-blue-400' : ''}`}>
-      {/* 章节标题 */}
-      <div
-        className={`flex items-center gap-3 mb-3 ${isContainer ? 'cursor-pointer' : ''}`}
-        style={{ paddingLeft: depth * 12 }}
-        onClick={() => isContainer && setCollapsed(!collapsed)}
-      >
-        {isContainer ? (
-          <div className={`w-8 h-8 rounded-lg bg-gradient-to-br ${gradientClass} flex items-center justify-center shadow-sm`}>
-            <svg className="w-4 h-4 text-white" fill="currentColor" viewBox="0 0 20 20">
-              <path d="M2 6a2 2 0 012-2h5l2 2h5a2 2 0 012 2v6a2 2 0 01-2 2H4a2 2 0 01-2-2V6z" />
-            </svg>
-          </div>
-        ) : (
-          <div className={`w-8 h-8 rounded-lg bg-gradient-to-br ${gradientClass} flex items-center justify-center text-white text-xs font-bold shadow-sm`}>
-            {index + 1}
-          </div>
-        )}
-        <div className="flex-1">
-          <div className="flex items-center gap-2">
-            <span className={`text-[10px] font-semibold px-1.5 py-0.5 rounded ${badgeClass}`}>
-              {getLevelName(chapter.level)}
-            </span>
-            <h3 className={getLevelTitleClass(chapter.level)}>{chapter.title}</h3>
-          </div>
-        </div>
-        {isContainer && hasChildren && (
-          <span className="text-[10px] text-blue-500 bg-blue-50 px-2 py-0.5 rounded-full font-medium">
-            {chapter.children!.length} 子章节
-          </span>
-        )}
-        {!isContainer && hasUnits && (
-          <span className="text-[10px] text-gray-400 bg-gray-50 px-2 py-0.5 rounded-full">
-            {unitCount} 单元
-          </span>
-        )}
-        {isContainer && (
-          <span className="text-xs text-gray-400 transition-transform" style={{ transform: collapsed ? 'rotate(0deg)' : 'rotate(90deg)' }}>▶</span>
-        )}
-      </div>
-
-      {/* 子章节递归渲染 */}
-      {hasChildren && !collapsed && (
-        <div className={`space-y-3 pl-6 ml-4 ${isContainer ? 'border-l-2 border-blue-200' : 'border-l-2 border-gray-100'}`}>
-          {chapter.children!.map((child, i) => (
-            <ChapterNode
-              key={child.id}
-              chapter={child}
-              depth={depth + 1}
-              index={i}
-              mastery={mastery}
-              expandedUnitId={expandedUnitId}
-              onUnitClick={onUnitClick}
-              onRelearn={onRelearn}
-              onEnrich={onEnrich}
-            />
-          ))}
-        </div>
-      )}
-
-      {/* 知识单元列表（容器节点不显示） */}
-      {!isContainer && hasUnits && (
-        <div className="space-y-2 pl-11 mt-2">
-          {chapter.knowledge_units.map((unit) => {
-            const score = getUnitMastery(unit.id);
-            const record = mastery.find((m) => m.knowledge_unit_id === unit.id);
-            const levelInfo = getMasteryLevelLabel(record?.mastery_level || '');
-            const hasAiContent = !!unit.summary;
-            const isExpanded = expandedUnitId === unit.id;
-
-            return (
-              <div key={unit.id}>
-                <div className="flex items-center gap-3 group cursor-pointer" onClick={() => onUnitClick(unit.id)}>
-                  <div className="flex-1 flex items-center gap-2">
-                    <div className={`w-1.5 h-1.5 rounded-full ${score >= 80 ? 'bg-emerald-400' : score >= 50 ? 'bg-amber-400' : score > 0 ? 'bg-red-400' : 'bg-gray-300'}`} />
-                    <p className="text-sm text-gray-600 group-hover:text-gray-800 transition-colors">{unit.title}</p>
-                    {hasAiContent && (
-                      <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-blue-50 text-blue-500 font-medium">已学习</span>
-                    )}
-                    {record?.mastery_level && (
-                      <span className={`text-[10px] px-1.5 py-0.5 rounded-full font-medium ${levelInfo.color}`}>{levelInfo.label}</span>
-                    )}
-                  </div>
-                  <div className="w-24">
-                    <ProgressBar value={score} size="sm" color={score >= 80 ? 'green' : score >= 50 ? 'yellow' : 'red'} />
-                  </div>
-                  <span className="text-xs text-gray-400 w-10 text-right font-medium">{score}%</span>
-                  {hasAiContent && (
-                    <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
-                      <button
-                        onClick={async (e) => { e.stopPropagation(); await onRelearn(unit.id); }}
-                        className="text-[10px] text-purple-500 hover:text-purple-600 px-1.5 py-0.5 rounded hover:bg-purple-50 transition-colors"
-                        title="重新生成 AI 分析">
-                        🔄
-                      </button>
-                      <button
-                        onClick={async (e) => { e.stopPropagation(); await onEnrich(unit.id); }}
-                        className="text-[10px] text-emerald-500 hover:text-emerald-600 px-1.5 py-0.5 rounded hover:bg-emerald-50 transition-colors"
-                        title="增量更新（补充例子）">
-                        ✨
-                      </button>
-                    </div>
-                  )}
-                  <span className="text-xs text-gray-400 transition-transform" style={{ transform: isExpanded ? 'rotate(90deg)' : 'rotate(0deg)' }}>▶</span>
-                </div>
-
-                {/* 展开的详情面板 */}
-                {isExpanded && <UnitDetailPanel unitId={unit.id} />}
-              </div>
-            );
-          })}
-        </div>
-      )}
-
-      {/* 无子章节也无单元时显示提示 */}
-      {!isContainer && !hasChildren && !hasUnits && (
-        <p className="text-sm text-gray-400 pl-11">暂无知识单元</p>
-      )}
-    </Card>
-  );
-}
-
-// 知识单元详情面板组件
-function UnitDetailPanel({ unitId }: { unitId: string }) {
-  const [detail, setDetail] = useState<KnowledgeUnit | null>(null);
-  const [loading, setLoading] = useState(true);
+  const [title, setTitle] = useState(initialTitle);
+  const [author, setAuthor] = useState(initialAuthor ?? '');
 
   useEffect(() => {
-    let cancelled = false;
-    setLoading(true);
-    getKnowledgeUnit(unitId)
-      .then((d) => { if (!cancelled) setDetail(d); })
-      .catch(() => { if (!cancelled) setDetail(null); })
-      .finally(() => { if (!cancelled) setLoading(false); });
-    return () => { cancelled = true; };
-  }, [unitId]);
-
-  if (loading) {
-    return (
-      <div className="mt-3 ml-4 p-4 bg-gradient-to-r from-blue-50 to-indigo-50 rounded-lg border border-blue-100">
-        <div className="flex items-center gap-2 text-sm text-gray-500">
-          <div className="w-4 h-4 border-2 border-blue-400 border-t-transparent rounded-full animate-spin"></div>
-          加载中...
-        </div>
-      </div>
-    );
-  }
-
-  if (!detail?.summary) {
-    return (
-      <div className="mt-3 ml-4 p-4 bg-gradient-to-r from-blue-50 to-indigo-50 rounded-lg border border-blue-100 text-center py-4">
-        <p className="text-sm text-gray-500">暂无 AI 学习数据</p>
-      </div>
-    );
-  }
+    if (open) { setTitle(initialTitle); setAuthor(initialAuthor ?? ''); }
+  }, [open, initialTitle, initialAuthor]);
 
   return (
-    <div className="mt-3 ml-4 p-4 bg-gradient-to-r from-blue-50 to-indigo-50 rounded-lg border border-blue-100 animate-fade-in">
-      <div className="space-y-4">
-        <div>
-          <h4 className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-1">AI 摘要</h4>
-          <p className="text-sm text-gray-700 leading-relaxed">{detail.summary}</p>
+    <ConfirmDialog
+      open={open}
+      title="编辑书籍信息"
+      message={
+        <div className="space-y-3 text-left">
+          <label className="block">
+            <span className="block text-xs font-medium text-gray-500 mb-1">书名</span>
+            <input
+              value={title}
+              onChange={e => setTitle(e.target.value)}
+              className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm
+                focus:outline-none focus:border-blue-300 focus:ring-2 focus:ring-blue-100"
+            />
+          </label>
+          <label className="block">
+            <span className="block text-xs font-medium text-gray-500 mb-1">作者（可留空）</span>
+            <input
+              value={author}
+              onChange={e => setAuthor(e.target.value)}
+              className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm
+                focus:outline-none focus:border-blue-300 focus:ring-2 focus:ring-blue-100"
+            />
+          </label>
         </div>
-        {detail.key_points && detail.key_points.length > 0 && (
-          <div>
-            <h4 className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-1">关键要点</h4>
-            <ul className="space-y-1">
-              {detail.key_points.map((point, idx) => (
-                <li key={idx} className="flex items-start gap-2 text-sm text-gray-700">
-                  <span className="text-blue-500 mt-0.5">•</span>
-                  <span>{typeof point === 'string' ? point : point.title}</span>
-                </li>
-              ))}
-            </ul>
-          </div>
-        )}
-        {detail.concepts && detail.concepts.length > 0 && (
-          <div>
-            <h4 className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-1">核心概念</h4>
-            <div className="flex flex-wrap gap-2">
-              {detail.concepts.map((concept, idx) => (
-                <span key={idx} className="inline-flex items-center px-2.5 py-1 rounded-full text-xs font-medium bg-white text-gray-700 border border-gray-200 shadow-sm">
-                  {typeof concept === 'string' ? concept : concept.name}
-                </span>
-              ))}
-            </div>
-          </div>
-        )}
-        <div className="flex items-center gap-4 pt-2 border-t border-blue-100">
-          <div className="flex items-center gap-1">
-            <span className="text-xs text-gray-500">难度:</span>
-            <div className="flex gap-0.5">
-              {[1, 2, 3, 4, 5].map((level) => (
-                <div key={level} className={`w-2 h-2 rounded-full ${level <= (detail.difficulty_level || 0) ? 'bg-amber-400' : 'bg-gray-200'}`} />
-              ))}
-            </div>
-          </div>
-          <div className="flex items-center gap-1">
-            <span className="text-xs text-gray-500">重要性:</span>
-            <div className="w-16 h-1.5 bg-gray-200 rounded-full overflow-hidden">
-              <div className="h-full bg-blue-500 rounded-full" style={{ width: `${((detail.importance_score || 0) * 100)}%` }} />
-            </div>
-          </div>
-        </div>
-      </div>
-    </div>
+      }
+      confirmText="保存"
+      loading={loading}
+      onConfirm={() => onSave({ title, author })}
+      onCancel={onClose}
+    />
   );
 }
 
 export default function BookOverview() {
   const { bookId } = useParams<{ bookId: string }>();
   const navigate = useNavigate();
+  const { toast } = useToast();
+
   const [book, setBook] = useState<Book | null>(null);
   const [chapters, setChapters] = useState<Chapter[]>([]);
   const [mastery, setMastery] = useState<MasteryRecord[]>([]);
   const [progress, setProgress] = useState<LearningProgress | null>(null);
   const [loading, setLoading] = useState(true);
   const [splitting, setSplitting] = useState(false);
-  const [deleting, setDeleting] = useState(false);
   const [splitError, setSplitError] = useState<string | null>(null);
   const [expandedUnitId, setExpandedUnitId] = useState<string | null>(null);
   const [editingMotivation, setEditingMotivation] = useState(false);
   const [motivationText, setMotivationText] = useState('');
   const [savingMotivation, setSavingMotivation] = useState(false);
+  const [showDelete, setShowDelete] = useState(false);
+  const [deleting, setDeleting] = useState(false);
+  const [showInfoEdit, setShowInfoEdit] = useState(false);
+  const [savingInfo, setSavingInfo] = useState(false);
+  const [unitLoopLoading, setUnitLoopLoading] = useState(false);
+  const [deepOverview, setDeepOverview] = useState<BookDeepOverview | null>(null);
+  const [overviewLoading, setOverviewLoading] = useState(false);
+  const [overviewGenerating, setOverviewGenerating] = useState(false);
+  const [bookConcepts, setBookConcepts] = useState<Array<{
+    id: string; name: string; definition?: string | null;
+    first_chapter_id?: string | null; source: string;
+  }>>([]);
+
+  const loadDeepOverview = async () => {
+    if (!bookId) return;
+    try {
+      const res = await getDeepOverview(bookId);
+      setDeepOverview(res.overview ?? null);
+    } catch {
+      setDeepOverview(null);
+    }
+  };
+
+  const loadBookConcepts = async () => {
+    if (!bookId) return;
+    try {
+      const res = await getBookConcepts(bookId);
+      setBookConcepts(res.concepts ?? []);
+    } catch {
+      setBookConcepts([]);
+    }
+  };
 
   const loadData = async () => {
-    try {
-      const results = await Promise.allSettled([
-        getBook(bookId!),
-        getBookChapters(bookId!),
-        getMasteryRecords(bookId!),
-        getLearningProgress(bookId!),
-      ]);
-      if (results[0].status === 'fulfilled') setBook(results[0].value);
-      if (results[1].status === 'fulfilled') setChapters(results[1].value);
-      if (results[2].status === 'fulfilled') setMastery(results[2].value);
-      if (results[3].status === 'fulfilled') setProgress(results[3].value);
-    } catch (error) {
-      console.error('加载书籍详情失败:', error);
-    } finally {
-      setLoading(false);
-    }
+    if (!bookId) return;
+    const results = await Promise.allSettled([
+      getBook(bookId),
+      getBookChapters(bookId),
+      getMasteryRecords(bookId),
+      getLearningProgress(bookId),
+      getDeepOverview(bookId),
+      getBookConcepts(bookId),
+    ]);
+    if (results[0].status === 'fulfilled') setBook(results[0].value);
+    if (results[1].status === 'fulfilled') setChapters(results[1].value);
+    if (results[2].status === 'fulfilled') setMastery(results[2].value);
+    if (results[3].status === 'fulfilled') setProgress(results[3].value);
+    if (results[4].status === 'fulfilled') setDeepOverview(results[4].value.overview ?? null);
+    if (results[5].status === 'fulfilled') setBookConcepts(results[5].value.concepts ?? []);
   };
 
   useEffect(() => {
     let cancelled = false;
-    if (bookId) {
-      (async () => {
-        try {
-          await loadData();
-        } catch (error) {
-          if (!cancelled) console.error('加载书籍详情失败:', error);
-        } finally {
-          if (!cancelled) setLoading(false);
-        }
-      })();
-    }
+    (async () => {
+      try {
+        await loadData();
+      } catch (err) {
+        if (!cancelled) console.error('加载书籍详情失败:', err);
+      } finally {
+        if (!cancelled) setLoading(false);
+      }
+    })();
     return () => { cancelled = true; };
   }, [bookId]);
 
+  // 进入页面时记录"最近打开的书籍"，供首页继续学习入口使用
+  useEffect(() => {
+    if (book) saveLastBook({ id: book.id, title: book.title });
+  }, [book?.id, book?.title]);
+
   // 构建树形结构（支持 parent_id 缺失时按 level 推断层级）
   const chapterTree = useMemo(() => {
-    // 先按 order_index 排序（确保文档顺序），再按 level 排序作为次要条件
     const sorted = [...chapters].sort((a, b) => a.order_index - b.order_index || a.level - b.level);
-
     const roots: Chapter[] = [];
     const map = new Map<string, Chapter>();
+    for (const ch of sorted) map.set(ch.id, { ...ch, children: [] });
 
-    // 初始化所有节点
-    for (const ch of sorted) {
-      map.set(ch.id, { ...ch, children: [] });
-    }
-
-    // 建立父子关系
-    // 当 parent_id 缺失时，根据 level 推断：找最近的 level-1 节点作为父节点
-    const levelStack: Chapter[] = []; // 维护各级别最近的节点
-
+    const levelStack: Chapter[] = [];
     for (const ch of sorted) {
       const node = map.get(ch.id)!;
-
       if (ch.parent_id && map.has(ch.parent_id)) {
-        // 有 parent_id 时直接使用
         map.get(ch.parent_id)!.children!.push(node);
       } else if (ch.level > 0) {
-        // parent_id 缺失时，按 level 推断父节点
         const parent = levelStack[ch.level - 1];
-        if (parent) {
-          parent.children!.push(node);
-        } else {
-          roots.push(node);
-        }
+        if (parent) parent.children!.push(node);
+        else roots.push(node);
       } else {
         roots.push(node);
       }
-
-      // 更新 levelStack：清除当前及更深级别，设置当前节点
       levelStack.length = ch.level;
       levelStack[ch.level] = node;
     }
 
-    // 递归计算 is_container（有子节点的为容器）
     const markContainers = (nodes: Chapter[]) => {
       for (const node of nodes) {
         if (node.children && node.children.length > 0) {
@@ -405,16 +186,13 @@ export default function BookOverview() {
       }
     };
     markContainers(roots);
-
     return roots;
   }, [chapters]);
 
   // 统计各级别数量
   const levelStats = useMemo(() => {
     const stats: Record<number, number> = {};
-    for (const ch of chapters) {
-      stats[ch.level] = (stats[ch.level] || 0) + 1;
-    }
+    for (const ch of chapters) stats[ch.level] = (stats[ch.level] || 0) + 1;
     return stats;
   }, [chapters]);
 
@@ -424,20 +202,15 @@ export default function BookOverview() {
     await loadData();
   };
 
-  const handleSplitError = (message: string) => {
-    setSplitting(false);
-    setSplitError(message);
-  };
-
   const handleDelete = async () => {
-    if (!bookId || !confirm('确定要删除这本书吗？此操作不可恢复。')) return;
+    if (!bookId) return;
     setDeleting(true);
     try {
       await deleteBook(bookId);
+      toast('书籍已删除', 'success');
       navigate('/');
-    } catch (error) {
-      console.error('删除失败:', error);
-      alert('删除失败，请重试');
+    } catch {
+      toast('删除失败，请重试', 'error');
       setDeleting(false);
     }
   };
@@ -450,8 +223,9 @@ export default function BookOverview() {
     try {
       await relearnUnit(unitId);
       await loadData();
+      toast('已重新生成 AI 分析', 'success');
     } catch {
-      alert('重新生成失败');
+      toast('重新生成失败', 'error');
     }
   };
 
@@ -459,107 +233,313 @@ export default function BookOverview() {
     try {
       await enrichUnit(unitId, { focus: 'examples' });
       await loadData();
+      toast('已补充示例', 'success');
     } catch {
-      alert('增量更新失败');
+      toast('增量更新失败', 'error');
     }
   };
 
-  if (loading) return <Loading />;
-  if (!book) return <div className="text-center py-12 text-gray-500">书籍不存在</div>;
+  const handleUnitLoop = async (unitId: string) => {
+    if (!bookId || unitLoopLoading) return;
+    setUnitLoopLoading(true);
+    try {
+      const { asset, session } = await prepareAndStartUnitLoop(bookId, unitId);
+      localStorage.setItem(`teaching_v2_session_${bookId}`, session.id);
+      localStorage.setItem(`teaching_v2_unit_${bookId}`, unitId);
+      localStorage.setItem(`teaching_v2_asset_${bookId}`, asset.asset_id);
+      toast(
+        `单单元闭环已启动（${asset.readiness_status}）· 状态 ${session.state_v2 || 'diagnose'}`,
+        'success',
+      );
+      navigate(`/books/${bookId}/teach?engine=v2&unitId=${encodeURIComponent(unitId)}`);
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : '启动失败';
+      toast(typeof msg === 'string' ? msg : '启动单单元闭环失败', 'error');
+    } finally {
+      setUnitLoopLoading(false);
+    }
+  };
+
+  const handleGenerateOverview = async () => {
+    if (!bookId || overviewGenerating) return;
+    setOverviewGenerating(true);
+    try {
+      await generateDeepOverview(bookId, true);
+      toast('全书鸟瞰生成中，稍后自动刷新', 'success');
+      // 简单轮询 3 次
+      for (let i = 0; i < 6; i++) {
+        await new Promise((r) => setTimeout(r, 1500));
+        setOverviewLoading(true);
+        await loadDeepOverview();
+        setOverviewLoading(false);
+        // 有数据就停
+        // loadDeepOverview 写 state，下一轮 render 才有 deepOverview；这里再拉一次判断
+        const res = await getDeepOverview(bookId);
+        if (res.overview) {
+          setDeepOverview(res.overview);
+          toast(res.overview.degraded ? '已生成降级鸟瞰' : '全书鸟瞰已就绪', 'success');
+          break;
+        }
+      }
+    } catch {
+      toast('生成鸟瞰失败', 'error');
+    } finally {
+      setOverviewGenerating(false);
+      setOverviewLoading(false);
+    }
+  };
+
+  const handleSaveInfo = async (data: { title: string; author: string }) => {
+    if (!bookId) return;
+    setSavingInfo(true);
+    try {
+      const updated = await updateBookInfo(bookId, {
+        title: data.title,
+        author: data.author || undefined,
+      });
+      setBook(updated);
+      setShowInfoEdit(false);
+      toast('已更新书籍信息', 'success');
+    } catch {
+      toast('保存失败', 'error');
+    } finally {
+      setSavingInfo(false);
+    }
+  };
+
+  if (loading) return <BookOverviewSkeleton />;
+  if (!book) {
+    return (
+      <div className="max-w-4xl mx-auto">
+        <Card hover={false}>
+          <EmptyState icon="alert" title="书籍不存在" description="该书籍可能已被删除或链接有误" />
+        </Card>
+      </div>
+    );
+  }
 
   const needsSplit = chapters.length === 0;
-
-  // 构建统计文本（只显示数量，不假设层级名称）
   const statsText = Object.entries(levelStats)
     .sort(([a], [b]) => Number(a) - Number(b))
     .map(([level, count]) => `${count} L${level}`)
     .join(' · ');
 
-  // 总章节数
-  const totalChapters = chapters.length;
-
   return (
     <div className="max-w-4xl mx-auto animate-fade-in">
       {/* 书籍头部 */}
       <div className="relative overflow-hidden rounded-2xl bg-gradient-to-r from-slate-800 via-slate-700 to-slate-800 p-8 mb-8 text-white shadow-xl">
-        <div className="absolute inset-0 bg-[url('data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iNDAiIGhlaWdodD0iNDAiIHZpZXdCb3g9IjAgMCA0MCA0MCIgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIj48ZyBmaWxsPSJub25lIiBmaWxsLXJ1bGU9ImV2ZW5vZGQiPjxnIGZpbGw9IiNmZmYiIGZpbGwtb3BhY2l0eT0iMC4wMyI+PHBhdGggZD0iTTIwIDBMMCA0MGg0MEwyMCAweiIvPjwvZz48L2c+PC9zdmc+')] opacity-50" />
-        <div className="relative flex items-start justify-between">
+        <div className="relative flex flex-wrap items-start justify-between gap-4">
           <div className="flex items-start gap-5">
-            <div className="w-16 h-20 rounded-xl bg-white/10 backdrop-blur flex items-center justify-center text-3xl shadow-lg border border-white/10">
-              📖
+            <div className="w-14 h-18 rounded-xl bg-white/10 backdrop-blur flex items-center justify-center shrink-0 border border-white/10">
+              <Icon name="bookOpen" className="w-7 h-7" />
             </div>
-            <div>
-              <h1 className="text-2xl font-bold mb-1">{book.title}</h1>
-              {book.author && <p className="text-slate-300 text-sm">{book.author}</p>}
-              <div className="flex items-center gap-4 mt-3">
-                <span className="text-xs text-slate-400 bg-white/10 px-2.5 py-1 rounded-full">{book.total_chapters} 章节</span>
-                <span className="text-xs text-slate-400 bg-white/10 px-2.5 py-1 rounded-full">{book.total_units} 知识单元</span>
-                <span className="text-xs text-slate-400 uppercase bg-white/10 px-2.5 py-1 rounded-full">{book.file_type}</span>
+            <div className="min-w-0">
+              <h1 className="text-2xl font-bold mb-1 break-words">{book.title}</h1>
+              {book.author && <p className="text-slate-300 text-sm break-words">{book.author}</p>}
+              <div className="flex flex-wrap items-center gap-2 mt-3">
+                <Badge tone="gray" className="!bg-white/15 !text-slate-200">{book.total_chapters} 章节</Badge>
+                <Badge tone="gray" className="!bg-white/15 !text-slate-200">{book.total_units} 知识单元</Badge>
+                <Badge tone="gray" className="!bg-white/15 !text-slate-200 uppercase">{book.file_type}</Badge>
               </div>
             </div>
           </div>
 
           {/* 操作按钮 */}
-          <div className="flex gap-2 items-center">
+          <div className="flex flex-wrap gap-2 items-center">
+            <Button variant="secondary" size="sm" icon="pencil" onClick={() => setShowInfoEdit(true)}
+              className="!bg-white/10 !text-white !border-white/10 hover:!bg-white/20">
+              编辑
+            </Button>
             {!needsSplit && !splitting && (
-              <button onClick={() => navigate(`/books/${bookId}/toc`)}
-                className="flex items-center gap-1.5 px-4 py-2 bg-white/10 text-white rounded-xl text-sm font-medium hover:bg-white/20 transition-all border border-white/10">
-                ✏️ 编辑目录
-              </button>
+              <Button variant="secondary" size="sm" icon="listBullet" onClick={() => navigate(`/books/${bookId}/toc`)}
+                className="!bg-white/10 !text-white !border-white/10 hover:!bg-white/20">
+                编辑目录
+              </Button>
             )}
             {!splitting && (
-              <button onClick={() => { setSplitting(true); setSplitError(null); }}
-                className={`flex items-center gap-1.5 px-4 py-2 text-white rounded-xl text-sm font-medium transition-all ${
-                  needsSplit
-                    ? 'bg-amber-500 hover:bg-amber-400 shadow-lg shadow-amber-500/25'
-                    : 'bg-white/10 hover:bg-white/20 border border-white/10'
-                }`}>
-                ⚡ {needsSplit ? '知识拆分' : '重新拆分'}
-              </button>
+              <Button variant={needsSplit ? 'warning' : 'secondary'} size="sm" icon="bolt"
+                onClick={() => { setSplitting(true); setSplitError(null); }}
+                className={!needsSplit ? '!bg-white/10 !text-white !border-white/10 hover:!bg-white/20' : ''}>
+                {needsSplit ? '知识拆分' : '重新拆分'}
+              </Button>
             )}
-            <button onClick={() => navigate(`/books/${bookId}/learn`)} disabled={needsSplit}
-              className="flex items-center gap-1.5 px-4 py-2 bg-blue-500 text-white rounded-xl text-sm font-medium hover:bg-blue-400 disabled:opacity-40 disabled:cursor-not-allowed shadow-lg shadow-blue-500/25 transition-all">
-              📚 学习
-            </button>
-            <button onClick={() => navigate(`/books/${bookId}/design`)} disabled={needsSplit}
-              className="flex items-center gap-1.5 px-4 py-2 bg-emerald-500 text-white rounded-xl text-sm font-medium hover:bg-emerald-400 disabled:opacity-40 disabled:cursor-not-allowed shadow-lg shadow-emerald-500/25 transition-all">
-              🧭 教学设计
-            </button>
-            <button onClick={handleDelete} disabled={deleting}
-              className="flex items-center gap-1.5 px-3 py-2 bg-white/10 text-red-300 rounded-xl text-sm font-medium hover:bg-red-500/20 disabled:opacity-50 transition-all border border-white/10">
-              🗑️ 删除
-            </button>
+            <Button variant="primary" size="sm" icon="bookOpen" disabled={needsSplit}
+              onClick={() => navigate(`/books/${bookId}/learn`)}>
+              学习
+            </Button>
+            <Button variant="success" size="sm" icon="map" disabled={needsSplit}
+              onClick={() => navigate(`/books/${bookId}/design`)}>
+              教学设计
+            </Button>
+            <Button variant="primary" size="sm" icon="bolt" disabled={needsSplit}
+              onClick={() => navigate(`/books/${bookId}/teach`)}>
+              开始教学
+            </Button>
+            <Button variant="secondary" size="sm" icon="map" onClick={handleGenerateOverview} disabled={overviewGenerating || needsSplit}
+              className="!bg-white/10 !text-white !border-white/10 hover:!bg-white/20">
+              {overviewGenerating ? '生成中...' : '生成鸟瞰'}
+            </Button>
+            <Button variant="danger" size="sm" icon="trash" onClick={() => setShowDelete(true)}>
+              删除
+            </Button>
           </div>
         </div>
-        <div className="absolute -right-10 -top-10 w-40 h-40 rounded-full bg-blue-500/10 blur-3xl pointer-events-none" />
+<div className="absolute -right-10 -top-10 w-40 h-40 rounded-full bg-blue-500/10 blur-3xl pointer-events-none" />
         <div className="absolute -left-6 -bottom-6 w-32 h-32 rounded-full bg-purple-500/10 blur-2xl pointer-events-none" />
       </div>
 
+      {/* 全书鸟瞰（深度精读层 Step1）—— 无数据不渲染主体，仅可手动生成 */}
+      {(deepOverview || overviewGenerating || overviewLoading) && (
+        <Card hover={false} className="mb-6 animate-fade-in">
+          <div className="flex items-start justify-between gap-3 mb-3">
+            <div>
+              <h2 className="text-lg font-semibold text-gray-800 flex items-center gap-2">
+                <Icon name="map" className="w-5 h-5 text-emerald-600" />
+                全书鸟瞰
+                {deepOverview?.degraded && (
+                  <Badge tone="amber">降级版</Badge>
+                )}
+              </h2>
+              <p className="text-xs text-gray-400 mt-1">AI 对全书核心论点、章节角色与关键概念的全局理解</p>
+            </div>
+            <Button
+              variant="secondary"
+              size="sm"
+              onClick={handleGenerateOverview}
+              disabled={overviewGenerating || needsSplit}
+            >
+              {overviewGenerating ? '生成中…' : '重新生成'}
+            </Button>
+          </div>
+
+          {deepOverview ? (
+            <div className="space-y-4 text-sm text-gray-700">
+              <div>
+                <p className="text-xs font-medium text-gray-400 mb-1">核心论点</p>
+                <p className="leading-relaxed">{deepOverview.core_thesis}</p>
+              </div>
+              <div>
+                <p className="text-xs font-medium text-gray-400 mb-1">论证主线</p>
+                <p className="leading-relaxed whitespace-pre-wrap">{deepOverview.main_thread}</p>
+              </div>
+              {deepOverview.reading_guide && (
+                <div>
+                  <p className="text-xs font-medium text-gray-400 mb-1">导读</p>
+                  <p className="leading-relaxed whitespace-pre-wrap">{deepOverview.reading_guide}</p>
+                </div>
+              )}
+              {deepOverview.key_concepts?.length > 0 && (
+                <div>
+                  <p className="text-xs font-medium text-gray-400 mb-2">关键概念</p>
+                  <div className="flex flex-wrap gap-2">
+                    {deepOverview.key_concepts.map((c) => (
+                      <span
+                        key={c.name}
+                        className="inline-flex flex-col max-w-xs rounded-lg border border-emerald-100 bg-emerald-50/60 px-3 py-2"
+                        title={c.definition}
+                      >
+                        <span className="font-medium text-emerald-800 text-xs">{c.name}</span>
+                        {c.definition && (
+                          <span className="text-[11px] text-gray-500 mt-0.5 line-clamp-2">{c.definition}</span>
+                        )}
+                      </span>
+                    ))}
+                  </div>
+                </div>
+              )}
+              {deepOverview.chapter_roles?.length > 0 && (
+                <div>
+                  <p className="text-xs font-medium text-gray-400 mb-2">章节角色</p>
+                  <ul className="space-y-1.5">
+                    {deepOverview.chapter_roles.map((r) => {
+                      const ch = chapters.find((c) => c.id === r.chapter_id);
+                      return (
+                        <li key={r.chapter_id} className="flex items-start gap-2 text-xs">
+                          <Badge tone="gray">{r.role || '其他'}</Badge>
+                          <span className="text-gray-700">
+                            <span className="font-medium">{ch?.title || r.chapter_id}</span>
+                            {r.one_liner ? ` — ${r.one_liner}` : ''}
+                          </span>
+                        </li>
+                      );
+                    })}
+                  </ul>
+                </div>
+              )}
+            </div>
+          ) : (
+            <p className="text-sm text-gray-400">{overviewGenerating || overviewLoading ? '正在生成全书鸟瞰…' : '暂无鸟瞰数据'}</p>
+          )}
+        </Card>
+      )}
+
+      {/* 概念词典（Step4）—— 无数据不渲染 */}
+      {bookConcepts.length > 0 && (
+        <Card hover={false} className="mb-6 animate-fade-in">
+          <h2 className="text-lg font-semibold text-gray-800 mb-1 flex items-center gap-2">
+            <Icon name="bookOpen" className="w-5 h-5 text-indigo-600" />
+            概念词典
+          </h2>
+          <p className="text-xs text-gray-400 mb-3">全书统一概念清单（overview + 单元收编，只读）</p>
+          <div className="flex flex-wrap gap-2">
+            {bookConcepts.map((c) => {
+              const ch = c.first_chapter_id
+                ? chapters.find((x) => x.id === c.first_chapter_id)
+                : undefined;
+              return (
+                <span
+                  key={c.id}
+                  className="inline-flex flex-col max-w-xs rounded-lg border border-indigo-100 bg-indigo-50/50 px-3 py-2"
+                  title={c.definition || c.name}
+                >
+                  <span className="font-medium text-indigo-800 text-xs">
+                    {c.name}
+                    {c.source === 'unit_harvest' && (
+                      <span className="ml-1 text-[10px] text-indigo-400">单元</span>
+                    )}
+                  </span>
+                  {c.definition && (
+                    <span className="text-[11px] text-gray-500 mt-0.5 line-clamp-2">{c.definition}</span>
+                  )}
+                  {ch && (
+                    <span className="text-[10px] text-gray-400 mt-0.5">首次：{ch.title}</span>
+                  )}
+                </span>
+              );
+            })}
+          </div>
+        </Card>
+      )}
+
       {/* 学习进度概览 */}
       {progress && progress.total_units > 0 && (
-        <div className="grid grid-cols-3 gap-4 mb-6 animate-fade-in">
-          <Card gradient>
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-6 animate-fade-in">
+          <Card hover={false} gradient>
             <div className="flex items-center gap-3">
-              <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-blue-500 to-blue-600 flex items-center justify-center text-lg shadow-md">📊</div>
+              <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-blue-500 to-blue-600 flex items-center justify-center shadow-md">
+                <Icon name="chart" className="w-5 h-5 text-white" />
+              </div>
               <div>
                 <p className="text-xs text-gray-400">学习进度</p>
                 <p className="text-2xl font-bold text-blue-600">{progress.progress_percent}%</p>
               </div>
             </div>
           </Card>
-          <Card gradient>
+          <Card hover={false} gradient>
             <div className="flex items-center gap-3">
-              <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-emerald-500 to-green-500 flex items-center justify-center text-lg shadow-md">✅</div>
+              <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-emerald-500 to-green-500 flex items-center justify-center shadow-md">
+                <Icon name="checkCircle" className="w-5 h-5 text-white" />
+              </div>
               <div>
                 <p className="text-xs text-gray-400">已学单元</p>
                 <p className="text-2xl font-bold text-emerald-600">{progress.learned_units}/{progress.total_units}</p>
               </div>
             </div>
           </Card>
-          <Card gradient>
+          <Card hover={false} gradient>
             <div className="flex items-center gap-3">
-              <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-purple-500 to-violet-500 flex items-center justify-center text-lg shadow-md">
-                {progress.status === 'completed' ? '🏆' : progress.status === 'in_progress' ? '📖' : '⏳'}
+              <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-purple-500 to-violet-500 flex items-center justify-center shadow-md">
+                <Icon name={progress.status === 'completed' ? 'flag' : progress.status === 'in_progress' ? 'play' : 'clock'} className="w-5 h-5 text-white" />
               </div>
               <div>
                 <p className="text-xs text-gray-400">状态</p>
@@ -575,32 +555,28 @@ export default function BookOverview() {
       {/* 拆分错误提示 */}
       {splitError && !splitting && (
         <div className="mb-6 p-4 bg-red-50 border border-red-200 rounded-xl flex items-start gap-3 animate-fade-in">
-          <span className="text-red-500 text-lg">⚠️</span>
+          <Icon name="alert" className="w-5 h-5 text-red-500 shrink-0 mt-0.5" />
           <div className="flex-1">
             <p className="text-sm font-medium text-red-700">拆分失败</p>
             <p className="text-sm text-red-500 mt-1">{splitError}</p>
           </div>
-          <button onClick={() => { setSplitting(true); setSplitError(null); }}
-            className="text-sm text-red-600 hover:text-red-700 font-medium underline">
+          <Button variant="secondary" size="sm" onClick={() => { setSplitting(true); setSplitError(null); }}>
             重试
-          </button>
+          </Button>
         </div>
       )}
 
       {/* 阅读动机 */}
-      <Card className="mb-6 animate-fade-in">
+      <Card hover={false} className="mb-6 animate-fade-in">
         <div className="flex items-center justify-between mb-2">
           <div className="flex items-center gap-2">
-            <span className="text-lg">🎯</span>
+            <Icon name="flag" className="w-4 h-4 text-gray-400" />
             <h3 className="text-sm font-semibold text-gray-700">阅读动机</h3>
           </div>
           {!editingMotivation && (
-            <button
-              onClick={() => { setMotivationText(book.reading_motivation || ''); setEditingMotivation(true); }}
-              className="text-xs text-blue-500 hover:text-blue-600 px-2 py-1 rounded hover:bg-blue-50 transition-colors"
-            >
+            <Button variant="ghost" size="sm" onClick={() => { setMotivationText(book.reading_motivation || ''); setEditingMotivation(true); }}>
               {book.reading_motivation ? '编辑' : '设置'}
-            </button>
+            </Button>
           )}
         </div>
         {editingMotivation ? (
@@ -608,35 +584,27 @@ export default function BookOverview() {
             <textarea
               value={motivationText}
               onChange={(e) => setMotivationText(e.target.value)}
-              placeholder="写下你阅读这本书的动机... 为什么读这本书？想从中获得什么？"
+              placeholder="写下你阅读这本书的动机..."
               className="w-full p-3 text-sm text-gray-700 border border-gray-200 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent resize-none"
               rows={3}
             />
             <div className="flex gap-2 justify-end">
-              <button
-                onClick={() => setEditingMotivation(false)}
-                className="px-3 py-1.5 text-xs text-gray-500 hover:text-gray-700 rounded-lg hover:bg-gray-100 transition-colors"
-              >
-                取消
-              </button>
-              <button
-                onClick={async () => {
-                  setSavingMotivation(true);
-                  try {
-                    const updated = await updateBookMotivation(bookId!, motivationText || null);
-                    setBook(updated);
-                    setEditingMotivation(false);
-                  } catch {
-                    alert('保存失败');
-                  } finally {
-                    setSavingMotivation(false);
-                  }
-                }}
-                disabled={savingMotivation}
-                className="px-4 py-1.5 text-xs text-white bg-blue-500 rounded-lg hover:bg-blue-600 disabled:opacity-50 transition-colors"
-              >
-                {savingMotivation ? '保存中...' : '保存'}
-              </button>
+              <Button variant="secondary" size="sm" onClick={() => setEditingMotivation(false)}>取消</Button>
+              <Button size="sm" loading={savingMotivation} onClick={async () => {
+                setSavingMotivation(true);
+                try {
+                  const updated = await updateBookMotivation(bookId!, motivationText || null);
+                  setBook(updated);
+                  setEditingMotivation(false);
+                  toast('已保存阅读动机', 'success');
+                } catch {
+                  toast('保存失败', 'error');
+                } finally {
+                  setSavingMotivation(false);
+                }
+              }}>
+                保存
+              </Button>
             </div>
           </div>
         ) : (
@@ -649,27 +617,19 @@ export default function BookOverview() {
       {/* 章节列表 */}
       <div className="flex items-center justify-between mb-5">
         <h2 className="text-lg font-bold text-gray-800">章节列表</h2>
-        {!needsSplit && statsText && (
-          <span className="text-xs text-gray-400">{statsText}</span>
-        )}
+        {!needsSplit && statsText && <span className="text-xs text-gray-400">{statsText}</span>}
       </div>
 
       {splitting ? (
-        <SplitProgress
-          key={bookId}
-          bookId={bookId!}
-          onComplete={handleSplitComplete}
-          onError={handleSplitError}
-        />
+        <SplitProgress key={bookId} bookId={bookId!} onComplete={handleSplitComplete} onError={(msg) => setSplitError(msg)} />
       ) : chapterTree.length === 0 ? (
-        <Card className="text-center py-16 animate-fade-in">
-          <div className="text-5xl mb-4 animate-float">📂</div>
-          <h3 className="text-lg font-semibold text-gray-700 mb-2">暂无章节数据</h3>
-          <p className="text-sm text-gray-400 mb-6 max-w-sm mx-auto">点击上方"知识拆分"按钮，自动解析书籍内容并生成章节和知识单元</p>
-          <button onClick={() => { setSplitting(true); setSplitError(null); }}
-            className="px-6 py-3 bg-gradient-to-r from-amber-500 to-orange-500 text-white rounded-xl text-sm font-medium hover:shadow-lg hover:shadow-amber-500/25 transition-all">
-            ⚡ 开始知识拆分
-          </button>
+        <Card hover={false}>
+          <EmptyState
+            icon="documentText"
+            title="暂无章节数据"
+            description={'点击上方「知识拆分」按钮，自动解析书籍内容并生成章节和知识单元'}
+            action={<Button icon="bolt" onClick={() => { setSplitting(true); setSplitError(null); }}>开始知识拆分</Button>}
+          />
         </Card>
       ) : (
         <div className="space-y-3">
@@ -684,10 +644,34 @@ export default function BookOverview() {
               onUnitClick={handleUnitClick}
               onRelearn={handleRelearn}
               onEnrich={handleEnrich}
+              onUnitLoop={handleUnitLoop}
+              unitLoopLoading={unitLoopLoading}
             />
           ))}
         </div>
       )}
+
+      {/* 确认删除弹窗 */}
+      <ConfirmDialog
+        open={showDelete}
+        title="删除书籍"
+        message={`确定要删除《${book.title}》吗？此操作将同时删除章节、学习记录、知识图谱等所有关联数据，且不可恢复。`}
+        confirmText="确认删除"
+        danger
+        loading={deleting}
+        onConfirm={handleDelete}
+        onCancel={() => setShowDelete(false)}
+      />
+
+      {/* 编辑书籍信息弹窗 */}
+      <BookInfoDialog
+        open={showInfoEdit}
+        initialTitle={book.title}
+        initialAuthor={book.author ?? null}
+        loading={savingInfo}
+        onClose={() => setShowInfoEdit(false)}
+        onSave={handleSaveInfo}
+      />
     </div>
   );
 }

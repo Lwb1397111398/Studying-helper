@@ -31,11 +31,32 @@ from app.modules.teaching.prompts import (
     FEYNMAN_EXPLAIN_PROMPT, FEYNMAN_ASSESS_PROMPT,
     CORNELL_CUES_PROMPT, CORNELL_SUMMARY_PROMPT,
     EXAMPLE_PROMPT,
+    EXPLAIN_PROMPT_V2, CHECK_PROMPT_V2, REFLECT_PROMPT_V2,
+    GRADE_PROMPT_V2, FEYNMAN_EXPLAIN_PROMPT_V2, REPAIR_PROMPT_V2,
+)
+from app.modules.teaching.hint_ladder import (
+    PASS_SCORE,
+    classify_error_type,
+    fail_count_from_assessments,
+    format_repair_assessment,
+    next_hint_level,
+    rule_based_repair_text,
+    should_mark_review,
+    build_repair_instruction,
 )
 from app.modules.teaching.strategies import select_teaching_strategy
 from app.modules.teaching.teaching_plan import (
     TeachingPlan, TeachingPlanGenerator, CoverageTracker,
     plan_generator, coverage_tracker,
+)
+from app.modules.teaching.v2_consumer import (
+    load_v2_teaching_context,
+    build_explain_budget_block,
+    build_check_claims_block,
+    build_reflect_connect_block,
+    pick_feynman_mastery_checks,
+    claim_id_for_question_index,
+    mastery_check_for_claim,
 )
 
 
@@ -329,26 +350,147 @@ class TeachingService:
         if phase == TeachingPhase.FEYNMAN:
             assessment = await self._assess_feynman_explanation(current_unit, answer)
         else:
-            prompt = ASSESS_PROMPT.format(
-                topic=current_unit.summary[:200],
-                question=question_text,
-                student_answer=answer,
+            # Step3：若问题中嵌入了 mastery_check 元数据，用 GRADE_PROMPT_V2
+            import re as _re
+            meta_m = _re.search(
+                r"<!--claim_id=(.*?)\|\|mastery_check=(.*?)-->",
+                question_text or "",
             )
-            try:
-                response = await self.llm.chat_json(
-                    messages=[LLMMessage(role="user", content=prompt)],
-                    temperature=0.1,
+            if meta_m:
+                claim_id = meta_m.group(1).strip()
+                mastery_check = meta_m.group(2).strip()
+                clean_q = _re.sub(
+                    r"\s*<!--claim_id=.*?-->\s*",
+                    "",
+                    question_text or "",
+                ).strip()
+                claim_text = ""
+                for c in (await load_v2_teaching_context(self.db, current_unit_id, book_id=current_unit.book_id)).claims:
+                    if c.id == claim_id:
+                        claim_text = c.text
+                        break
+                prompt = GRADE_PROMPT_V2.format(
+                    question=clean_q,
+                    mastery_check=mastery_check or "能正确回答该问题",
+                    claim_text=claim_text or current_unit.summary[:200],
+                    student_answer=answer,
+                    claim_id=claim_id,
                 )
-                assessment = response if isinstance(response, dict) else json.loads(response)
-            except Exception:
-                assessment = {
-                    "score": 50, "mastery_level": "partial",
-                    "feedback": "无法评估，请继续学习",
-                    "should_advance": True, "suggestion": "继续下一阶段",
-                }
+                try:
+                    response = await self.llm.chat_json(
+                        messages=[LLMMessage(role="user", content=prompt)],
+                        temperature=0.1,
+                    )
+                    assessment = response if isinstance(response, dict) else json.loads(response)
+                    assessment.setdefault("claim_id", claim_id)
+                    assessment.setdefault("mastery_check", mastery_check)
+                    score_val = int(assessment.get("score", 50))
+                    assessment.setdefault("should_advance", score_val >= 60)
+                    assessment.setdefault(
+                        "mastery_level",
+                        "excellent" if score_val >= 80 else
+                        "good" if score_val >= 60 else
+                        "partial" if score_val >= 40 else "poor",
+                    )
+                    assessment.setdefault("suggestion", "继续下一阶段" if score_val >= 60 else "建议对照掌握标准再答一次")
+                except Exception:
+                    assessment = {
+                        "score": 50, "mastery_level": "partial",
+                        "feedback": "无法评估，请继续学习",
+                        "should_advance": True, "suggestion": "继续下一阶段",
+                        "claim_id": claim_id,
+                    }
+            else:
+                prompt = ASSESS_PROMPT.format(
+                    topic=current_unit.summary[:200],
+                    question=question_text,
+                    student_answer=answer,
+                )
+                try:
+                    response = await self.llm.chat_json(
+                        messages=[LLMMessage(role="user", content=prompt)],
+                        temperature=0.1,
+                    )
+                    assessment = response if isinstance(response, dict) else json.loads(response)
+                except Exception:
+                    assessment = {
+                        "score": 50, "mastery_level": "partial",
+                        "feedback": "无法评估，请继续学习",
+                        "should_advance": True, "suggestion": "继续下一阶段",
+                    }
 
         score = assessment.get("score", 50)
-        should_advance = assessment.get("should_advance", score >= 60)
+        try:
+            score = int(score)
+        except (TypeError, ValueError):
+            score = 50
+        should_advance = assessment.get("should_advance", score >= PASS_SCORE)
+
+        # Step5：三级提示阶梯（仅答错时；hint_policy=ladder 或默认）
+        hint_policy = getattr(session.strategy, "hint_policy", None) or "ladder"
+        if (
+            phase in (TeachingPhase.CHECK, TeachingPhase.REFLECT, TeachingPhase.RETRIEVAL)
+            and not should_advance
+            and score < PASS_SCORE
+            and hint_policy in ("ladder", "hint_only", "answer_first", "")
+        ):
+            prev_assessments = await self._list_phase_assessments(
+                session_id, current_unit_id, phase.value,
+            )
+            fails_before = fail_count_from_assessments(prev_assessments)
+            hint_level = next_hint_level(fails_before, hint_policy or "ladder")
+            claim_id = assessment.get("claim_id") or ""
+            mastery_check = assessment.get("mastery_check") or ""
+            claim_text = ""
+            if claim_id:
+                try:
+                    for c in (await load_v2_teaching_context(
+                        self.db, current_unit_id, book_id=current_unit.book_id
+                    )).claims:
+                        if c.id == claim_id:
+                            claim_text = c.text
+                            mastery_check = mastery_check or (c.mastery_check or "")
+                            break
+                except Exception:
+                    pass
+            error_type = classify_error_type(
+                answer,
+                claim_text=claim_text,
+                mastery_check=mastery_check,
+                feedback=str(assessment.get("feedback") or ""),
+            )
+            repair_text = await self._generate_repair_hint(
+                question=question_text,
+                student_answer=answer,
+                score=score,
+                feedback=str(assessment.get("feedback") or ""),
+                hint_level=hint_level,
+                error_type=error_type,
+                claim_text=claim_text,
+                mastery_check=mastery_check,
+            )
+            mark_review = should_mark_review(hint_level)
+            assessment = format_repair_assessment(
+                hint_level=hint_level,
+                error_type=error_type,
+                repair_text=repair_text,
+                score=score,
+                mark_review=mark_review,
+                claim_id=claim_id or None,
+                mastery_check=mastery_check,
+            )
+            # 保留原始 is_correct 等
+            assessment.setdefault("is_correct", False)
+            if mark_review:
+                try:
+                    await self._flag_unit_for_review(
+                        unit_id=current_unit_id,
+                        book_id=session.book_id,
+                        session_id=session_id,
+                        reason=f"hint_level_3:{error_type}",
+                    )
+                except Exception:
+                    pass
 
         # 保存学生的回答消息
         answer_msg_id = str(uuid4())
@@ -365,7 +507,10 @@ class TeachingService:
         eval_msg_id = str(uuid4())
         feedback_text = assessment.get("feedback", "")
         suggestion = assessment.get("suggestion", "")
+        hint_level_show = assessment.get("hint_level")
         eval_content = f"**评估结果**：{feedback_text}"
+        if hint_level_show:
+            eval_content = f"**提示等级 {hint_level_show}/3**\n\n{feedback_text}"
 
         # 费曼评估：补充覆盖/遗漏要点
         if phase == TeachingPhase.FEYNMAN:
@@ -1079,7 +1224,25 @@ class TeachingService:
                 concepts_list.append(f"- {c}")
         concepts_str = "\n".join(concepts_list) if concepts_list else "无"
 
-        # 提取关键要点列表
+        # Step3：v2 路径
+        v2 = await load_v2_teaching_context(self.db, unit.unit_id, book_id=unit.book_id)
+        if v2.is_v2:
+            prompt = EXPLAIN_PROMPT_V2.format(
+                title=(unit.summary or "")[:50],
+                summary=unit.summary or "",
+                concepts=concepts_str,
+                explanation_style=strategy.explanation_style,
+                teaching_style=getattr(strategy, "teaching_style", None) or "explain_then_probe",
+                scaffold_level=strategy.scaffold_level,
+                budget_block=build_explain_budget_block(v2),
+            )
+            response = await self.llm.chat(
+                messages=[LLMMessage(role="user", content=prompt)],
+                temperature=0.7,
+            )
+            return response.content
+
+        # 提取关键要点列表（v1）
         kp_list = []
         for kp in (unit.key_points or []):
             if hasattr(kp, 'title'):
@@ -1092,9 +1255,9 @@ class TeachingService:
         key_points_str = "\n".join(kp_list) if kp_list else "无"
 
         prompt = EXPLAIN_PROMPT.format(
-            title=unit.summary[:50],
-            content=unit.summary,
-            summary=unit.summary,
+            title=unit.summary[:50] if unit.summary else "",
+            content=unit.summary or "",
+            summary=unit.summary or "",
             concepts=concepts_str,
             key_points=key_points_str,
             explanation_style=strategy.explanation_style,
@@ -1247,6 +1410,20 @@ class TeachingService:
 
     async def _generate_feynman(self, unit: LearnedUnit) -> str:
         """费曼学习法：引导学生用自己的话解释"""
+        v2 = await load_v2_teaching_context(self.db, unit.unit_id, book_id=unit.book_id)
+        if v2.is_v2:
+            checks = pick_feynman_mastery_checks(v2)
+            if checks:
+                prompt = FEYNMAN_EXPLAIN_PROMPT_V2.format(
+                    summary=(unit.summary or "")[:500],
+                    mastery_checks="\n".join(f"- {m}" for m in checks),
+                )
+                response = await self.llm.chat(
+                    messages=[LLMMessage(role="user", content=prompt)],
+                    temperature=0.7,
+                )
+                return response.content
+
         kp_list = []
         for kp in (unit.key_points or []):
             kp_list.append(f"- {kp.title}" if hasattr(kp, 'title') else f"- {kp}")
@@ -1258,7 +1435,7 @@ class TeachingService:
         concepts_str = "\n".join(concepts_list) or "无"
 
         prompt = FEYNMAN_EXPLAIN_PROMPT.format(
-            summary=unit.summary[:500],
+            summary=(unit.summary or "")[:500],
             key_points=key_points_str,
             concepts=concepts_str,
         )
@@ -1364,7 +1541,35 @@ class TeachingService:
         return header + "\n".join(questions)
 
     async def _generate_check(self, unit: LearnedUnit) -> str:
-        # 提取所有关键要点
+        v2 = await load_v2_teaching_context(self.db, unit.unit_id, book_id=unit.book_id)
+        if v2.is_v2:
+            prompt = CHECK_PROMPT_V2.format(
+                summary=(unit.summary or "")[:500],
+                claims_block=build_check_claims_block(v2),
+            )
+            try:
+                raw = await self.llm.chat_json(
+                    messages=[LLMMessage(role="user", content=prompt)],
+                    temperature=0.4,
+                )
+                questions = raw.get("questions") if isinstance(raw, dict) else None
+                if isinstance(questions, list) and questions:
+                    lines = []
+                    for i, q in enumerate(questions, 1):
+                        if not isinstance(q, dict):
+                            continue
+                        qtext = q.get("question") or ""
+                        cid = q.get("claim_id") or claim_id_for_question_index(v2, i - 1) or ""
+                        mc = q.get("mastery_check") or mastery_check_for_claim(v2, cid) or ""
+                        # 在输出中保留 claim 元数据，供评分阶段解析
+                        meta = f"<!--claim_id={cid}||mastery_check={mc}-->"
+                        lines.append(f"{i}. {qtext} {meta}".rstrip())
+                    if lines:
+                        return "请回答下列检验题：\n" + "\n".join(lines)
+            except Exception:
+                pass  # fall through to v1
+
+        # 提取所有关键要点（v1）
         kp_list = []
         for kp in (unit.key_points or []):
             if hasattr(kp, 'title'):
@@ -1374,7 +1579,7 @@ class TeachingService:
         key_points_str = "\n".join(kp_list) if kp_list else "无"
 
         prompt = CHECK_PROMPT.format(
-            summary=unit.summary[:500],
+            summary=(unit.summary or "")[:500],
             key_points=key_points_str,
         )
         response = await self.llm.chat(
@@ -1385,6 +1590,19 @@ class TeachingService:
 
     async def _generate_reflect(self, unit: LearnedUnit, strategy: TeachingStrategy) -> str:
         """元认知反思：引导学生自评理解程度"""
+        v2 = await load_v2_teaching_context(self.db, unit.unit_id, book_id=unit.book_id)
+        if v2.is_v2:
+            prompt = REFLECT_PROMPT_V2.format(
+                summary=unit.summary or "",
+                unit_gist=v2.unit_gist or "",
+                connect_block=build_reflect_connect_block(v2),
+            )
+            response = await self.llm.chat(
+                messages=[LLMMessage(role="user", content=prompt)],
+                temperature=0.7,
+            )
+            return response.content
+
         kp_list = []
         for kp in (unit.key_points or []):
             if hasattr(kp, 'title'):
@@ -1465,8 +1683,10 @@ class TeachingService:
     async def _generate_answer(self, question: str, intent: str,
                                unit: Optional[LearnedUnit]) -> tuple:
         content = unit.summary if unit else "无相关内容"
+        asset_block = await self._build_tutor_asset_block(unit)
         prompt = ANSWER_PROMPT.format(
             current_content=content,
+            asset_block=asset_block or "（无预存 v2 资产/概念，按摘要作答）",
             question=question,
             intent=intent,
         )
@@ -1497,6 +1717,158 @@ class TeachingService:
             ]
 
         return answer, follow_ups
+
+    async def _build_tutor_asset_block(self, unit: Optional[LearnedUnit]) -> str:
+        """tutor_ask：优先注入本单元 v2 claims + book_concepts 定义。"""
+        if unit is None:
+            return ""
+        lines: list[str] = []
+        try:
+            v2 = await load_v2_teaching_context(self.db, unit.unit_id, book_id=unit.book_id)
+            if v2.is_v2:
+                lines.append("### 本单元 claims")
+                for c in (v2.required_claims or v2.claims)[:8]:
+                    mc = f" | 掌握：{c.mastery_check}" if getattr(c, "mastery_check", None) else ""
+                    role = getattr(c, "role_in_book", "") or ""
+                    lines.append(f"- [{c.id}] ({role}) {c.text}{mc}")
+        except Exception:
+            pass
+        try:
+            from app.modules.learning_assets.concept_harvest import list_book_concepts
+            if unit.book_id:
+                rows = await list_book_concepts(self.db, unit.book_id)
+                # 优先与单元概念名相交的
+                unit_names = set()
+                for c in (unit.concepts or []):
+                    if hasattr(c, "name") and c.name:
+                        unit_names.add(c.name)
+                picked = []
+                for r in rows:
+                    if r.name in unit_names:
+                        picked.append(r)
+                if not picked:
+                    picked = list(rows)[:6]
+                else:
+                    picked = picked[:8]
+                if picked:
+                    lines.append("### 概念词典")
+                    for r in picked:
+                        defn = (r.definition or "").strip() or "（暂无定义）"
+                        lines.append(f"- {r.name}: {defn}")
+        except Exception:
+            pass
+        return "\n".join(lines)
+
+    async def _list_phase_assessments(
+        self, session_id: str, unit_id: str, phase: str,
+    ) -> list[dict]:
+        """读取同单元同阶段历史 assessment（用于连续失败计数）。"""
+        result = await self.db.execute(
+            select(TeachingMessageModel).where(
+                TeachingMessageModel.session_id == session_id,
+                TeachingMessageModel.unit_id == unit_id,
+                TeachingMessageModel.phase == phase,
+            ).order_by(TeachingMessageModel.created_at.asc())
+        )
+        rows = result.scalars().all()
+        out: list[dict] = []
+        for m in rows:
+            if not getattr(m, "assessment_json", None):
+                continue
+            try:
+                data = json.loads(m.assessment_json)
+                if isinstance(data, dict):
+                    out.append(data)
+            except Exception:
+                continue
+        return out
+
+    async def _generate_repair_hint(
+        self,
+        *,
+        question: str,
+        student_answer: str,
+        score: int,
+        feedback: str,
+        hint_level: int,
+        error_type: str,
+        claim_text: str,
+        mastery_check: str,
+    ) -> str:
+        """LLM 生成阶梯提示；失败则规则 fallback。"""
+        instruction = build_repair_instruction(
+            hint_level,
+            error_type=error_type,
+            claim_text=claim_text,
+            mastery_check=mastery_check,
+        )
+        prompt = REPAIR_PROMPT_V2.format(
+            question=question or "",
+            student_answer=student_answer or "",
+            score=score,
+            feedback=(feedback or "")[:300],
+            repair_instruction=instruction,
+        )
+        try:
+            response = await self.llm.chat(
+                messages=[LLMMessage(role="user", content=prompt)],
+                temperature=0.4,
+            )
+            text = (response.content or "").strip()
+            if text:
+                return text
+        except Exception:
+            pass
+        return rule_based_repair_text(
+            hint_level,
+            claim_text=claim_text,
+            mastery_check=mastery_check,
+            error_type=error_type,
+            question=question,
+        )
+
+    async def _flag_unit_for_review(
+        self,
+        *,
+        unit_id: str,
+        book_id: str,
+        session_id: str,
+        reason: str = "",
+    ) -> None:
+        """第 3 级提示：把单元挂进复习（降低掌握、缩短间隔），复用现有 MasteryRecord。"""
+        from app.db.models import MasteryRecordModel
+        from datetime import timedelta
+
+        result = await self.db.execute(
+            select(MasteryRecordModel).where(
+                MasteryRecordModel.knowledge_unit_id == unit_id,
+            )
+        )
+        rec = result.scalar_one_or_none()
+        now = datetime.now(timezone.utc)
+        if rec is None:
+            self.db.add(MasteryRecordModel(
+                id=str(uuid4()),
+                user_id="anonymous",
+                knowledge_unit_id=unit_id,
+                book_id=book_id,
+                mastery_score=0.3,
+                mastery_level="learning",
+                ease_factor=2.0,
+                interval_days=1,
+                review_count=0,
+                last_reviewed_at=now,
+                next_review_at=now + timedelta(days=1),
+            ))
+        else:
+            rec.mastery_score = min(float(rec.mastery_score or 0.5), 0.4)
+            rec.interval_days = 1
+            rec.next_review_at = now + timedelta(days=1)
+            rec.last_reviewed_at = now
+            # 轻量标记：不新增列，写在已有字段能表达的范围内
+            if hasattr(rec, "mastery_level"):
+                rec.mastery_level = "learning"
+        await self.db.flush()
 
     async def _grade_answer(self, question: TestQuestion, student_answer: str) -> float:
         """LLM 语义判分，返回 0-100"""
