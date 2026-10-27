@@ -1,0 +1,69 @@
+{
+  "总计划": {
+    "score": 89,
+    "issues": [
+      "P1 时间盒 60 分钟与 P1 的测试矩阵、全量 pytest、Android 验证不匹配，容易过早触发止损。",
+      "总时间预算未显式包含执行期 AI 复评、复评后修改重验、全量回归重复运行的成本，通宵执行可能被评审流程耗尽。",
+      "缺少推送后发现严重问题时的回滚/热修触发条件与通知流程；现有备份分支和 P3 revert 不足以覆盖推送后故障处置。"
+    ],
+    "suggestions": [
+      "将 P1 时间盒调至 90-120 分钟，或拆成 P1a 后端算法/测试、P1b Android 验证两个子盒。",
+      "在总计划中增加 20%-30% 时间缓冲，并限定执行期 AI 复评最多重试 2 轮，超限即止损汇报。",
+      "补充推送后严重问题处置流程：不 force push，使用 git revert 或新 commit 修复；真实库需从备份恢复时先经老板确认并记录恢复命令与 hash 对比。"
+    ]
+  },
+  "P1": {
+    "score": 88,
+    "issues": [
+      "P1 时间盒 60 分钟明显偏紧，测试矩阵含 FSRS 数值、service 查库、sync 闭环、SM-2 保值、旧库 None、Android 测试，AI 很可能无法在盒内完成并触发止损。",
+      "测试 4 只要求先核实公式、写预期数值表并断言，但没有写死“修复后数值变化”的接受边界与暂停条件；若 lapses 影响 stability/difficulty 导致已有用户 AGAIN 间隔明显恶化，计划没有阈值阻止自动接受。",
+      "改点 C 描述“透传给 _calculate_fsrs”，但未在改点中显式写死 _calculate_fsrs 签名末尾追加 lapses 参数及全部调用点清单，存在 AI 漏改中间层签名的可执行性风险。"
+    ],
+    "suggestions": [
+      "将 P1 时间盒调至 90-120 分钟，或拆为“后端算法+测试”和“Android 锁定测试”两个子盒，避免核心真 bug 被时间盒误杀。",
+      "在测试 4 增加安全边界：lapses>0 路径的 stability/difficulty 必须为非负有限值，scheduled_days 必须为正；若 AGAIN 后间隔相比 lapses=0 路径变化超过预设阈值（如 30%）或方向异常，暂停并上报老板，不自动接受。",
+      "在改点 C 明确写出 _calculate_fsrs 签名末尾追加 lapses: int = 0，并列出 service、spaced_repetition_v2、测试中的全部调用点逐一核对。"
+    ]
+  },
+  "P2": {
+    "score": 92,
+    "issues": [
+      "无新增实质缺口，计划已覆盖导入冒烟、get_type_hints 身份断言、pyflakes 新测试文件 0 报告。"
+    ],
+    "suggestions": []
+  },
+  "P3": {
+    "score": 91,
+    "issues": [
+      "无新增实质缺口，P3a 已覆盖 B1 三查、B2 RHS 副作用判定、B4 占位符预检、金样对比、证据留痕与回滚命令；C1 已降为可选且不阻塞推送。"
+    ],
+    "suggestions": []
+  },
+  "P4": {
+    "score": 89,
+    "issues": [
+      "目标 unit_id 的获取方式未写死：计划只说“对目标 unit 调 analyze”，但没有明确从 sync/import 返回值还是 export 包中筛选 round4-book 的 unit，AI 可能猜错或取到空值。",
+      "PREFLIGHT_PASS/FAIL 的落盘文件名未写死；P6 要求读取 P4 的 PREFLIGHT_PASS 记录，但 P4 验证只明确 smoke_run1/2 日志，证据链不够闭合。",
+      "e2e 预检中“检查 playwright install chromium 状态”的具体命令和判定标准未写死，AI 可能只做模糊检查。"
+    ],
+    "suggestions": [
+      "写死 unit_id 获取规则：从 sync/import 返回值或 export 包 units 中筛选 book_id==round4-book，断言唯一且非空，再作为 analyze 的路径参数。",
+      "写死 PREFLIGHT_PASS/FAIL 输出到 logs/preflight_result.txt，并纳入 P4 日志 commit 与 P6 读取门禁。",
+      "写死 playwright 预检命令与判定，例如记录 npx playwright --version 与 npx playwright install chromium 完整输出，再用最小 chromium 启动冒烟判定 PASS/FAIL，失败日志落盘。"
+    ]
+  },
+  "P5": {
+    "score": 92,
+    "issues": [
+      "无新增实质缺口，文档模板、TODO_P6 占位、check_modules SKIP 与 check_session_close FAIL 口径、commit 顺序均已覆盖。"
+    ],
+    "suggestions": []
+  },
+  "P6": {
+    "score": 91,
+    "issues": [
+      "无新增实质缺口，终检门禁、隐私扫描范围、final_gate.py 接口、豁免四分类、数字回写时序与推送后 note 均已写实。"
+    ],
+    "suggestions": []
+  }
+}

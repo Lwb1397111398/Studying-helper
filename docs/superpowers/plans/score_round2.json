@@ -1,0 +1,118 @@
+{
+  "总计划": {
+    "score": 88,
+    "issues": [
+      "缺少明确的优先级与降级策略：P1/P2/P4/P6是硬收益，P3大批量未用导入清理收益低且diff大，可能吞掉通宵时间。",
+      "失败回滚后是否继续后续计划、是否允许推送没有写死；当前“30分钟修不好就reset”可能回滚后仍继续，存在带病推进风险。",
+      "git reset --hard会丢弃未提交日志和未跟踪现场文件，计划未要求先把失败现场、hash、日志备份到工作区外或提交。",
+      "全局“每完成一个Pn重跑之前所有Pn专项测试”成本可能过高，缺少总时间盒和超时降级规则。",
+      "P6的e2e失败豁免范围过宽，可能把真正的测试失败当成环境问题跳过。",
+      "缺少一次开工前的基线快照命令清单与全绿证据归档格式，后续归因可能困难。"
+    ],
+    "suggestions": [
+      "把计划分级：P1、P2、P4、P6为必须完成且推送前置；P3只做B1/B2/B4，B3未用导入批量清理默认跳过或限时完成；P5可精简为最小可用文档。",
+      "明确止损规则：任一Pn失败30分钟未修复，回滚该Pn工作区并停止后续代码改动，不推送GitHub，汇报失败点。",
+      "回滚前把当前commit hash、失败diff、测试日志复制到docs/superpowers/plans/logs/failed_Pn/并git stash或打包未跟踪文件，再执行reset。",
+      "设置总时间盒和每Pn时间上限；超时自动降级P3/P5，不降级P1/P2/P4/P6。",
+      "收窄推送豁免：只有Playwright浏览器安装或启动环境失败可豁免；任何断言失败、pytest失败、tsc/build失败均阻断推送。",
+      "开工前生成基线快照：git rev-parse HEAD、pytest -q、tsc --noEmit、vite build、pyflakes基线，统一存日志并在最终汇报引用。"
+    ]
+  },
+  "P1": {
+    "score": 86,
+    "issues": [
+      "没有覆盖离线同步包中lapses字段的闭环验证；可能出现DB修好了但sync preview/import/export丢失lapses。",
+      "_update_stability继续使用state.lapses意味着传入真实旧lapses后会改变stability/difficulty/interval计算；计划只测lapses计数，未测调度结果回归。",
+      "Android第⑨步写成“若同样硬编码0则对称修复”，文件、函数、测试命令和验收标准不够具体，且P1验证未包含Kotlin测试。",
+      "未要求全仓搜索所有FSRSResult和FSRSState构造点，新增字段可能漏改其他路径。",
+      "测试矩阵缺少quality边界值、首次学习卡、复习卡、lapses为大值或None与0混用等边界。",
+      "风险写成“低”不准确，真实lapses进入算法后可能改变复习间隔，应至少为中低。",
+      "未明确_upsert_mastery对lapses=0、None、旧记录缺失三种情况的落库行为验证。"
+    ],
+    "suggestions": [
+      "补同步闭环测试：构造MasteryRecordModel.lapses=3，执行sync export→import→查DB断言仍为3；同时断言preview/import schema包含lapses字段；Android同步包解析与序列化也补对应测试。",
+      "补FSRS调度回归：对lapses=0和lapses=2分别执行AGAIN，断言stability、difficulty、interval的快照或标准公式结果；明确修复后间隔变化是否预期。",
+      "把Android修复写成明确步骤：检查FSRSAlgorithm.kt调用处是否读取旧MasteryRecord.lapses并传入；补:app:testDebugUnitTest --tests “*FSRS*”并纳入P1验证；若确认不改，必须写明证据和原因。",
+      "全仓搜索FSRSResult(和FSRSState(构造点，逐项确认lapses传递；对_init_card、_update_card单独加单测。",
+      "测试矩阵增加quality=2/3、新卡、复习卡、lapses=None/0/大值、连续AGAIN与HARD/GOOD/EASY交替。",
+      "把风险改为中低，并列出本Pn回滚hash和如间隔异常时的回滚条件。"
+    ]
+  },
+  "P2": {
+    "score": 92,
+    "issues": [
+      "3处undefined name与两个测试函数的一一映射不够明确，需确认get_type_hints测试确实覆盖全部3处未导入名。",
+      "review/fsrs.py顶层真实导入app.db.models会增加算法层对持久层依赖，需确认独立导入fsrs时不会触发不期望的SQLAlchemy初始化副作用。",
+      "新增test_type_hints.py的位置和命名需确保pytest发现，且避免测试顺序依赖。"
+    ],
+    "suggestions": [
+      "列出3处未导入名到函数/注解的映射表，测试逐项调用get_type_hints，断言返回dict包含ReplanResult、StageFeedback、MasteryRecordModel目标类型。",
+      "在fsrs.py导入DB模型处加注释说明仅用于运行时注解解析，并增加一个独立导入测试确认无循环导入和初始化异常。",
+      "确认测试文件位于pytest发现路径，并在P2验证中写死执行命令。"
+    ]
+  },
+  "P3": {
+    "score": 80,
+    "issues": [
+      "B3批量清理142个未用导入收益低、diff大、误删re-export或副作用导入风险偏高，且一个批次commit过大不易定位回滚。",
+      "pyflakes归零的白名单未给具体文件、具体过滤命令和保留原因，验收标准偏主观。",
+      "删除死查询前未要求检查SQL副作用，如日志、权限、缓存、事务锁、动态调用或字符串引用。",
+      "B2疑似丢逻辑的判定记录模板不够具体，执行者可能直接删除而不留下证据。",
+      "整体收益/成本比偏低，在通宵场景下可能挤占P1/P4/P6时间。"
+    ],
+    "suggestions": [
+      "将B3降级为可选：只清理非测试文件中的纯未用导入，按模块拆小commit；__init__.py、# noqa、re-export、有副作用导入全部保留。",
+      "固定白名单文件docs/superpowers/plans/logs/pyflakes_whitelist.txt，验证命令输出过滤白名单后必须为空，并记录每条白名单保留原因。",
+      "每个删除查询记录：查询结果后续引用搜索证据、动态引用搜索命令、对应模块测试命令、回滚commit hash。",
+      "B2逐项输出判定表：文件行号、变量名、是否真死、证据、测试、处理方式；疑似丢逻辑必须先写失败测试再修。",
+      "如果时间不足，只做B1/B2/B4，B3跳过并在当前进度文档记录，不影响P6推送。"
+    ]
+  },
+  "P4": {
+    "score": 86,
+    "issues": [
+      "round4样例包的仓库路径、multipart上传字段名、preview/import/export请求与响应断言未写死，AI执行时容易跑偏。",
+      "杀进程只写taskkill by PID，未明确taskkill /F /T杀进程树；launcher可能拉起子进程导致残留端口或临时目录删不掉。",
+      "teaching/v2/sessions/start只断言不5xx太弱，未写死最小payload和期望fallback响应结构或标志。",
+      "临时目录删除在Windows可能因文件占用失败，计划未要求重试和失败记录。",
+      "自选空闲端口存在bind后释放再启动的竞态，虽概率低但应加一次重试或明确失败诊断。"
+    ],
+    "suggestions": [
+      "写死样例包相对路径、上传字段名、导入API payload、导出后查询断言；在脚本docstring中给出httpx或requests调用示例。",
+      "进程清理改为taskkill /F /T /PID并等待退出；--keep时打印临时目录和进程PID。",
+      "sessions/start写死最小payload，断言非5xx且响应包含fallback标志或预期结构，而不是仅看状态码。",
+      "临时目录删除加重试并在最终报告记录失败路径；health轮询失败时打印子进程stdout/stderr最后N行。",
+      "端口冲突时自动换端口重试一次，仍失败则输出占用诊断。"
+    ]
+  },
+  "P5": {
+    "score": 90,
+    "issues": [
+      "check_modules.py的具体执行命令和通过标准未写死，字段齐全仍依赖人工对照模板。",
+      "若P3降级或跳过，相关文档范围需要同步调整，避免文档声称已清理但代码未清理。",
+      "文档最后更新与验证命令需要和P6最终日志数字一致，否则容易出现文档数字过期。"
+    ],
+    "suggestions": [
+      "在验证中写死check_modules.py实际路径、命令和输出标准；提供模板字段勾选清单。",
+      "文档中明确记录P3哪些批次跳过及原因。",
+      "最终更新文档时引用P6日志中的实际测试数字和commit hash。"
+    ]
+  },
+  "P6": {
+    "score": 82,
+    "issues": [
+      "e2e“安装/运行确实失败→豁免”范围过宽；如果是Playwright测试断言失败，不应豁免并继续推送。",
+      "隐私检查写成人工级过目，但执行者是AI；缺少自动化grep、密钥模式、大文件阈值和二进制文件检查命令。",
+      "推送前检查项较分散，未写死git status必须干净、P1-P6 commit必须存在、日志必须归档。",
+      "前端无单测声明可以保留，但e2e失败豁免会显著降低前端覆盖，必须在豁免条件上收紧。",
+      "Android只跑单测和assembleDebug，未说明是否覆盖本轮若修改的Kotlin FSRS路径；需和P1联动。"
+    ],
+    "suggestions": [
+      "收紧豁免：只有Playwright chromium安装或浏览器启动环境失败可豁免；test:e2e断言失败必须修复或停止推送。",
+      "增加自动化隐私扫描命令：扫描git diff --cached、新增文件中的.env、token、password、secret、私钥模式；设置文件大小阈值并检查git status --ignored。",
+      "推送前写死检查：git status --porcelain为空、git log包含P1-P6 commit、smoke日志存在、失败豁免列表为空（除已记录环境豁免）。",
+      "在最终汇报中列出前端覆盖声明和e2e实际执行结果；若豁免，写明失败命令、错误输出和替代验证。",
+      "若P1修改了Android FSRS路径，P6必须执行对应Kotlin测试并确认不在P1遗漏。"
+    ]
+  }
+}

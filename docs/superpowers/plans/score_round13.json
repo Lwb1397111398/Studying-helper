@@ -1,0 +1,65 @@
+{
+  "总计划": {
+    "score": 89,
+    "issues": [
+      "P4 冒烟脚本只写了 health 轮询 60s 超时，没有给每个 HTTP 请求设置请求级超时或脚本级截止时间；任一接口挂起会绕过 P4 时间盒。",
+      "P6 的提交/快照/隐私扫描顺序与 P5 的文档 commit 顺序、P6 第 8/10 步存在矛盾；P6 仍保留 P4 preflight 已接管的 e2e 安装口径。"
+    ],
+    "suggestions": [
+      "在 P4 增加 urllib 统一超时（如 10 到 20 秒）和脚本级 deadline，失败时输出最近请求 URL、状态与响应摘要。",
+      "在总计划中写死 P6 最终序列：提交全部代码/测试/logs 与当前进度终稿，生成 final_gate.md，提交 final_gate.md，只读 --dry-run 复核并确认 git status 为空，最后推送；隐私扫描必须覆盖未跟踪/暂存文件或先提交 logs。"
+    ]
+  },
+  "P1": {
+    "score": 91,
+    "issues": [],
+    "suggestions": [
+      "无新增实质缺口"
+    ]
+  },
+  "P2": {
+    "score": 92,
+    "issues": [],
+    "suggestions": [
+      "无新增实质缺口"
+    ]
+  },
+  "P3a": {
+    "score": 90,
+    "issues": [],
+    "suggestions": [
+      "无新增实质缺口"
+    ]
+  },
+  "P4": {
+    "score": 89,
+    "issues": [
+      "smoke_backend.py 只明确 health 轮询 60s 超时，未给所有 GET/POST/analyze/import/export 请求设置超时；挂起接口会让脚本无限等待，时间盒失效。"
+    ],
+    "suggestions": [
+      "在 urllib 封装层统一加 timeout=10 到 20 秒并传参；增加脚本级 deadline（如 8 分钟）和失败时打印最近请求 URL/状态/响应摘要。"
+    ]
+  },
+  "P5": {
+    "score": 91,
+    "issues": [],
+    "suggestions": [
+      "无新增实质缺口"
+    ]
+  },
+  "P6": {
+    "score": 86,
+    "issues": [
+      "P5 要求当前进度终稿先 commit、final_gate 快照后生成；P6 第 10 步又要求 final_gate 与当前进度一起 commit，第 8 步又要求重新生成 final_gate 后检查 git status 干净再第 9 步 commit，顺序自相矛盾。",
+      "隐私扫描范围写死为 git diff origin/master...HEAD，不能覆盖尚未提交的新 logs/final_gate.md；但 AI 逐文件复核表又要求包含本轮新增 logs 文件。",
+      "P6 第 2 步仍写 Playwright 预检未确认、此处尝试安装，与 P4 preflight 已接管 e2e 预检、P6 只做最终跑的规则冲突。",
+      "P6 第 5 步硬编码 check_session_close.py 的绝对路径，与 P5 的 AGENT_MANAGER_TOOLS 优先/fallback 规则不一致。"
+    ],
+    "suggestions": [
+      "写死顺序：提交 P1-P6 代码/测试/logs 和当前进度终稿；生成 final_gate.md（记录父 commit 与 P1-P6 hash，不记录自身 hash）；提交 final_gate.md；之后只运行 final_gate.py --dry-run 或只读校验并确认 git status --porcelain 为空；禁止 push 前再次写入 final_gate.md。",
+      "隐私扫描前先提交 logs，或把扫描扩展为 origin/master...HEAD 加 git diff --cached 加 git ls-files --others --exclude-standard，并让 AI 复核表覆盖未跟踪/暂存文件；扫描结果落盘后再单独 commit 并复跑只读检查。",
+      "删除 P6 的再次安装/预检口径：P6 只检查 P4 的 PREFLIGHT_PASS 记录并执行 npm run test:e2e:round3；P4 记录 FAIL 即阻塞，不在 P6 补救。",
+      "P6 文档四查命令改为优先读取 AGENT_MANAGER_TOOLS 或配置变量，缺失时按 P5 规则输出 FAIL 并阻塞，不要只依赖硬编码绝对路径。"
+    ]
+  }
+}

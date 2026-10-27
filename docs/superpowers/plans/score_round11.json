@@ -1,0 +1,107 @@
+{
+  "总计划": {
+    "score": 88,
+    "issues": [
+      "存在门禁口径自相矛盾：P1 把旧同步包缺 lapses 清零登记为类别③待老板确认，P6 又声明类别③本轮为空；通宵自动推送与待老板书面确认冲突。",
+      "P3a 死代码清理被设为推送前置，收益/成本偏低，可能因低价值清理阻塞真 bug 修复成果推送。",
+      "第11轮仍为长文档叠加，重复条款和跨节引用过多，AI 执行时需要在冲突口径间判断；已出现平台期信号。",
+      "P1 旧同步包兼容缺口未覆盖 Android/SQLite 导入路径，仅锁后端测试不足。",
+      "P6 要求隐私扫描命中附上下文并 commit 日志，存在把敏感值二次写入 repo 的风险。",
+      "外部工具 check_session_close.py 依赖绝对路径，环境预检未列其存在性；缺失时 P6 直接 FAIL，通宵执行可能卡在环境。 "
+    ],
+    "suggestions": [
+      "冻结范围：P1、P2、P4、P6 为推送前置；P3a 仅保留 B1/B4 或降级为非阻塞后续任务；C1 默认跳过。",
+      "统一风险分类：要么改同步契约/导入迁移并补三端测试，要么在 P6 类别③明确列出该风险且禁止自动推送等待书面确认，不能两处矛盾。",
+      "补 Android 旧包缺 lapses 导入测试，并增加只读诊断脚本统计真实库 lapses 非零/缺失分布。",
+      "给 privacy_scan 日志定义脱敏规则：只记录文件:行、规则名和命中值 SHA256 前缀，不写完整敏感值。",
+      "开工前预检 check_session_close.py/check_modules.py 存在性；缺失时提前决定复制进 repo 或调整门禁，不能到 P6 才发现。",
+      "把 11 轮修订压缩成一页执行清单和冲突口径裁决表，减少执行期歧义。"
+    ]
+  },
+  "P1": {
+    "score": 87,
+    "issues": [
+      "风险登记矛盾：P1 写旧同步包缺字段清零归类别③待老板确认，P6 写类别③本轮为空；推送门槛无法判定。",
+      "旧同步包缺 lapses 字段只锁后端 7b，未覆盖 Android DTO/SQLite 导入路径；Kotlin DTO 默认 0 时同样会清零。",
+      "历史 lapses 不可恢复仅文档声明，缺少真实库只读诊断脚本或人工修正指引。",
+      "_update_card 中先用旧 state.lapses 参与 _update_stability/_update_difficulty 的表述需先核实函数签名；若公式不消费 lapses，会误导实现。",
+      "测试 7b 锁定清零为现行行为，但没有给出老板可执行的二选一决策包。 "
+    ],
+    "suggestions": [
+      "统一风险分类：推荐短期在 P6 类别③非空登记旧包清零风险并明确不自动推送；或实施迁移：SyncMasteryRecord.lapses 使用 None 区分缺字段，导入前读取现有 lapses 映射，delete+add 后写回。",
+      "补 Android 旧包缺 lapses 导入测试，断言导入后行为与文档一致，并给出 Android 端风险声明。",
+      "增加只读脚本统计真实库 lapses 分布；文档给人工修正 SQL/操作步骤。",
+      "P1 开工前打印 _update_stability/_update_difficulty 签名和调用点，确认 lapses 是否参与公式；按实际公式写数值预期表。",
+      "把旧包兼容做成明确决策包：保持清零并老板接受，或改契约迁移；不要用 not-applicable 掩盖产品风险。"
+    ]
+  },
+  "P2": {
+    "score": 92,
+    "issues": [
+      "未发现阻塞性问题；方案已写死文件、符号、identity 断言和导入冒烟。",
+      "残余风险主要是执行时忘记把四条 import smoke 输出原文落盘；计划已有要求但可在执行清单中加勾选项。"
+    ],
+    "suggestions": [
+      "保持现有方案；执行时把 imports smoke、pyflakes、pytest 输出原文作为 P2 commit 附件。",
+      "在 test_type_hints.py 注释中写明三个注解点与 schemas 对象 identity 断言目的，便于后续维护。"
+    ]
+  },
+  "P3": {
+    "score": 89,
+    "issues": [
+      "P3a 将死代码清理设为推送前置，收益/成本偏低；若 B2 调查项超时保留豁免，目标诊断归零可能不可达。",
+      "缺少 pyflakes 可执行性预检（版本/安装）和 baseline 目标诊断集合的脚本化比较，靠人工逐条核对有漏项风险。",
+      "B2 共 8 文件+2 调查项，单项 10 分钟上限下容易滑向默认保留；需预写每项的回滚 hash 和证据模板。",
+      "B1 autoflush 风险已识别，但显式 flush 改动本身可能改变事务边界，需要针对性测试而不只是模块回归。"
+    ],
+    "suggestions": [
+      "把 P3a 降级为非阻塞：P1/P2/P4/P6 先推送；P3a/C1 作为后续分支。若坚持阻塞，仅保留 B1/B4，B2 调查项默认豁免。",
+      "开工前加 python -m pyflakes --version 预检，并写脚本比较 baseline 与当前目标诊断集合。",
+      "给 B2 每项预填删除前后 rg、测试命令、revert 命令模板；超时直接记 not-applicable 并保留证据。",
+      "B1 若改显式 flush，补针对 autoflush 时机的测试，断言落库结果和事务边界不变。"
+    ]
+  },
+  "P4": {
+    "score": 90,
+    "issues": [
+      "urllib 手工 multipart 容易在边界、CRLF、Content-Length 上出错，需小型自检 fixture。",
+      "PREFLIGHT 自动跑 analyze 依赖规则管线；若环境缺依赖，失败需给出可诊断 stack，不能只 PREFLIGHT_FAIL。",
+      "e2e 预检提前到 P4 会增加 P4 时间盒压力，须明确只检查状态不在 P4 安装。 "
+    ],
+    "suggestions": [
+      "加一个 multipart 构造自检：固定文件内容、解析回读字段名 file 和 JSON 内容。",
+      "PREFLIGHT_FAIL 输出最近子进程日志和失败步骤名；--check-env 只检查 Playwright/chromium 状态，不在 P4 安装。",
+      "smoke 脚本自身加少量纯函数单测或 --self-test，覆盖路径拼接、端口探测、清理顺序。"
+    ]
+  },
+  "P5": {
+    "score": 91,
+    "issues": [
+      "外部工具 check_session_close.py/check_modules.py 依赖绝对路径，环境预检未列存在性；check_session_close 缺失直接阻塞 P6。",
+      "文档中 TODO_P6 占位和 P6 回写数字存在时序依赖，需确保 P6 推送前机器检查全文无残留。",
+      "三篇总览的验证命令必须可复制执行，否则文档闭环仍是形式。 "
+    ],
+    "suggestions": [
+      "把两个外部工具存在性加入开工前环境预检；优先把 check_session_close.py 复制进 repo scripts 并版本化。",
+      "P5 完成后立即跑一次 TODO_P6 全文 rg，P6 数字回写后再次检查。",
+      "每篇总览的验证命令至少执行一次并把输出摘要记入 P5 commit。"
+    ]
+  },
+  "P6": {
+    "score": 86,
+    "issues": [
+      "P1 风险类别③待老板确认与 P6 类别③本轮为空矛盾，推送前置门无法一致判定。",
+      "privacy_scan.txt 要求附上下文且 commit，可能把敏感值写入 repo，形成二次泄漏。",
+      "final_gate.py 作为门禁脚本只要求 --dry-run 自检，缺少临时 git 仓 fixture 的独立测试。",
+      "真实库三方 hash 未定义源库不存在时的判定流程；%TEMP% 备份可能被系统清理。",
+      "Android 终检虽强制重跑测试和 assembleDebug，但未明确复跑 P1 新增的旧包缺字段/同步保值专项测试。 "
+    ],
+    "suggestions": [
+      "统一 P1/P6 风险分类：若保留旧包清零为风险，P6 类别③必须非空并禁止自动推送；若判 not-applicable，删除 P1 中类别③待确认表述并补论证。",
+      "隐私日志强制脱敏：prompt 规则只记录文件:行和规则名，敏感值用 SHA256 前缀代替；commit 前人工确认无明文。",
+      "final_gate.py 加临时 git 仓自测：构造含 .db、超 1MB、TODO_P6、diff --check 错误的 fixture，断言逐项 FAIL 和正常仓 PASS。",
+      "明确源库不存在时三方 hash 的判定为 N/A 并记录；备份 hash 同时写入 docs/当前进度.md。",
+      "P6 Android 步骤增加复跑 P1 专项测试：--tests \"*FSRS*\" --tests \"*Sync*\" 和旧包缺 lapses 导入测试。"
+    ]
+  }
+}

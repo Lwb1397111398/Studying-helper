@@ -1,0 +1,95 @@
+{
+  "总计划": {
+    "score": 88,
+    "issues": [
+      "未明确真实用户 SQLite/APP_DATA_DIR 的备份与隔离规则；launcher 或手工验证若误用真实目录，可能污染老板唯一学习数据。",
+      "缺少总时间盒和检查点，通宵自主执行容易在 P3a/P4 细节上失控，只有局部 10/30/45 分钟限制。",
+      "P6 规定推送后回写数字并补 commit，会造成本地/远程不一致或需要二次推送，而二次推送未定义门禁。",
+      "P3a 作为推送阻塞项的收益论证不足，死代码清理可能挤占 FSRS 回归和 e2e 的时间。"
+    ],
+    "suggestions": [
+      "开工前复制真实 APP_DATA_DIR 下 SQLite 到 logs/backup 并记录 hash；所有启动/冒烟强制使用 tempfile.mkdtemp 的 APP_DATA_DIR，final_gate 记录未触碰真实库。",
+      "给 P1/P2/P3a/P4/P5/P6 写死时间预算和检查点，超时按止损规则落盘回滚，不通宵硬磨。",
+      "把数字回写拆成推送前生成 final_gate 快照与当前进度草稿；推送后如需补文档 commit，限定仅文档并记录二次推送门禁，或只本地保存不推送。",
+      "明确 P3a 每项删除的行为证据；无法在时限内证明的项允许记录豁免，不阻塞推送，以免低收益清理拖垮高价值验证。"
+    ]
+  },
+  "P1": {
+    "score": 88,
+    "issues": [
+      "SM-2 路径下 lapses 的落库语义未写死；测试只说行为与现在一致，若现实现会把 lapses 置 0，则算法切换会清零。",
+      "数值回归要求先读公式手算，但未在计划中列出预期数值表，AI 现场容易算错或只断言不崩溃。",
+      "未明确旧 SQLite 数据库 schema 兼容验证；列已存在但值 NULL 已测，缺列/更老库未覆盖。",
+      "未断言 API 返回对象 lapses 与 DB 一致，只查库，前端/Android 契约可能仍看不到。"
+    ],
+    "suggestions": [
+      "增加 SM-2 路径测试：mastery.lapses=3 走 SM-2 后 DB/返回仍为 3 或明确产品口径，不得静默清零。",
+      "在计划中先写 _update_stability/_update_difficulty 公式和 lapses=0/2 AGAIN 的预期 stability/difficulty/scheduled_days 表，再写测试。",
+      "增加旧库兼容测试：构造缺 lapses 列或 NULL 的库，跑升级/AGAIN，断言不报错且 lapses=1。",
+      "增加 review submit API 响应 lapses 字段断言，锁定三端契约。"
+    ]
+  },
+  "P2": {
+    "score": 92,
+    "issues": [
+      "导入冒烟只覆盖两个模块导入，未覆盖 pytest 完整收集和新增测试文件自身导入路径。",
+      "get_type_hints 测试未明确是否在包初始化/插件环境下列运行；若有 pytest 路径差异可能假绿。"
+    ],
+    "suggestions": [
+      "在 P2 验证中加入 pytest app/tests/test_type_hints.py -q 和 pytest app/modules/adaptive_design app/modules/review -q 的完整收集输出。",
+      "新增测试中显式传入模块 globals，或直接调用函数所在模块的 get_type_hints，避免解析域错误。"
+    ]
+  },
+  "P3": {
+    "score": 87,
+    "issues": [
+      "导出器金样哈希若含时间戳、路径、排序或随机 id 会不稳定，计划只写落盘哈希，未定义规范化。",
+      "B2 安全删除类仅靠 rg 证明无后续读写，可能漏 getattr/模板/动态引用；缺少全量测试作为硬门。",
+      "删除证据要求删除后 rg 仅定义处命中，对同名列/字符串可能误判，证据粒度不足。"
+    ],
+    "suggestions": [
+      "金样对比固定输入、排序、时间字段，必要时规范化 JSON；对比完整输出 diff 而非仅哈希。",
+      "每个删除项必须跑对应模块测试 + 全量 pytest，并记录测试数量；动态引用可疑项直接豁免。",
+      "证据记录到 文件:行 + 删除前后上下文 + commit hash，不只看符号名命中。"
+    ]
+  },
+  "P4": {
+    "score": 90,
+    "issues": [
+      "端口 bind 探测后释放再启动有竞态，可能启动失败；未写重试。",
+      "sync preview/import/export 的计数字段路径未写死，'≥导入返回值'口径可能现场猜。",
+      "teaching v2 降级 400 的具体 code/message 未列值，AI 可能现场猜错误码。"
+    ],
+    "suggestions": [
+      "改为绑定端口后立即启动并重试 3 次，或让 launcher 支持 port=0 并读实际端口。",
+      "在计划中列出响应 JSON 字段路径（如 data.books/units/mastery 计数）和断言类型。",
+      "写死无前置资产时的 HTTP 状态、code、message 值；能创建前置资产则必须走成功路径。"
+    ]
+  },
+  "P5": {
+    "score": 92,
+    "issues": [
+      "文档中的文件:行/函数名可能随 P1/P3 改动漂移，验证只检查字段齐全，未检查引用可命中。",
+      "check_modules.py 使用绝对路径，换环境可能不可执行。"
+    ],
+    "suggestions": [
+      "增加文档引用校验脚本：对每篇总览中的路径、函数名用 rg 校验存在，失败即修。",
+      "外部工具路径改为相对路径或环境变量 fallback，并在当前进度.md 记录实际命令输出。"
+    ]
+  },
+  "P6": {
+    "score": 86,
+    "issues": [
+      "推送后回写数字并补 commit 会造成本地/远程不一致或二次推送绕过完整门禁。",
+      "隐私扫描使用 token 等泛词误报率高，AI 逐文件复核可做，但老板小白人工抽验不可执行，需更精确规则。",
+      "e2e 豁免未写死必须附安装日志和浏览器启动错误栈，环境豁免可能被滥用。",
+      "未明确 P6 所有命令使用临时 APP_DATA_DIR 和真实库备份校验。"
+    ],
+    "suggestions": [
+      "把当前进度数字回写放到推送前 final_gate 生成阶段；推送后最多只本地记录，若二次推送仅文档 commit 并记录简化门禁。",
+      "隐私扫描改精确规则并输出命中文件:行；token 等泛词先白名单再逐条确认，附 AI 复核表。",
+      "e2e 豁免必须附 npx playwright install 完整日志和浏览器启动错误栈，否则不豁免。",
+      "P6 命令统一设置临时 APP_DATA_DIR，final_gate 记录真实库备份路径/hash 和未触碰声明。"
+    ]
+  }
+}

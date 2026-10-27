@@ -1,0 +1,109 @@
+{
+  "总计划": {
+    "score": 88,
+    "issues": [
+      "P3 的 B3 未用导入清理被标为可选，但 P3 验证和 P6 推送前置门又要求 pyflakes 过滤白名单后归零，门槛自相矛盾；B3 超时豁免时计划无法自洽。",
+      "止损规则只保存 git diff，未保存暂存区、未跟踪文件和二进制改动，且直接 git reset --hard，失败现场可能丢失。",
+      "缺少执行中代码质量复评的具体五维评分卡和通过线，只写同法复评，AI 自评容易放水。",
+      "推送前没有老板可读摘要和明确批准门；隐私人工复核实际由 AI 自证，老板是小白无法终审。",
+      "缺少全局通宵截止时间和超时后的降级策略，只有 P3 有 45 分钟限时。",
+      "P3 仍被列为推送前置必须完成，但 B3 可选、P5 最小可用，阻塞边界不清。"
+    ],
+    "suggestions": [
+      "拆 P3 为 P3a 阻塞（B1/B2/B4）和 P3b 非阻塞（B3）；P6 的 pyflakes 门槛改为 P3a 涉及文件 0 报告且白名单外无新增报告，不再要求全仓归零。",
+      "止损前保存 git status --porcelain=v2、git diff --binary、git diff --cached --binary，并复制未跟踪文件到 logs/failed_Pn/；回滚前先 git stash push -u 或备份工作区。",
+      "补一页五维评分卡：每维 0-20，明确 <12 单项失败、总分 <90 不执行；每个 Pn commit 后由独立评分提示复评并留档。",
+      "推送前生成一页老板可读摘要（改了什么、验证数字、未覆盖项、回滚点），要求明确批准推送；隐私扫描白名单需人工确认。",
+      "增加全局截止时间（例如 6 小时）和超时规则：超时只提交进度报告，不继续改代码、不推送。"
+    ]
+  },
+  "P1": {
+    "score": 86,
+    "issues": [
+      "quality 到 FSRS grade 的映射未写死；改点 F 用 grade==GRADE_AGAIN，改点 G 删除 quality<3 手算，quality=2/3 边界可能出现口径不一致，测试矩阵未覆盖。",
+      "FSRSResult 增加默认字段 lapses 未说明 dataclass 字段顺序和所有构造点兼容，可能 TypeError 或漏填。",
+      "_update_card 中先算 stability/difficulty 还是先递增 lapses 未写死；若顺序错会改变数值口径，违反用旧 state.lapses 的约定。",
+      "测试矩阵缺少 HTTP/API 层复习提交后查 DB lapses 的端到端测试，路由/序列化层仍可能丢字段。",
+      "同步只测 lapses=3 导出导入，未测旧同步包缺 lapses 字段、旧 DB 记录 None 的导入向后兼容。",
+      "Android 侧仍是若硬编码则改的条件动作，没有先写失败测试锁定；执行者可能漏改或误判。",
+      "历史已丢失的 lapses 不可回填未声明，老板可能误以为历史数据被修好。"
+    ],
+    "suggestions": [
+      "在 P1 开头补 quality→grade→是否 AGAIN 映射表，统一由 _calculate_fsrs 的 grade 判定；测试 quality=0,1,2,3,4,5 各一次，断言只有映射为 AGAIN 的 quality 递增。",
+      "明确 FSRSResult 新字段放 dataclass 末尾且默认 0；用 rg FSRSResult 列全构造点补默认值，并加构造兼容测试。",
+      "写死 _update_card 顺序：先用旧 state.lapses 算 stability/difficulty，再算 new_lapses，最后构造 result；数值回归断言 lapses 变化不改变 stability/difficulty。",
+      "增加 API 集成测试：通过复习路由提交 AGAIN，查 DB MasteryRecordModel.lapses 从 2 变 3。",
+      "增加旧同步包缺失 lapses 字段、旧 DB 记录 None 的导出导入测试，断言默认 0 且不覆盖已有 lapses。",
+      "Android 先加 FSRSAlgorithmTest：传入 lapses=2 的 state，AGAIN 后断言 3；若失败再改喂参处，并在 commit 记录行号和测试名。",
+      "在 P5 当前进度和最终汇报写明：历史 lapses 不可恢复，仅新复习累积。"
+    ]
+  },
+  "P2": {
+    "score": 91,
+    "issues": [
+      "未列 pyflakes 原始 3 条输出和行号，执行者可能漏勾。",
+      "真实导入 DB 模型到 fsrs.py 后未写 import/launcher 启动验证，仍有循环导入或启动失败风险。"
+    ],
+    "suggestions": [
+      "先保存 pyflakes 基线到 logs，逐条勾销；增加 python -c 导入 fsrs 模块和 launcher 启动冒烟。"
+    ]
+  },
+  "P3": {
+    "score": 80,
+    "issues": [
+      "B3 可选与 pyflakes 过滤白名单后必须为空冲突；超时停手记录豁免后验证不通过，计划未定义最终门槛。",
+      "B1 删除查询只靠无后续读写搜索，未要求删除前后关键 API/启动冒烟；existing_edges、chapter_map 删除后缺少行为对比。",
+      "45 分钟清理 142 个未用导入不现实，白名单可能被滥用导致归零失真。",
+      "B2 疑似丢逻辑先写失败测试再修可能扩大范围，缺每项限时和回滚边界。",
+      "删除证据命令路径 rg <符号名> backend/app 与项目实际可能不一致，未要求保存删除前后 pyflakes 对比。"
+    ],
+    "suggestions": [
+      "拆 P3a 阻塞（B1/B2/B4）和 P3b 非阻塞（B3）；P3a 验证为相关模块测试+全量回归+B1/B2/B4 涉及文件 pyflakes 0；P3b 独立 commit，超时即停且不纳入 P6 前置门。",
+      "每个删除项记录删除前后 rg 输出、模块测试命令、commit hash；对 existing_edges、chapter_map 增加启动和关键 API 冒烟。",
+      "B3 白名单逐条 review，禁止把普通未用导入放入白名单；白名单文件进 repo。",
+      "B2 每项限时 10 分钟，超时记录疑似逻辑不改、留 TODO，不阻塞推送。"
+    ]
+  },
+  "P4": {
+    "score": 86,
+    "issues": [
+      "连续跑 2 次第二次为覆盖 upsert 不成立：脚本每次新建 APP_DATA_DIR，第二次是全新 DB；要测 upsert 应在同一 DB 内导入两次。",
+      "子进程启动路径/cwd/launcher.py 位置未写死；taskkill 是 Windows 专用，跨平台或失败 fallback 不足。",
+      "teaching/v2/sessions/start 允许 400 结构化错误，可能因缺前置失败，冒烟未验证成功路径。",
+      "失败日志只打印最近输出，未强制落盘到 logs，不满足全局留档。"
+    ],
+    "suggestions": [
+      "写死 PROJECT_ROOT、launcher.py 绝对路径、cwd、sys.executable；进程清理用 terminate 等待后 kill，Windows 再 fallback taskkill /T /F。",
+      "脚本内同一临时 DB 导入两次测 upsert；脚本连续运行两次另测幂等/新 DB。",
+      "sessions/start 准备最小合法前置数据，要求 2xx 成功；400 仅作诊断不计 PASS。",
+      "所有子进程 stdout/stderr 重定向到 logs/smoke_backend_时间戳.log，失败时打印路径。"
+    ]
+  },
+  "P5": {
+    "score": 90,
+    "issues": [
+      "check_modules.py 未给绝对路径、命令和红黄档标准，验证可执行性略弱。",
+      "文档模板要求落到真实函数与数值，但未给最小验收样例，例如 lapses 数据流必须包含的文件行号和测试名。"
+    ],
+    "suggestions": [
+      "在 P5 验证中写死 python tools/check_modules.py 的路径与通过标准；每篇总览至少链接 1 个测试文件或命令。"
+    ]
+  },
+  "P6": {
+    "score": 82,
+    "issues": [
+      "pyflakes 归零与 P3 B3 可选冲突，推送前置门可能永远不满足或被迫滥用白名单。",
+      "隐私扫描模式 token/password/secret 过宽会大量误报，未定义白名单和人工复核标准；git diff --cached 在 commit 后可能为空。",
+      "check_session_close.py 黄档人工确认未定义确认标准和负责人，老板小白无法终审。",
+      "e2e 豁免未区分本轮是否有前端代码改动；若前端有改动仍可因 Playwright 安装失败豁免，风险高。",
+      "P6 自身 commit 内容与 git_push_github.py 的职责边界不清；推送后无远端 hash 校验。"
+    ],
+    "suggestions": [
+      "与 P3 拆分同步：P6 前置门改为 P3a 涉及文件 pyflakes 0 且白名单外无新增报告，不再要求全仓归零，除非 B3 已完成。",
+      "隐私扫描范围改为 git diff origin/main...HEAD 或本轮 P1~P6 commit 范围，结果落盘并逐条人工标注误报；定义白名单文件。",
+      "黄档逐条给标准：仅文档缺失且已在当前进度记录可放行，否则失败；AI 生成逐条确认表，老板只批准推送。",
+      "e2e 豁免条件增加本轮前端无代码改动；否则必须修到通过或明确阻塞不推送。",
+      "明确 P6 commit 只含终检报告和进度更新，推送脚本只推不 commit；推送后 git ls-remote 校验远端 HEAD 与本地一致并记录 commit hash。"
+    ]
+  }
+}

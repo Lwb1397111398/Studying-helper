@@ -1,0 +1,90 @@
+{
+  "总计划": {
+    "score": 89,
+    "issues": [
+      "P1 与 P3 仍低于单项 90 门槛，按计划自定规则不能直接进入执行。",
+      "P1 的旧同步包缺 lapses 会覆盖清零现有 lapses，但只记为已知坑，未进入 P6 的老板书面风险接受，和“向后兼容”目标冲突。",
+      "P3 对 B2 安全删除类只证明变量无后续读写，未要求证明赋值右侧无副作用；删除语句可能移除函数调用、SQLAlchemy autoflush 等行为。",
+      "P6 的最终门禁脚本没有写死文件路径和自检方式，执行时可操作性仍有一点模糊。"
+    ],
+    "suggestions": [
+      "先修订 P1 和 P3 到各自 >=90 再启动通宵执行；总计划重评前不要开 P1。",
+      "P1 增加同步兼容决策门：要么 import 缺字段时保留旧 lapses，要么在 P6 增加明确的老板书面风险接受项，并加旧包导入前备份/告警。",
+      "P3 增加“删除前检查 RHS 副作用”规则；有副作用的赋值只删变量名或保留调用，不整语句删除。",
+      "P6 写死 final_gate 脚本路径、CLI 参数、输出文件与一次 dry-run 自检。"
+    ]
+  },
+  "P1": {
+    "score": 88,
+    "issues": [
+      "旧版同步包缺 lapses 时按 0 覆盖导入，会把已有非 0 lapses 清零；计划只记录为已知坑，未修复也未作为老板书面风险接受项，属于真实数据兼容风险。",
+      "历史已丢失的 lapses 无法由本次修复恢复，计划未在 P1/P5/终检汇报中明确“仅修复未来增量，历史计数不回溯”。",
+      "calculate_next_review 的 lapses 参数只写“追加”，未写死必须放在参数列表末尾或 keyword-only；若插入位置错误会破坏旧位置参数调用。"
+    ],
+    "suggestions": [
+      "二选一并写死：A. 将 SyncMasteryRecord.lapses 改为 Optional[int]=None，import 时缺字段保留旧值；B. 保持 0 但在 P6 豁免三分类中新增“老板书面接受风险：旧包导入会清零 lapses”，并附导出备份步骤。不能只在模块总览记已知坑。",
+      "在 P5 复习模块总览和 docs/当前进度.md 增加“历史 lapses 不可恢复，需重新学习或人工修正”的明确声明。",
+      "写死签名：lapses: int = 0 追加在现有可变参数之后，service 调用使用关键字 lapses=old_lapses；新增一个旧位置参数调用测试锁定兼容。",
+      "补一个旧包导入时目标记录已有 lapses=3 的测试，明确预期行为并与老板决策绑定。"
+    ]
+  },
+  "P2": {
+    "score": 93,
+    "issues": [
+      "整体已足够可执行；仅需防止测试只覆盖顶层导入而漏掉反向导入后的 get_type_hints。"
+    ],
+    "suggestions": [
+      "在 test_type_hints.py 中保留两条正反导入顺序，并断言三个注解点全部解析成功。",
+      "验证命令中补一条 pyflakes 对新增测试文件的检查，避免测试文件自身留 undefined name。"
+    ]
+  },
+  "P3": {
+    "score": 89,
+    "issues": [
+      "B2 安全删除类只要求 rg 证明变量无后续读写，未要求检查赋值右侧是否有副作用；删除整行可能移除函数调用、数据库查询、日志或 SQLAlchemy autoflush 触发。",
+      "B1 死查询删除未考虑 SELECT 触发的 autoflush 时序变化；若函数内有 pending 写操作，删除查询可能改变后续 flush 时点。",
+      "B4 f-string 已做占位符预检，但仍需在删除/改写后锁定输出字符串，计划已有但可再强调为硬断言。"
+    ],
+    "suggestions": [
+      "在 B2 每个删除项证据中增加“RHS 副作用判定”：纯表达式才整行删；有副作用则保留调用表达式或改为 _ = expr，并说明原因。",
+      "B1 删除前检查该查询之前是否存在可能 pending 的 write/flush；若有，增加针对性测试或暂缓删除并记豁免。",
+      "B4 每个字符串改写都加精确断言或快照，防止把合法占位符误改成普通字符串。"
+    ]
+  },
+  "P4": {
+    "score": 90,
+    "issues": [
+      "--check-env 仍是人工核对 openapi 和字段，未在预检阶段真实执行 round4 样例的 analyze 并确认 active/teachable，teaching v2 start 2xx 断言可能到正式冒烟才暴露前置不满足。",
+      "“不存在的路径移除或补实现”与“只新增不改业务代码”存在口径张力，需限定为失败并重写断言，不在 P4 补业务实现。"
+    ],
+    "suggestions": [
+      "把 --check-env 扩展为自动 preflight：导入 round4 包、对目标 unit 调 analyze、GET asset，打印并断言 status/readiness，再决定 start 断言是否可写。",
+      "写死路径缺失时 P4 只允许修 smoke 断言或报 FAIL，不允许在 P4 改业务代码补接口。",
+      "提交前连续跑两次全新临时库的 smoke，并保留两次日志。"
+    ]
+  },
+  "P5": {
+    "score": 92,
+    "issues": [
+      "文档内容依赖 P1 的兼容决策；若 P1 的旧包清零风险未定，复习模块总览的“已知坑”会不完整。",
+      "测试数字占位由 P6 回写，需防止 P5 commit 中占位符被误推送为最终值。"
+    ],
+    "suggestions": [
+      "在复习模块总览中增加“旧同步包缺 lapses 的处理决策/风险接受状态”和“历史 lapses 不可恢复”两项。",
+      "当前进度.md 使用显式占位标记如 TODO_P6，并在 P6 推送前置门检查无 TODO_P6 残留。"
+    ]
+  },
+  "P6": {
+    "score": 90,
+    "issues": [
+      "统一 Python 门禁脚本未写死文件名、CLI 参数、输出格式和自检方式，执行者需要临场决定。",
+      "隐私检查中的“人工抽验”在 AI 自主执行场景下责任主体不清；且已 commit 的 smoke 日志也应纳入隐私扫描。",
+      "final_gate.md 与当前进度.md 的回写时序较复杂，需防止推送前快照与最终 commit 不一致。"
+    ],
+    "suggestions": [
+      "写死使用 backend/scripts/final_gate.py --base origin/master --out docs/superpowers/plans/logs/final_gate.md，并增加 --dry-run 自检。",
+      "明确人工抽验由 AI 生成逐文件表 + 老板只做最终确认；隐私扫描范围显式包含本轮新增 logs/ 文件。",
+      "推送前最后一步重新生成 final_gate.md，并检查 docs/当前进度.md 无占位符、git status 干净后再推送。"
+    ]
+  }
+}

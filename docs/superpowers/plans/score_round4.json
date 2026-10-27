@@ -1,0 +1,102 @@
+{
+  "总计划": {
+    "score": 87,
+    "issues": [
+      "缺少执行前的独立备份分支/tag/worktree；止损直接用 git reset --hard，虽有日志备份，但对通宵自主 agent 仍偏高危。",
+      "AI 自评分与自复评存在同源宽松风险；硬门禁应完全依赖测试、smoke、e2e、隐私扫描等确定性证据。",
+      "P3a 没有时间盒和“疑似丢逻辑”时的兜底决策规则，可能让 agent 在死代码清理上无限追查。",
+      "日志路径在 P4/P6 中出现 `docs/superpowers/plans/logs/` 与 `logs/` 两种口径，推送前置门容易误判。"
+    ],
+    "suggestions": [
+      "执行前创建 `pre-convergence-2026-10-28` tag 与 backup 分支，并在独立分支上工作；P6 通过后再合并/推送。",
+      "把 AI 评分降为辅助审查，测试、smoke、e2e、隐私扫描、git 状态作为硬门禁；复评必须附 diff 与命令输出。",
+      "给 P3a 每个 B2 项设 10 分钟上限；疑似丢逻辑则先写失败测试，不能证明死代码就保留并记录豁免，不强行删除。",
+      "统一日志目录为 `docs/superpowers/plans/logs/`，并在 P6 推送门前检查日志已入库。"
+    ]
+  },
+  "P1": {
+    "score": 88,
+    "issues": [
+      "Android 侧仍是条件式“若硬编码 0 则修复”，没有写死具体文件、函数、调用点和测试名；AI 可能只核对 FSRSAlgorithm.kt 而漏掉 ViewModel/Repository 喂参处。",
+      "后端 sync/export/import 对 lapses 的映射改点未明确；只写“schema 已有字段”和闭环测试，若实际 service 映射丢字段，P1 会临时扩大范围。",
+      "quality=2 从旧逻辑 `quality<3` 递增 lapses 改为 HARD 不递增，是行为变化，但缺少 service 层 quality=2 回归断言。",
+      "Android 同步链路是否保值 lapses 没有对称测试；仅跑 `*FSRS*`/`*Sync*` 单元测试不足以锁死 DTO→Entity→DB→DTO。"
+    ],
+    "suggestions": [
+      "补写 Android 精确改点：用 `rg \"FSRSState\\(|lapses\"` 列出所有构造点，明确 ReviewScheduler/ViewModel/Repository 中读取旧 `MasteryRecordEntity.lapses` 的位置与测试文件。",
+      "补写后端 sync 映射改点：在 sync service 的 export/import 函数中明确 `lapses` 拷贝行；若已存在则写明文件行号作为核对项。",
+      "新增 service 层 quality=0~5 全覆盖测试，断言仅 0/1 递增，quality=2 不递增，SM-2 路径保持原行为。",
+      "新增 Android 测试：entity lapses=2 + AGAIN → 3；同步包 import/export 后 DTO/entity 仍为 3。"
+    ]
+  },
+  "P2": {
+    "score": 91,
+    "issues": [
+      "`AIDService.replan_next_module` 的类名/函数名表述可能不够精确，需执行前用 rg 核实。",
+      "把 `MasteryRecordModel` 真实导入 `review/fsrs.py` 虽已声明无循环导入，但缺少导入 smoke 证据。"
+    ],
+    "suggestions": [
+      "执行前用 `rg \"class .*Service|def replan_next_module|StageFeedback|ReplanResult\"` 写死真实类名/函数名。",
+      "增加 `python -c \"import app.modules.review.fsrs\"` 与 `python -c \"import app.modules.adaptive_design.service\"` 冒烟，防止循环导入回归。",
+      "`get_type_hints` 测试覆盖三个未导入名对应的全部注解点，不只两个函数。"
+    ]
+  },
+  "P3": {
+    "score": 84,
+    "issues": [
+      "B2 中 `total_minutes` 等项被标为“疑似丢逻辑”，但没有时间盒、判定模板和失败兜底；AI 可能删掉必要逻辑或陷入无限排查。",
+      "B1 死查询删除证据只有 rg 前后对比，缺少 exporter 输出 golden/snapshot 回归，无法证明删除查询不改变输出。",
+      "P3a 是推送前置，但未定义“某 B2 项无法证明死代码时”的放行/阻塞规则。",
+      "每批 pyflakes 通过标准未写死具体文件列表与预期剩余报告数。"
+    ],
+    "suggestions": [
+      "把 B2 拆成“安全删除”和“疑似丢逻辑调查”两类；调查项每项 10 分钟上限，先写失败测试，不能证明死代码则保留并记录豁免。",
+      "对 cornell/markdown exporter 增加删除前后同输入 golden 输出对比，或至少断言导出文件内容哈希一致。",
+      "预先写死 B1/B2/B4 涉及文件清单和每批后 pyflakes 预期 0 报告的文件范围。",
+      "增加一次 `git show --stat` 与关键 diff 人工/AI 复核记录，避免批量误删。"
+    ]
+  },
+  "P4": {
+    "score": 88,
+    "issues": [
+      "multipart 字段名 `file` 被写死但未说明已从 OpenAPI 或代码核实；若实际字段名不同，smoke 直接失败。",
+      "teaching v2 start 允许“无非 LLM 前置路径时降级为 400 结构化”，但没有写死具体错误码；可能把真实功能回归误判为合法 400。",
+      "同一临时库二次 import 只断言计数不重复膨胀/≥导入返回值，未要求第二次 import 后计数与第一次完全相等。",
+      "未明确 smoke 子进程 stderr/stdout 持续捕获方式，失败诊断可能不足。"
+    ],
+    "suggestions": [
+      "执行前从 OpenAPI 或 router 定义核实 `/sync/import` 的 multipart 字段名与 `teaching/v2/sessions/start` 的 schema，写死到脚本常量。",
+      "teaching v2 降级断言必须写死具体 4xx 错误码/错误结构；若存在非 LLM 前置创建路径则优先走真实成功路径。",
+      "二次 import 后断言 books/units/mastery 计数与第一次完全相等，而非 ≥。",
+      "子进程 stdout/stderr 写入 ring buffer 或临时日志，失败时打印最近 N 行；finally 中断言端口已释放。"
+    ]
+  },
+  "P5": {
+    "score": 91,
+    "issues": [
+      "要求“文档引用的测试数字与 P6 日志实际结果一致”，但 P5 在 P6 之前执行，时序矛盾。",
+      "AI 学习与精读模块总览合并了 ai_learning 与 learning_assets，需确保 learning_assets 的入口、接口、测试没有被弱化覆盖。"
+    ],
+    "suggestions": [
+      "把最终测试数字同步动作放到 P6 之后，或在 P6 中增加“更新当前进度.md 数字并 commit”。",
+      "给 AI 学习与精读模块总览加 checklist：learning_assets 路由、claims 校验、概念采集、测试入口逐项出现。"
+    ]
+  },
+  "P6": {
+    "score": 84,
+    "issues": [
+      "隐私扫描下界写死为 `ec689b7`，会漏掉该 commit 本身及更早未推送历史中的敏感信息；这是推送前关键缺口。",
+      "推送前置门允许 teaching v2 前置资产豁免，可能把功能未验证带入 GitHub。",
+      "日志路径 `logs/` 与全局 `docs/superpowers/plans/logs/` 不一致，可能导致推送门前置检查误判。",
+      "未要求推送前 fetch remote 并确认当前分支与远端关系；推送失败原因可能包括 non-fast-forward 而非仅脚本错误。",
+      "人工 diff 隐私复核默认由非程序员老板执行不现实；缺少 AI 独立复核或结构化 diff 清单。"
+    ],
+    "suggestions": [
+      "隐私扫描改为从远端跟踪分支扫描：`git fetch` 后 `git diff origin/main...HEAD`；若从未推送则扫描全历史或至少从首个未推送 commit 开始，且包含 ec689b7。",
+      "teaching v2 豁免不得进入推送门；至少要求路由注册、schema、精确结构化 4xx 通过；能创建前置资产就必须走成功路径。",
+      "统一日志目录并检查日志已提交；推送前增加 `git fetch`、`git status -sb`、`git log --oneline origin/main..HEAD`。",
+      "增加 AI 独立 diff 隐私复核清单：逐文件标注新增/修改/敏感模式/结论，不只依赖人工过目。",
+      "增加 `git diff --check` 与推送前最后一次 `pytest`/`tsc`/`build`/`Android` 的时间戳记录。"
+    ]
+  }
+}

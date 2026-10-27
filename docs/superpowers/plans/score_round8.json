@@ -1,0 +1,112 @@
+{
+  "总计划": {
+    "score": 87,
+    "issues": [
+      "正确性：P1 内部存在硬矛盾——改点⑪写 `SyncMasteryRecord.lapses` 默认 `0→None`，测试 7b 又写 schema 默认 `lapses=0` 并锁定覆盖为 0。AI 执行时无法判断该信哪一条。",
+      "正确性：P1 把同步 schema 默认值从 0 改 None 属于同步契约变更，但计划未给旧包、旧 Android DTO、直接读 DB 的其他消费方的兼容方案，却又称逐字段 upsert 超出范围，边界不一致。",
+      "完整性：P4 多处端点/字段/语义未给证据：`/api/v1/learning-assets/assets/{asset_id}` 与 `/units/{unit_id}/asset` 并存是否真实存在；连续 import 仍称 `upsert 覆盖语义`，但 P1 已核实 sync import 是 delete+add；回灌后断言 teaching session state 保值，前提是 export 包真的包含 session state，计划未证实。",
+      "可执行性：P6 要求推送前生成 `final_gate.md` 快照并包含 commit hash 后一起 commit，存在自指问题：无法在 commit 前写入自身 commit hash。",
+      "风险控制：P6 真实库检查只写“对比备份 hash”，未要求终检重算源库当前 hash 并与开工前 hash 比较；0b 的 `git ls-files | grep logs/backup` 与 P6 的 Windows Python 替代口径未统一，且未进入 P6 前置门清单。",
+      "完整性：P3a 对 `knowledge_graph/service.py` 死查询删除只有模块测试和启动冒烟，缺 API 级前后输出对比或契约测试，删除证据强度弱于 exporter 金样对比。"
+    ],
+    "suggestions": [
+      "先修 P1 同步默认值矛盾：本轮建议保持 `SyncMasteryRecord.lapses` 默认 0，不改契约，只在测试中锁定“缺字段覆盖为 0”并写入已知坑；若坚持改 None，则必须同步改 7b 断言、补 Android 旧 DTO/旧包测试、审计所有直接读 DB lapses 的消费方，并给迁移说明。",
+      "P4 执行前增加一次性探测步骤：启动临时后端拉 `/openapi.json`，核对实际路径、StartBody/AnalyzeResponse schema、样例包路径和 multipart 字段；把不存在的路径从断言清单移除或补实现。",
+      "P4 将连续 import 断言从“upsert 覆盖语义”改为“delete+add 重放不导致计数膨胀且导出内容一致”；回灌后 session state 断言前先确认 sync/export 是否包含 teaching session，不包含则改为验证 session 未被误删/仍可查。",
+      "P6 `final_gate.md` 只记录 P1-P6 代码 commit hash 与 final_gate 的父 commit hash，不记录自身 hash；推送后不修改，或仅允许纯追加说明。",
+      "P6 开工前记录源库 `learning.db` SHA256，终检重算源库当前 hash 与备份 hash，两者都写入 `final_gate.md`；用同一 Python 脚本实现 db 入库、`logs/backup`、大文件检查并输出 PASS/FAIL。",
+      "P3a 为 `knowledge_graph` 死查询增加固定 fixture 的 API 级 JSON 前后 diff，或补契约测试；P3a 开工前先完成 P1，再重新生成 pyflakes 基线，避免 `fsrs.py:156` 行号漂移。"
+    ]
+  },
+  "P1": {
+    "score": 84,
+    "issues": [
+      "正确性：改点⑪与测试 7b 对 `SyncMasteryRecord.lapses` 默认值描述直接冲突：一处 `0→None`，一处锁定 `lapses=0`。这是阻塞级歧义。",
+      "正确性：同步 schema 默认值改动未明确是否同步修改 Android `SyncDtos.kt` 默认值、旧版同步包、直接查 DB lapses 的报表/API；改 None 后落库 NULL，虽读取侧 None→0，但其他消费方可能看到 NULL。",
+      "完整性：缺少“旧版同步包导入后，读取 API 与复习提交均把 NULL/缺失视为 0”的端到端测试，现有 7b 只锁定覆盖行为，且与改点⑪矛盾。",
+      "可执行性：数值回归要求先手算 `_update_stability/_update_difficulty` 预期值，AI 可能误读公式；未要求保留修复前同输入快照作对照。",
+      "风险控制：`create_fsrs_state_from_mastery_record` 无调用方仍修改，收益低；且该函数注解修复在 P2，P1/P2 顺序耦合需说明。",
+      "收益成本比：核心 lapses 修复价值高，但同步默认值改动扩大范围，属过度扩展。"
+    ],
+    "suggestions": [
+      "二选一并全文统一：方案 A（建议）本轮不改 `SyncMasteryRecord.lapses` 默认值，保持 0，7b 锁定缺字段覆盖为 0，记录已知坑；方案 B 若改 None，则 7b 改为断言 NULL 且读取侧返回 0，并补 Android 旧 DTO、旧同步包、直接 DB 查询消费方测试。",
+      "增加旧版同步包端到端测试：无 lapses 字段导入后，`GET` 读取记录/复习提交 AGAIN 均不报错且按 0 处理；若选方案 B，断言 DB 为 NULL、业务读取为 0。",
+      "数值回归增加修复前同输入快照：至少断言非 AGAIN 路径的 stability/difficulty/scheduled_days 与修复前一致，AGAIN 路径按公式表断言。",
+      "在 P1 证据中附 `rg \"FSRSResult\\(\" backend/app` 与 `rg \"FSRSState\\(\" backend/app` 的输出，证明构造点全覆盖。",
+      "明确 P2 完成前不要依赖 `create_fsrs_state_from_mastery_record` 的类型注解；若该函数确实无调用方，P1 只加 None 防御并注释，不做行为扩展。"
+    ]
+  },
+  "P2": {
+    "score": 92,
+    "issues": [
+      "可执行性：`adaptive_design/service.py` 删除函数内 `ReplanResult as _RR` 前需全文件搜 `_RR`，计划已写，但未要求把搜索结果作为证据留档。",
+      "风险控制：顶层导入后模块加载顺序变化，虽已设计导入冒烟，但未覆盖 `python -m pytest` 全量收集阶段是否触发循环导入。"
+    ],
+    "suggestions": [
+      "在 P2 证据中附 `rg \"_RR\" adaptive_design/service.py` 的前后输出，证明函数内导入删除无遗漏。",
+      "导入冒烟除 `python -c import` 外，增加 `pytest --collect-only` 全量收集冒烟，防止测试收集阶段触发循环导入。"
+    ]
+  },
+  "P3a": {
+    "score": 88,
+    "issues": [
+      "完整性：`knowledge_graph/service.py:424 existing_edges` 删除只有模块测试与 P4 启动/关键 API 冒烟，缺该查询所在 API 的固定输入前后输出对比，证据强度不足。",
+      "可执行性：B2 清单中 `fsrs.py:156` 标注“P1 已随改点 F 消除”，但 P3a 又列为安全删除类；P1 后行号/代码可能变化，AI 需动态确认，存在照旧行号误操作风险。",
+      "完整性：导出器金样对比只覆盖 cornell/markdown exporter，未覆盖 `knowledge_graph` 相关接口。",
+      "风险控制：删除性批次虽有回滚 commit，但未给每批失败时一键回滚命令。"
+    ],
+    "suggestions": [
+      "为 `knowledge_graph` 死查询增加固定 fixture 的 API 级 JSON 前后 diff：删除前保存规范化响应，删除后重放并 diff；若该 API 无直接入口，补最小契约测试。",
+      "P3a 开工前先完成 P1，重新跑 pyflakes 基线；`fsrs.py:156` 若已消失则在清单中勾掉，禁止按旧行号硬删。",
+      "每批删除 commit 后在证据中写 `git revert <hash>` 回滚命令，并记录该批测试命令与前后 pytest 数量。",
+      "B1 删除后除 pyflakes 0 外，对该文件所在模块增加启动导入冒烟与至少一个代表性 API 回归。"
+    ]
+  },
+  "P4": {
+    "score": 86,
+    "issues": [
+      "正确性：openapi 断言同时列 `/api/v1/learning-assets/assets/{asset_id}` 与后文 `/api/v1/learning-assets/units/{unit_id}/asset`，未确认前者真实存在；若不存在冒烟必红。",
+      "正确性：连续 import 仍称“upsert 覆盖语义”，但 P1 已核实 sync import 是 delete+add；术语错误会误导断言设计。",
+      "完整性：回灌后断言 teaching session state 保值，前提是 `sync/export` 导出包包含 teaching session state；计划未证实该前提。",
+      "可执行性：样例包路径、multipart 字段名、StartBody 字段名虽写死，但未要求脚本启动时先做路径/端点/schema 预检，失败诊断可能不清晰。",
+      "风险控制：`analyze` 规则路径能产出 active/teachable 资产依赖 round4 样例 unit 内容；未给该前提失败时的明确阻塞诊断。"
+    ],
+    "suggestions": [
+      "执行前增加 `--check-env` 或一次性探测：拉 `/openapi.json` 输出实际路径集合，核对 `/learning-assets/...`、`/teaching/v2/sessions/start`、`AnalyzeResponse`、`StartBody` 字段；不存在的路径从断言清单移除或补实现。",
+      "将“upsert 覆盖语义”改为“delete+add 重放不膨胀且导出内容一致”；连续 import 断言计数不膨胀即可，不声称 upsert。",
+      "确认 `sync/export` 是否包含 teaching session state：包含则保留保值断言并加字段白名单；不包含则删除该断言，改为回灌后 session 仍可查/未被误删。",
+      "脚本启动时预检 `round4_sync_package.json` 存在且可 JSON 解析，预检 multipart 字段名与端点方法，失败输出人话诊断。",
+      "对 `analyze→asset→start` 链加阶段化错误输出：每步打印响应状态与响应体前 500 字符，失败时明确是哪一步阻塞。"
+    ]
+  },
+  "P5": {
+    "score": 91,
+    "issues": [
+      "可执行性：验证命令仍硬编码 `E:\\AI Agent\\Agent Manager\\tools\\check_modules.py`，与第 6 点环境变量 fallback 口径不一致。",
+      "完整性：`当前进度.md` 要写测试数字，但实际数字由 P6 终检产生，存在“先写文档后跑终检”的时序风险。",
+      "风险控制：外部工具找不到时输出 SKIP/FAIL 原因已写，但未规定 SKIP 是否允许放行。"
+    ],
+    "suggestions": [
+      "验证命令示例改为 PowerShell `$env:AGENT_MANAGER_TOOLS` 优先、默认路径 fallback，并给找不到工具时的明确 SKIP/FAIL 输出。",
+      "`当前进度.md` 的测试数字留占位或写“见 final_gate.md”，由 P6 生成实际数字后回写再 commit；避免文档先于终检写死。",
+      "明确外部工具缺失时：check_modules 缺失为 SKIP 且记录原因，check_session_close 缺失为 FAIL 阻塞推送。"
+    ]
+  },
+  "P6": {
+    "score": 85,
+    "issues": [
+      "可执行性：`final_gate.md` 要求推送前包含全部 commit hash 并一起 commit，但无法包含 final_gate 自身的 commit hash，存在自指。",
+      "风险控制：真实库检查只写“备份 hash 对比一致”，未要求终检重算源库当前 hash 并与开工前 hash 比较；无法严格证明源库未被触碰。",
+      "一致性：0b 的 `git ls-files | grep logs/backup` 与 P6 的 Windows Python 替代未统一，且 P6 推送前置门清单未列 `logs/backup` 检查。",
+      "完整性：隐私扫描 AI 逐文件复核表未说明二进制/生成文件如何处理；对不可文本复核文件缺少“不应入库/需人工确认”规则。",
+      "可执行性：`git log --oneline origin/master..HEAD` 含 `P1:`~`P6:` 的要求与 P3a/P3b 可选 commit 前缀未完全对齐，需明确 `P3a:` 合法。"
+    ],
+    "suggestions": [
+      "`final_gate.md` 只记录 P1-P6 代码 commit hash、final_gate 的父 commit hash、推送目标分支；不记录自身 hash。推送后如需补文档，只追加“post-push note”且不重写快照。",
+      "开工前记录源库 `learning.db` SHA256；终检重算源库当前 hash，并与开工前 hash、备份 hash 三者比较，结果写入 `final_gate.md`。",
+      "用同一 Python 脚本实现 `git ls-files '*.db'`、`logs/backup`、>1MB 新文件、`git diff --check` 检查，输出 PASS/FAIL 并落盘；把 `logs/backup` 检查加入推送前置门。",
+      "隐私复核表对二进制文件标注“不可文本复核”，并检查是否应入库；新增大文件逐个说明用途，5MB 红线保留。",
+      "明确 commit 前缀合法集合：`P1:`、`P2:`、`P3a:`、`P3b:`（若做）、`P4:`、`P5:`、`P6:`；P3b 未做不阻塞。"
+    ]
+  }
+}

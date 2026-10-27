@@ -1,0 +1,119 @@
+{
+  "总计划": {
+    "score": 89,
+    "issues": [
+      "P3b 为可选任务且规定超时只停手记豁免，但全局止损规则写“任一 Pn 超时即停止后续代码改动、不推送”，两者矛盾，执行时 AI 无法判定 P3b 超时是否阻塞推送。",
+      "P1 把“旧同步包缺 lapses 字段会清零旧值”登记为类别③“老板书面接受风险、待确认”，但 P6 又写豁免三分类“本轮为空”，风险登记与推送门口径冲突。",
+      "时间盒偏紧：P1 60 分钟覆盖大量单测+Android 测试，P4 60 分钟实现完整冒烟脚本，P6 90 分钟覆盖 e2e+Android 重跑+隐私+final_gate+推送，均存在到点未完成即触发止损的概率。",
+      "P6 的 e2e 前置未提前预检：未确认 package.json 是否存在 test:e2e:round3、playwright 配置、后端启动方式、APP_DATA_DIR 隔离与数据清理，终检阶段才发现问题风险高。",
+      "P1 未明确首次复习走 _init_card 还是 _update_card；改点 F 让 _init_card 返回 lapses=0，但测试 1 要求从 0 连续 AGAIN 第一次结果为 1，若首评走 _init_card 则测试与实现矛盾。",
+      "全局只强调“启动/冒烟”用临时 APP_DATA_DIR，未明确 pytest/conftest 是否绝不触碰真实库；P1/P2/P3 验证命令也未统一加临时数据目录前置。",
+      "P6 写“推送前最后一步重新生成 final_gate.md + 检查 git status 干净”，但生成后若不先 commit final_gate.md，git status 不可能干净，执行顺序需写死。"
+    ],
+    "suggestions": [
+      "修订 0c/5：明确 P3b 超时只停止 P3b 并记豁免，不触发全局止损；只有硬 Pn（P1、P2、P3a、P4、P5、P6）超时才触发停止后续代码改动与不推送。",
+      "统一 P1-11 与 P6-7：将旧同步包缺字段清零归入 not-applicable（附“修复前既有覆盖式行为”测试证据），或明确“老板未书面确认则阻塞推送”；不能同时写“待确认”和“本轮为空”。",
+      "P1 增加首评路径决策：若产品口径要求新卡首评 AGAIN 计 1，则改 _init_card 在 grade==AGAIN 时返回 1；否则把测试 1 改为已有 reps 的记录。把该口径写进 P1 新算法口径。",
+      "所有后端验证命令统一加临时 APP_DATA_DIR，并在 P1 前确认 conftest 使用临时库；增加“测试前后真实库 SHA256 不变”证据。",
+      "放宽关键时间盒：P1 改 90 分钟、P3a 改 90-120 分钟、P4 改 90 分钟、P6 改 120-150 分钟；或拆 P1a/P1b、P6a/P6b。",
+      "P4/P5 增加 e2e 预检：确认 test:e2e:round3 脚本、playwright 配置、chromium 安装、后端启动与临时数据目录；P6 只做最终跑。",
+      "P6 写死 final_gate 顺序：生成 final_gate.md → 与当前进度终稿一起 commit → git status --porcelain 为空 → 推送 → 仅 post-push note。"
+    ]
+  },
+  "P1": {
+    "score": 88,
+    "issues": [
+      "首次复习路径未明确：_init_card 返回 lapses=0，而 _update_card 才在 AGAIN 时 +1；若首评走 _init_card，测试 1“初值 0 连续 AGAIN 3 次结果依次 1、2、3”无法成立。",
+      "同步旧包缺 lapses 字段会覆盖为 0 的风险登记为“待老板醒来确认”，但通宵自主执行无法获得书面确认；与 P6 豁免表“本轮为空”冲突，推送门不明确。",
+      "数值回归要求“修复前同输入快照”，但未明确固定 now、时区与输入构造；FSRS 间隔依赖当前时间，未固定时钟会导致快照不可重复。",
+      "测试 7b 写“GET 读取该记录与复习提交 AGAIN 均不报错且按 0 处理”表述不精确：AGAIN 提交后应变为 1，不是仍按 0 处理。",
+      "P1 时间盒 60 分钟对测试矩阵（含 service 查库、同步闭环、Android 测试、数值表）偏紧，容易触发止损。",
+      "未明确 pytest 运行是否使用临时 APP_DATA_DIR；若测试误连 backend/data/learning.db，会违反真实数据保护纪律。"
+    ],
+    "suggestions": [
+      "在 _calculate_fsrs 中写死首评/复习分支判定，并增加测试：新卡首评 quality=0 时预期 lapses 是 0 还是 1；若预期 1，则修改 _init_card；若预期 0，则调整测试 1 为已有 reps 的记录。",
+      "把旧包缺字段清零风险改为 not-applicable 并附测试证据，或明确“未书面确认则阻塞推送”；建议在 P6 豁免三分类中给该条明确归属。",
+      "所有 FSRS 数值测试固定 now（例如 datetime(2026,1,1,tzinfo=UTC)）和固定输入表；在测试注释中同时记录修复前/后稳定性、难度、间隔的预期值。",
+      "测试 7b 改为：GET 返回 lapses=0；对该记录提交 AGAIN 后 DB 中 lapses==1；并断言导入过程不报错。",
+      "P1 时间盒改 90 分钟，或拆为 P1a（核心 FSRS+service 查库）与 P1b（同步/Android/旧库兼容）。",
+      "P1 验证命令前统一设置临时 APP_DATA_DIR，并在证据中记录真实库 SHA256 前后一致；确认 conftest 使用临时 SQLite。"
+    ]
+  },
+  "P2": {
+    "score": 92,
+    "issues": [
+      "方案本身已很具体，剩余风险主要是导入副作用：review/fsrs.py 顶部导入 app.db.models 可能增加纯算法模块的导入依赖，需确认无循环导入与启动副作用。",
+      "get_type_hints 测试覆盖了三个注解点，但未要求把导入冒烟命令纳入 P6 后端门禁输出，执行时可能只跑一次不留痕。"
+    ],
+    "suggestions": [
+      "在 P2 验证中明确记录四条导入冒烟命令的退出码与输出摘要，并纳入 P6 后端门禁证据。",
+      "测试中断言 get_type_hints 返回的 StageFeedback/ReplanResult 与 schemas 中对象 identity 一致，避免仅“不抛 NameError”但类型错误。"
+    ]
+  },
+  "P3": {
+    "score": 88,
+    "issues": [
+      "P3b 超时规则与全局止损矛盾：P3b 规定超时只记豁免，但全局说任一 Pn 超时停止后续代码改动且不推送。",
+      "P3a 时间盒 60 分钟对 B1 三查、导出器金样完整 diff、B2 十项调查、B4 三处 f-string、证据留痕偏紧。",
+      "B2 预写死文件清单只列安全删除类 7 个文件，未列 style_analyzer.py 与 _v2.py 两个调查类文件；即使保留也应登记 not-applicable，否则 P6 豁免表可能漏项。",
+      "B1 若发现 pending write/autoflush 依赖，计划允许改显式 flush()，这是行为改动；未要求先写失败测试复现落库时机变化。",
+      "P3b 白名单中 models.py 的 Mapped/mapped_column 只写“人工确认后处理”，未给具体判定规则，执行时容易把普通未用导入塞入白名单。"
+    ],
+    "suggestions": [
+      "把 P3b 从“Pn”编号中移出，改为可选清理任务；明确其超时不触发全局止损，只记录豁免。",
+      "P3a 时间盒改 90-120 分钟，或拆为 B1/B2/B4 三个独立时间盒，避免批量删除中途超时。",
+      "将 style_analyzer.py 和 _v2.py 加入 B2 预写死清单；在 logs/p3_evidence.md 中逐项记录“删除”或“not-applicable+判定依据”。",
+      "B1 若需改 flush()，先写测试复现删除查询导致的落库时机差异，改后跑该端点/方法测试与全量 pytest；证明不了则记豁免。",
+      "P3b 白名单规则写死：Mapped/mapped_column 仅在 pyflakes 误报且无法 # noqa 时保留，每条附 pyflakes 输出与人工确认理由。"
+    ]
+  },
+  "P4": {
+    "score": 89,
+    "issues": [
+      "60 分钟时间盒对完整实现 urllib multipart、进程管理、openapi 断言、sync 闭环、teaching v2、资产 analyze、回灌、--check-env、--keep、双跑日志偏紧。",
+      "--check-env 自动跑最小链路会启动服务并导入包，但未定义 preflight 失败与正式冒烟失败的区分口径，失败时可能误判为业务缺口。",
+      "openapi 同时断言 /api/v1/learning-assets/assets/{asset_id} 与 /api/v1/learning-assets/units/{unit_id}/asset，需在 preflight 明确二者都必须存在；若不存在应判 FAIL 并记录，不能临时改业务码。",
+      "冒烟脚本的断言顺序已较具体，但未要求把 preflight 输出单独落盘，P6 复核时证据不足。"
+    ],
+    "suggestions": [
+      "P4 时间盒改 90 分钟，或拆 P4a（脚本骨架/健康/进程清理）与 P4b（sync/teaching/资产/回灌链路）。",
+      "--check-env 输出明确 PREFLIGHT_PASS/PREFLIGHT_FAIL；正式运行前要求 PREFLIGHT_PASS，preflight 失败只修 smoke 断言或判 FAIL。",
+      "P4 开始时先拉 openapi 确认两个资产路径及 sync/teaching 路径，把实际路径集合落盘 logs/preflight_paths.txt。",
+      "增加 --seed 或固定临时库初始数据，保证连续两次冒烟可重复。"
+    ]
+  },
+  "P5": {
+    "score": 91,
+    "issues": [
+      "40 分钟写三篇模块总览加当前进度偏紧，尤其教学 v2 状态机与 AI 学习 map-reduce 需要读代码。",
+      "check_modules.py 缺失时写 SKIP，但验证又写“退出码 0（无红档）”；SKIP 是否算 PASS、是否允许推送未明确。",
+      "当前进度.md 使用 TODO_P6 占位并由 P6 回写，但未写死“P6 回写 commit 必须早于 final_gate 快照 commit”的顺序。"
+    ],
+    "suggestions": [
+      "P5 时间盒改 60-90 分钟，或优先完成复习模块总览与当前进度，教学/AI 总览最小可用。",
+      "验证中写清：check_modules.py 存在则要求退出码 0；缺失则 SKIP 并记录原因，不作为 PASS 证据；check_session_close.py 缺失仍 FAIL。",
+      "当前进度.md 的 TODO_P6 用机器可查格式，P6 final_gate 检查无残留后先 commit 当前进度终稿，再生成 final_gate 快照。"
+    ]
+  },
+  "P6": {
+    "score": 88,
+    "issues": [
+      "豁免三分类口径冲突：P1 要求把旧包缺 lapses 清零登记为类别③“老板书面接受风险、待确认”，P6 又写“本轮为空”；未确认时是否阻塞推送不明确。",
+      "e2e 前置未预检：未确认 npm run test:e2e:round3 是否存在、playwright 配置、后端启动方式、APP_DATA_DIR 隔离与数据清理；终检才安装 chromium 风险高。",
+      "90 分钟终检时间盒覆盖 e2e、Android --rerun-tasks、assembleDebug、文档四查、隐私扫描、final_gate、commit 与推送，偏紧。",
+      "推送前“重新生成 final_gate.md + 检查 git status 干净”顺序不清；生成后若不先 commit final_gate.md，status 不会干净。",
+      "大文件 >1MB 只要求列清单，未定义是否阻塞或需人工确认；日志/数据库/二进制文件可能被误提交。",
+      "隐私扫描白名单未要求 P6 前预置并入库，终检时临时判断误报/漏报风险较高。",
+      "真实库三方 hash 未写源库不存在时的处理分支；若开工前无 backend/data/learning.db，final_gate 可能因比较逻辑不明确而失败。"
+    ],
+    "suggestions": [
+      "统一豁免表：在 P6 第 7 条明确旧包缺字段清零是 not-applicable（附测试证据）还是类别③待确认；若待确认且未确认则阻塞推送，二选一。",
+      "在 P4/P5 增加 e2e 预检：检查 package.json script、playwright 配置、chromium 安装、后端启动与临时 APP_DATA_DIR；P6 只做最终跑。",
+      "P6 时间盒改 120-150 分钟，或拆 P6a（三端全量+隐私+final_gate）与 P6b（推送+post-push note）。",
+      "写死顺序：生成 final_gate.md → 与当前进度终稿一起 commit → git status --porcelain 为空 → 推送 → 仅 post-push note。",
+      "定义 >1MB 文件规则：二进制/数据/日志必须人工确认并记录，未确认则阻塞；日志大文件优先不入库。",
+      "P6 前预置并 commit 隐私白名单，P6 只做增量确认与高置信模式复核。",
+      "真实库 hash 增加“源库不存在”分支：记录 NOT_FOUND 并仍校验备份存在或明确无真实数据，不得静默通过。"
+    ]
+  }
+}

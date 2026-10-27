@@ -1,0 +1,105 @@
+{
+  "总计划": {
+    "score": 86,
+    "issues": [
+      "存在隐私红线：0b 要把真实 backend/data/learning.db 备份到 docs/superpowers/plans/logs/backup/，而 P6 又要求 logs 入库，若未 gitignore，会把真实单用户数据推送到 GitHub。",
+      "P1 的 quality=2→HARD 口径与旧手算 quality<3 即 lapse 的行为冲突，计划未给出当前 _quality_to_grade 与产品标签的证据，可能引入未声明的行为变更。",
+      "P3a 要求涉及文件 pyflakes 0 报告，但 P3b 未用导入清理是可选；P3a 文件若仍有历史 unused import，门槛自相矛盾。",
+      "P4 允许 teaching v2 start 返回精确 400 作为 PASS，不能证明关键路径可用，并与 P6“teaching v2 前置资产不构成豁免”矛盾。",
+      "P6 推送门前未显式检查 logs/backup 与 *.db 是否被 git 跟踪，也未要求对 logs 内容做敏感信息复查。"
+    ],
+    "suggestions": [
+      "把真实库备份移出 repo（如 %TEMP% 或项目外目录），或至少将 docs/superpowers/plans/logs/backup/ 加入 .gitignore；P6 增加 git check-ignore、git ls-files '*.db' 为空、git ls-files logs/backup 为空三项硬门禁。",
+      "实施 P1 前先粘贴并核对当前 _quality_to_grade 和 UI 0-5 标签；若 quality=2 应算 AGAIN，则改映射并同步 Android；在 P1 commit 记录行为变更。",
+      "P3 明确 pyflakes 门槛口径：要么把 P3a 涉及文件的 B3 未用导入清理改为必做，要么改为“本批目标诊断 0 + 白名单外无新增”。",
+      "P4 对 teaching v2 start 只允许成功路径作为 PASS；无法创建前置资产时标记为覆盖缺口并失败，不得用 400 代替关键路径冒烟。",
+      "P6 增加最终红线检查：git status --ignored、git ls-files '*.db'、logs/backup、大文件清单、logs 敏感模式扫描；任一失败停止推送。"
+    ]
+  },
+  "P1": {
+    "score": 88,
+    "issues": [
+      "quality=2 的语义未锁死：计划写 quality=2→HARD 不递增 lapses，但旧代码手算为 quality<3 即 +1；若产品语义中 quality=2 是遗忘，则修复会改变行为。",
+      "缺少“旧同步包缺 lapses 字段”的向后兼容测试；若 SyncMasteryRecord 默认 lapses=0，导入旧包可能把已有 lapses=3 覆盖为 0。",
+      "service 层 quality 0~5 测试写“同一 mastery 分别提交”，若顺序执行会累积 lapses，断言容易歧义。",
+      "Android 只写“已核实正确，不改代码”，但未写清若 quality 0~5 映射测试失败时的改码路径。"
+    ],
+    "suggestions": [
+      "实施前在测试注释中引用当前 _quality_to_grade 源码和产品 0-5 标签；确认 quality=2 是 HARD 还是 AGAIN，若为 AGAIN 则改映射并同步 Android 测试。",
+      "新增同步向后兼容测试：构造不含 lapses 字段的 SyncMasteryRecord JSON，导入到已有 lapses=3 的 mastery，明确期望“保留原值”还是“默认 0”，并实现保护。",
+      "service 层每个 quality 用独立 mastery 初值 lapses=0，或断言提交前后增量，避免累积干扰。",
+      "Android 侧写明：若 quality 0~5 测试与后端不一致，必须修改 FSRSAlgorithm.kt 的 quality→grade 映射并重跑 *FSRS*/*Sync* 测试。"
+    ]
+  },
+  "P2": {
+    "score": 92,
+    "issues": [
+      "导入冒烟只覆盖正向 import，未覆盖两个模块相反导入顺序；风险低但可再加一道保险。",
+      "get_type_hints 测试需确保在模块已正常导入的上下文中运行，否则可能掩盖真实循环导入问题。"
+    ],
+    "suggestions": [
+      "增加两条反向导入冒烟命令：先 import adaptive_design.service 再 import review.fsrs，以及相反顺序。",
+      "在 test_type_hints.py 中显式 import 两个模块后再调用 get_type_hints，并断言返回类型对象 identity 正确。"
+    ]
+  },
+  "P3": {
+    "score": 86,
+    "issues": [
+      "P3a 要求“该批涉及文件 pyflakes 0 报告”，但 P3b 未用导入清理可选；这些文件可能仍有历史 unused import，导致无法达到 0。",
+      "B2 文件清单实际含 style_analyzer.py 与 _v2.py 共 8 个文件，计划文字写“上表 7 个文件”，执行时可能漏项。",
+      "B4 将缺占位符 f-string 改普通字符串时，若字符串含 {{ 或 }} 转义，输出可能变化，计划未要求检查。",
+      "B1 删除导出器 chapter_map 查询前虽有金样 diff，但未要求覆盖异常路径；若该查询原本用于提前暴露坏数据，删除会掩盖错误。"
+    ],
+    "suggestions": [
+      "修正 P3a 验证口径：改为“本批目标诊断 0 + 白名单外无新增”，或把 P3a 涉及文件的未用导入清理并入必做范围。",
+      "把 B2 文件清单改为 8 个并逐一勾选，commit message 列出全部文件。",
+      "B4 改动前对目标字符串做 rg 检查 {} 与 {{ }}，并在测试中锁定改后字符串输出。",
+      "B1 金样对比同时增加一个坏数据/缺章节 fixture，确认删除查询后行为仍符合预期或明确记录行为变化。"
+    ]
+  },
+  "P4": {
+    "score": 86,
+    "issues": [
+      "teaching v2 start 允许“精确 400 + 错误结构”作为 PASS，不能证明会话启动关键路径可用；且与 P6 的“不构成豁免”表述冲突。",
+      "sync 冒烟只导入样例再导出并查 books，没有把导出的包再次导入，未锁死 export→import 闭环。",
+      "HTTP 客户端依赖未写死；若环境无 requests/httpx 或 multipart 构造方式不一致，脚本可能执行失败。",
+      "二次 import 只断言 books/units/mastery 计数相等，未断言 mastery.lapses 等关键字段不被覆盖。"
+    ],
+    "suggestions": [
+      "P4 对 teaching v2 start 只接受成功创建 session；若需要前置 learning asset，必须实现非 LLM 创建路径；确实无法覆盖时标记为冒烟缺口并使脚本失败，不得用 400 作为 PASS。",
+      "增加 export 后重新 import 导出包，再比较 books/units/mastery 计数及关键字段（至少 lapses、due、state）。",
+      "明确使用 httpx（FastAPI 测试依赖常见）或 stdlib urllib 构造 multipart，并写死依赖检查与失败提示。",
+      "二次 import 断言扩展到 mastery.lapses、review schedule 等关键字段，防止 upsert 覆盖语义只保计数不保数据。"
+    ]
+  },
+  "P5": {
+    "score": 91,
+    "issues": [
+      "外部检查器路径 E:\\AI Agent\\Agent Manager\\tools\\check_modules.py 硬编码，换机器或路径变化会失败。",
+      "模块总览未明确覆盖 Android/Compose 与离线同步包架构，三端文档闭环仍偏后端。",
+      "P5 在 P6 前写测试数字，若 P6 数字变化需回写，计划虽提到数字回写但未把 P5 文档列为必改项。"
+    ],
+    "suggestions": [
+      "用环境变量或项目相对路径定位 check_modules.py，找不到时输出明确 SKIP/FAIL 原因。",
+      "至少增加一篇“同步与 Android 端总览”最小文档，或在当前进度.md 明确声明本轮不覆盖及原因。",
+      "P6 数字回写清单中显式列出 docs/当前进度.md 和三篇模块总览的测试数字字段，逐项更新。"
+    ]
+  },
+  "P6": {
+    "score": 78,
+    "issues": [
+      "严重隐私风险：真实 learning.db 备份放在 docs/superpowers/plans/logs/backup/，而 logs 又要 commit；若未 gitignore，会把真实用户数据推送 GitHub。",
+      "P6 的 pyflakes 门槛继承 P3a 矛盾：P3a 涉及文件 0 报告与 P3b 可选未用导入清理不可同时成立。",
+      "P6 说 teaching v2 前置资产不构成豁免，但 P4 允许 400 作为 smoke PASS，推送门禁存在逻辑冲突。",
+      "推送门前只要求 logs 已 commit，未显式检查 logs 中是否含数据库、备份、密钥、绝对路径或大文件。",
+      "e2e 豁免仅限 Playwright 安装/浏览器环境失败，但没有要求先确认 npm run test:e2e:round3 脚本存在；脚本缺失应直接失败。"
+    ],
+    "suggestions": [
+      "将真实库备份移出 repo，或把 docs/superpowers/plans/logs/backup/ 加入 .gitignore；P6 增加硬门禁：git ls-files '*.db' 为空、git ls-files logs/backup 为空、git check-ignore -v 备份路径通过。",
+      "统一 pyflakes 门槛：明确扫描范围、诊断码、白名单文件，并要求输出保存到 logs 后 commit。",
+      "解决 P4/P6 冲突：teaching v2 start 必须成功或明确标记覆盖缺口并失败；不得以 400 响应作为推送前 smoke PASS。",
+      "增加 logs 内容扫描：敏感模式、绝对路径、SQLite 文件头、>1MB 文件清单；任何命中先人工确认再决定是否 commit。",
+      "推送前增加 npm script 存在性检查：node -e 读取 package.json 确认 test:e2e:round3 存在，不存在直接失败。"
+    ]
+  }
+}

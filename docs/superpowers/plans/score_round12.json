@@ -1,0 +1,79 @@
+{
+  "总计划": {
+    "score": 88,
+    "issues": [
+      "P1 ⑪ 同步缺字段风险分类仍写“类别③老板书面接受风险、待老板确认”，而 7b 与 P6 终裁为“类别② not-applicable、类别③本轮为空”，执行者会二选一跑偏。",
+      "P4 的 --check-env 未把第 10 轮要求的 e2e 预检（package.json script、playwright 配置、chromium 安装状态）落实到 P4 步骤，只在 P6 提及，P4 执行会漏。",
+      "P6 文档四查与 git_push_github.py 仍硬编码 E 盘绝对路径，未复用 P5 的 AGENT_MANAGER_TOOLS 优先 + fallback 策略。",
+      "P6 第 5 条“当前进度终稿先 commit、final_gate 快照后生成”与第 10 条“final_gate 快照与当前进度终稿一起 commit”时序矛盾。",
+      "P1 测试 4 断言非 AGAIN 路径与修复前“完全一致”，但改点又要求先用旧 state.lapses 参与 _update_stability/_update_difficulty；若公式读取 lapses，lapses>0 时该断言不成立。"
+    ],
+    "suggestions": [
+      "删除 P1 ⑪ 中类别③待确认旧口径，统一为类别② not-applicable + 老板决策项写入最终汇报；P6 豁免③保持为空。",
+      "在 P4 第 0 条写死 e2e 预检命令/检查项与 PREFLIGHT_PASS/FAIL 输出标记，并明确 preflight 使用独立临时 DB、正式运行重新 mkdtemp。",
+      "P6 统一工具路径解析：$env:AGENT_MANAGER_TOOLS 优先、默认绝对路径 fallback、缺失时输出 FAIL/SKIP 并记录实际路径。",
+      "明确 P6 commit 顺序：当前进度终稿 commit -> 生成 final_gate 快照 -> 单独 commit final_gate -> 推送；删除“一起 commit”措辞。",
+      "P1 测试 4 先核实公式是否读取 state.lapses：若读取，则 lapses=0 路径断言与旧快照一致，lapses>0 路径按公式预期表断言，并在 P5 记录已有用户后续间隔可能变化。"
+    ]
+  },
+  "P1": {
+    "score": 88,
+    "issues": [
+      "⑪ 同步缺字段风险分类仍写类别③“老板书面接受风险、待老板醒来确认”，与 7b 的类别② not-applicable 终裁冲突。",
+      "测试 4 对非 AGAIN 路径写死“与修复前完全一致”，未区分 lapses=0 与 lapses>0；若 _update_stability/_update_difficulty 读取 state.lapses，则修复后 lapses>0 的数值会变化。",
+      "测试 7b 中“按 0 处理”未明确落库最终值（覆盖为 0 后再次 AGAIN 是否变 1），容易产生断言歧义。"
+    ],
+    "suggestions": [
+      "删除 P1 ⑪ 中类别③旧口径，统一为类别② not-applicable，并把“旧包缺 lapses 会清零”作为老板决策项写入最终汇报而非豁免。",
+      "测试 4 增加前置核实：若公式读取 state.lapses，拆成 lapses=0 与旧快照一致、lapses>0 按公式预期表断言；若公式不读取，再保留“完全一致”断言并注明依据。",
+      "测试 7b 明确断言数据库最终 lapses 值：导入后为 0；如需覆盖复习路径，再断言 AGAIN 后为 1。"
+    ]
+  },
+  "P2": {
+    "score": 92,
+    "issues": [
+      "无新增实质缺口"
+    ],
+    "suggestions": []
+  },
+  "P3": {
+    "score": 90,
+    "issues": [
+      "无新增实质缺口（P3a；C1 为可选任务，不纳入推送前置门）"
+    ],
+    "suggestions": []
+  },
+  "P4": {
+    "score": 88,
+    "issues": [
+      "P4 第 0 条 --check-env 未写第 10 轮要求的 e2e 预检具体项：package.json 的 test:e2e:round3、playwright 配置、chromium 安装状态，只在 P6 提及。",
+      "preflight 自动跑最小链路与正式运行是否共用同一临时 APP_DATA_DIR 未明确；若共用，preflight 的导入/analyze 会污染正式运行的连续 import、回灌和 session state 断言。"
+    ],
+    "suggestions": [
+      "在 P4 第 0 条补写 e2e 预检命令与判定：检查 package.json script、playwright config、npx playwright install chromium 状态，并输出 PREFLIGHT_PASS/FAIL 落盘。",
+      "明确 preflight 使用独立 tempfile.mkdtemp 的 APP_DATA_DIR，跑完清理；正式运行重新 mkdtemp 启动 launcher，确保从空库开始。"
+    ]
+  },
+  "P5": {
+    "score": 92,
+    "issues": [
+      "无新增实质缺口"
+    ],
+    "suggestions": []
+  },
+  "P6": {
+    "score": 87,
+    "issues": [
+      "文档四查命令和 git_push_github.py 仍硬编码 E 盘绝对路径，未复用 P5 的 AGENT_MANAGER_TOOLS 优先 + fallback 策略；路径不同会直接阻塞终检。",
+      "第 5 条要求“当前进度终稿先 commit、final_gate 快照后生成”，第 10 条又写“final_gate 快照与当前进度终稿一起 commit”，commit 时序矛盾。",
+      "e2e 预检依赖 P4 的 --check-env，但 P4 未落地具体检查项；P6 前置门没有校验 P4 已产出 e2e 预检 PASS 记录。",
+      "P1 ⑪ 类别③待确认与 P6 豁免③本轮为空的终裁冲突，P6 推送门需确保引用统一口径。"
+    ],
+    "suggestions": [
+      "P6 统一使用工具路径解析函数：$env:AGENT_MANAGER_TOOLS 优先、默认绝对路径 fallback、缺失时明确 FAIL/SKIP 并记录实际路径；check_session_close.py 缺失仍 FAIL。",
+      "明确 commit 顺序：当前进度终稿 commit -> 生成 final_gate 快照 -> 单独 commit final_gate -> 推送；删除“一起 commit”表述。",
+      "在 P6 推送前置门增加检查：P4 的 PREFLIGHT_PASS 与 e2e 预检记录已落盘并 commit。",
+      "在 P6 豁免表中只保留类别② not-applicable（B2 保留项、旧包缺 lapses 清零），类别③本轮为空；与 P1 同步修正。"
+    ]
+  }
+}

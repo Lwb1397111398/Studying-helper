@@ -1,0 +1,92 @@
+{
+  "总计划": {
+    "score": 88,
+    "issues": [
+      "P1 仍把同步包缺 lapses 字段会覆盖旧值为 0 作为锁定行为，未修复；这与 lapses 不丢失目标冲突，旧同步包导入可能清零真实数据。",
+      "P4 的 teaching v2 冒烟链未写死 analyze 的完整请求方式、payload、期望响应及是否异步轮询，也未写死按 unit 取 asset 的精确路径，执行者仍可能猜错。",
+      "P6 前置门存在跨平台命令问题：git diff --check 只检查工作区；grep 在 Windows PowerShell 默认不可用；P3a B2 保留豁免与 P6 仅允许 Playwright 环境豁免冲突。",
+      "P1 只审计 FSRSResult 构造点，未要求全量审计 FSRSState 构造点；create_fsrs_state_from_mastery_record 可能是第二条丢失路径。"
+    ],
+    "suggestions": [
+      "P1 增加 rg FSRSState 全量审计并修复 create_fsrs_state_from_mastery_record；同步导入对缺 lapses 字段用 None 或字段存在性判断保留旧值，或由老板书面接受数据丢失并降级目标。",
+      "P4 写死 analyze 的 METHOD、完整 URL、payload、期望状态码、响应字段；若异步则定义轮询；把 teaching session 创建放到 export 回灌之前，或删除 session state 保值断言。",
+      "P6 改为 git diff --check origin/master...HEAD 与 git diff --cached --check；用 Select-String 或 Python 替代 grep；明确 B2 保留项是 not-applicable 还是允许豁免，避免阻断。"
+    ]
+  },
+  "P1": {
+    "score": 86,
+    "issues": [
+      "未显式审计所有 FSRSState 构造点；fsrs.py 的 create_fsrs_state_from_mastery_record 未说明是否读取旧 lapses，可能是第二条丢失路径。",
+      "同步包缺 lapses 字段时覆盖为 0 被锁定为现行行为，旧同步包会清零现有 lapses，和修复目标冲突。",
+      "SM-2 分支不清零 lapses 只靠测试和假设，实施步骤未写死 service/upsert 在该分支不得写 lapses 的具体代码路径。"
+    ],
+    "suggestions": [
+      "增加 rg FSRSState 全量清单并逐点核对；若 create_fsrs_state_from_mastery_record 被业务调用，必须读取 mastery.lapses（None 转 0）并补测试。",
+      "同步导入用 lapses: int | None = None 或字段存在性检测，缺字段时跳过更新；补旧包导入不丢 lapses 的测试和跨端 DTO 兼容测试。",
+      "在 service 层显式分支：仅 FSRS 路径构造 fsrs_params 并写 lapses；SM-2 路径不触碰 lapses；补代码级断言和测试覆盖。"
+    ]
+  },
+  "P2": {
+    "score": 92,
+    "issues": [
+      "无阻断问题；新增测试需确保 get_type_hints 覆盖同一函数两个注解且 identity 正确。"
+    ],
+    "suggestions": [
+      "执行时保留四条导入冒烟命令输出到 logs，便于复核。"
+    ]
+  },
+  "P3a": {
+    "score": 90,
+    "issues": [
+      "B2 标注必须但调查类允许保留豁免，需与 P6 豁免口径统一，否则可能规则冲突。",
+      "B4 改 f-string 前检查目标字符串含 {} 的做法正确，但需补一条直接断言最终用户可见文本不变的测试。"
+    ],
+    "suggestions": [
+      "在 p3_evidence.md 中把 B2 保留项分类为 not-applicable，不进入 P6 环境豁免列表。",
+      "B4 每处改动加字符串金样断言，防止把合法占位改成普通字符串。"
+    ]
+  },
+  "P4": {
+    "score": 86,
+    "issues": [
+      "teaching v2 冒烟链未写死 analyze 的完整 METHOD、URL、payload、期望响应；未说明 analyze 是否异步、是否需要轮询，AI 可能照不出来。",
+      "GET /units/{unit_id}/asset 未写全路径；openapi 检查列的是 /api/v1/learning-assets/assets/{asset_id}，两者关系未写死。",
+      "导出包回灌断言 teaching session state 保值，但当前顺序在 start session 之前导出和回灌，状态不存在，断言时序矛盾。",
+      "端口探测后关闭再交给子进程存在竞态；虽低概率，但失败重试未定义。"
+    ],
+    "suggestions": [
+      "写死 analyze 为 POST /api/v1/learning-assets/units/{unit_id}/analyze，给出 payload 示例、期望 2xx、响应字段；若异步，定义轮询 GET 资产直到 active 或 teachable。",
+      "写死按 unit 取 asset 的完整 URL，并在 openapi 断言中包含该路径。",
+      "调整顺序：import、analyze、创建 teaching session、export、回灌、断言 session state；或删除 session state 保值断言。",
+      "端口探测失败或子进程启动失败时重试 1 到 2 次并打印诊断，不把偶发竞态当业务失败。"
+    ]
+  },
+  "P5": {
+    "score": 91,
+    "issues": [
+      "文档中的验证数字会随 P6 终检变化，需依赖 P6 终稿回写；当前要求 P5 验证时与 P6 日志一致存在时序倒置。",
+      "check_modules 绝对路径硬编码在验证命令里，跨环境可执行性依赖环境变量 fallback 的落实。"
+    ],
+    "suggestions": [
+      "P5 只写占位数字并在 P6 推送前统一回写；或把数字一致性检查放到 P6。",
+      "验证命令优先用 AGENT_MANAGER_TOOLS，并给出缺工具时的明确 FAIL 文本。"
+    ]
+  },
+  "P6": {
+    "score": 86,
+    "issues": [
+      "git diff --check 只检查工作区或未暂存内容，不能验证已 commit 的推送内容；推送门可能漏掉提交内冲突标记。",
+      "git ls-files | grep logs/backup 在 Windows PowerShell 默认不可用；执行者可能卡住或误判。",
+      "P6 豁免口径只允许 Playwright 环境豁免，但 P3a B2 允许保留项记录豁免，两者冲突。",
+      "e2e 在 chromium 安装或启动失败时允许豁免后推送；对三端终检来说风险仍高，需明确这是降级放行且由老板确认。",
+      "隐私扫描主要依赖 git diff 区间；若推送脚本或分支合并改变范围，需在 final_gate 记录确切命令和输出。"
+    ],
+    "suggestions": [
+      "前置门改为 git diff --check origin/master...HEAD 和 git diff --cached --check；必要时再跑 git diff --check。",
+      "用 PowerShell Select-String 或 Python 替换 grep，并把命令原文写入 final_gate.md。",
+      "统一豁免分类：环境豁免、代码保留 not-applicable、老板书面接受风险三类分列；B2 保留项不得伪装成环境豁免。",
+      "若 e2e 未跑，必须让老板书面确认降级放行，或改为至少跑通一条关键路径；否则不推送。",
+      "final_gate.md 记录隐私扫描的完整命令、提交范围、输出文件 hash。"
+    ]
+  }
+}

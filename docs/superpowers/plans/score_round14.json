@@ -1,0 +1,66 @@
+{
+  "总计划": {
+    "score": 91,
+    "issues": [
+      "P6 存在时序冲突：P5 要求“当前进度终稿先 commit、final_gate 快照后生成”，P6 第10条却要求 final_gate.md 与当前进度终稿一起 commit，导致 final_gate 的父 commit 和快照不可稳定复现。",
+      "P6 将“旧同步包缺 lapses 字段导入清零旧值”归入 not-applicable，弱化了实际数据丢失风险，分类不准确。"
+    ],
+    "suggestions": [
+      "统一推送前时序：P5 先提交带 TODO_P6 的当前进度；P6 回写实际数字后先提交当前进度终稿，再生成并单独提交 final_gate.md，final_gate 只引用父 commit。",
+      "将旧包缺 lapses 清零移至“既有行为风险豁免/老板书面接受风险（类别③）”，附 7b 测试证据、影响范围、备份恢复或重新学习说明，不得标 not-applicable。",
+      "推送后增加 git ls-remote 校验远端分支 HEAD 与本地 HEAD 一致，并写入 post-push note。"
+    ]
+  },
+  "P1": {
+    "score": 92,
+    "issues": [],
+    "suggestions": [
+      "无新增实质缺口。可选加强：在 P5 总览增加“修复前 quality=2 经旧手算会递增、修复后按 HARD 不递增”的行为差异表，避免老板误读；不构成阻塞。"
+    ]
+  },
+  "P2": {
+    "score": 94,
+    "issues": [],
+    "suggestions": [
+      "无新增实质缺口。"
+    ]
+  },
+  "P3": {
+    "score": 91,
+    "issues": [],
+    "suggestions": [
+      "无新增实质缺口。P3 指 P3a；C1 为可选任务，不阻塞推送。"
+    ]
+  },
+  "P4": {
+    "score": 91,
+    "issues": [],
+    "suggestions": [
+      "无新增实质缺口。可选在 preflight 增加一次 Playwright chromium 空启动探针，进一步降低 P6 环境误判，但不构成阻塞。"
+    ]
+  },
+  "P5": {
+    "score": 92,
+    "issues": [],
+    "suggestions": [
+      "无新增实质缺口。"
+    ]
+  },
+  "P6": {
+    "score": 88,
+    "issues": [
+      "P5 验证要求“当前进度终稿先 commit，final_gate 快照后生成”，P6 第10条却要求“final_gate.md 与当前进度.md 终稿一起 commit”，两者冲突，final_gate 的父 commit hash 不可按当前规则稳定生成。",
+      "final_gate.py 检查项写作 `git ls-files | logs/backup` 为空，命令语义不成立，应改为明确的路径过滤/字符串匹配实现。",
+      "缺少推送成功后对远端 HEAD 的校验；git_push_github.py 幂等不等于已确认远端分支指向本地 HEAD。",
+      "旧同步包缺 lapses 字段导入清零旧值归入 not-applicable 不当，属于既有行为数据风险，应单独风险豁免或老板书面确认。",
+      "真实库不存在时三方 hash 的判定方式未定义，可能导致 P6 门禁异常。"
+    ],
+    "suggestions": [
+      "统一时序为：P5 提交带 TODO_P6 的当前进度 → P6 回写数字并提交当前进度终稿 → 生成 final_gate.md 快照并单独提交，或在 final_gate 中引用当前进度 commit hash → 再执行推送；删除“与终稿一起 commit”表述。",
+      "将 final_gate.py 的 db/backup 检查改为 Python pathlib/子进程解析 `git ls-files -z` 结果，分别断言无 `.db`、无 `logs/backup` 路径；不要使用伪管道命令。",
+      "推送后增加 `git rev-parse HEAD` 与 `git ls-remote origin refs/heads/codex/stability-convergence` 对比，写入 post-push note 并确认一致。",
+      "把旧包缺 lapses 清零从 not-applicable 移到类别③老板书面接受风险，或新增“既有行为风险”类；附 7b 测试、影响范围、备份恢复/重新学习说明，并让老板在推送前书面确认。若坚持不阻塞，至少不得归 not-applicable。",
+      "明确源库不存在时三方 hash 的记录方式：记录 not-applicable，并校验备份不存在/存在性，避免 P6 门禁因缺文件异常。"
+    ]
+  }
+}

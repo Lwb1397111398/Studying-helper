@@ -1,0 +1,132 @@
+{
+  "总计划": {
+    "score": 78,
+    "issues": [
+      "P1、P2 存在实质性技术缺口，按当前方案不应直接放行执行；总计划却把它们当作已可执行项。",
+      "缺少失败停止策略：未明确任一 Pn 验证失败后必须停止后续计划、保留现场、输出人话报告且不推送。",
+      "缺少按小计划独立 commit/回滚点/tag 的护栏，通宵 AI 自主大批量改动后难以二分定位和回滚。",
+      "P4/P6 依赖 launcher 端口、APP_DATA_DIR、APP_NO_BROWSER、Playwright 浏览器、样例包路径等环境假设，执行前未做预检。",
+      "“每步全量 pytest”方向正确但成本高，计划未定义最小门槛、超时和失败日志留存方式。",
+      "执行中代码质量同法复评由同一 AI 自评，存在放水风险，缺少客观检查清单和证据留存要求。"
+    ],
+    "suggestions": [
+      "执行前先重写并重评 P1/P2，未到 90 分不得开工。",
+      "为每个 Pn 规定：独立 commit、验证命令、通过标准、失败即停、保留日志、必要时 tag 回滚点。",
+      "开工前做环境预检：launcher 启动参数、随机端口能力、APP_DATA_DIR、Playwright 浏览器、round4 样例包、Android 缓存状态。",
+      "明确推送是不可逆门槛：P1-P6 全部通过且人工 diff 隐私过目后才允许 push；任一阻塞项失败即停止。",
+      "要求每个 Pn 产出机器日志和一段给编程小白看的人话摘要：改了什么、验证了什么、还剩什么风险。",
+      "把“评分 ≥90”落到可检查项，而不是只写一句自评；至少要求文件/函数级改动点、测试矩阵、回滚方案齐全。"
+    ]
+  },
+  "P1": {
+    "score": 72,
+    "issues": [
+      "未明确 `_update_card` 中 lapses 递增条件。若现有实现是无条件 `state.lapses + 1`，直接返回会导致每次复习都累加 lapses，比原 bug 更严重。必须锁定仅 AGAIN/quality<3 时递增。",
+      "未明确 service 层写回落库路径：只写“读取 mastery.lapses 传入调度器”，但未写调度返回后如何把 `schedule.lapses`/`result.lapses` 写回 `MasteryRecordModel.lapses` 并 commit。",
+      "未明确 `_update_stability` 收到的是更新前还是更新后的 lapses，以及 `_calculate_fsrs` 内部调用时序；这决定“遗忘多惩罚稳定性”是否真的修好。",
+      "向后兼容只靠默认参数不足：还需检查 Pydantic schema、API 返回、sync 导入导出、旧 SQLite 记录无 lapses 时默认 0、已有 lapses=1/2 的记录不丢失。",
+      "测试矩阵不足：缺少 Good/Hard/Easy 不增加 lapses、Good 后保持原值、旧记录默认 0、sync 导出导入保留 lapses、稳定性/间隔回归的用例。",
+      "Android 对称性检查只写文件行号，未给出需要对齐的字段和判定标准；若 Android 行为“正确”也需用测试固定。",
+      "`ReviewSchedule.lapses` 改为直接取 `result.lapses` 后，调用方是否仍期望旧手算语义未检查。"
+    ],
+    "suggestions": [
+      "先画出数据流并列出精确改点：`service.py` 读取 `mastery.lapses` → `calculate_next_review(lapses=old)` → `_calculate_fsrs` 构造 `FSRSState(lapses=old)` → `_update_card` 仅 rating==AGAIN 或 quality<3 时 `new_lapses=old+1` → `_update_stability` 使用明确约定的 lapses → `FSRSResult.lapses=new_lapses` → `ReviewSchedule.lapses` → service 写回 DB 并 commit。",
+      "在 `_update_card` 增加显式条件，禁止无条件 +1；新增测试：初值0连续AGAIN得到1/2/3；初值2后Good仍为2；Hard/Easy不增加。",
+      "service 测试必须断言 DB 落库值，而不仅是返回对象；覆盖旧记录无 lapses 字段/值为 None 的默认 0 场景。",
+      "补 sync 测试：带 lapses=2 的 mastery 记录导出再导入后仍为 2；检查 API schema 和 JSON 序列化不丢字段。",
+      "补稳定性/间隔断言：同样旧 lapses 下，AGAIN 后 stability 应被惩罚且间隔缩短；与 Android `FSRSAlgorithm.kt` 同输入同输出对比至少一个用例。",
+      "检查所有 `ReviewSchedule.lapses` 消费方，确认语义变化不会影响导出、统计、UI 展示。"
+    ]
+  },
+  "P2": {
+    "score": 60,
+    "issues": [
+      "核心方案有技术错误：`TYPE_CHECKING` 下导入的名字在运行时不存在，`typing.get_type_hints`/序列化工具解析字符串注解时仍会 NameError，不能真正拆除埋雷。",
+      "删除函数内重复导入的表述含糊，可能导致运行时 `_RR` 用法破坏；计划要求“以不破坏运行时为准”但没有给出具体改法。",
+      "未处理循环依赖原因。若因为循环不能顶部导入，需要拆分类型模块或延迟导入方案，而不是掩耳盗铃。",
+      "验证只看 pyflakes 0 报告不够，必须运行时解析注解验证。",
+      "未列出受影响函数的调用方和是否暴露在 API/序列化路径。"
+    ],
+    "suggestions": [
+      "改成真正的运行时名称可见方案：优先在模块顶部真实导入；若循环依赖，拆分共享类型到独立 `types.py`/协议模块，或重构导入方向。",
+      "不要把 `TYPE_CHECKING` 当作运行时修复；它只能满足静态检查，不能解决 `get_type_hints`。",
+      "新增测试：对受影响函数/类调用 `typing.get_type_hints`（必要时传 globalns/localns），确保不再 NameError。",
+      "若保留函数内导入，必须明确列出 `_RR` 的每个运行时使用点并逐一验证；不要在同一提交里顺手删除。",
+      "验证范围加入 adaptive_design/review 模块测试、pyflakes、以及至少一个 API schema/序列化路径测试。"
+    ]
+  },
+  "P3": {
+    "score": 82,
+    "issues": [
+      "一口气清理 142 个未用 import 风险偏高，可能误删 `__init__.py` re-export、model 注册 side-effect import、插件注册、typing-only import。",
+      "“测试文件顺手清理”与业务代码清理混在一起，回滚和定位成本高。",
+      "死变量“真死则删，疑似逻辑丢失则修”的标准不够可执行，AI 容易把丢逻辑当死代码删掉。",
+      "pyflakes 归零目标可能诱导用 noqa 掩盖问题，计划只提白名单但未要求逐条说明理由。",
+      "exporter 的 `chapter_map` 死查询删除前后缺少行为/性能验证标准。",
+      "未要求分批提交；触碰文件多时一次失败难以二分。"
+    ],
+    "suggestions": [
+      "先保存 `pyflakes app` 基线清单，按模块/文件分批，每批独立 commit，每批跑相关测试。",
+      "对 `__init__.py`、model 注册、插件注册、side-effect imports 单独审查，保留 `__all__` 和明确 noqa 理由。",
+      "死变量逐项写判定：若无任何读写且测试覆盖删除后行为，才删；疑似丢逻辑的先写失败测试再修。",
+      "exporter 死查询删除前后跑 cornell/markdown/anki/mindmap 专项测试，并断言导出文件内容不变。",
+      "测试文件清理单独提交，不与业务死代码清理混在一起。",
+      "要求最终 pyflakes 输出和 noqa 白名单逐条可解释，禁止为了归零新增无理由 noqa。"
+    ]
+  },
+  "P4": {
+    "score": 86,
+    "issues": [
+      "未确认 `launcher.py` 是否支持随机端口、`APP_DATA_DIR`、`APP_NO_BROWSER=1`；若不支持，脚本无法按计划启动。",
+      "随机空闲端口存在竞态：先探测再启动可能被占用，最好让进程绑定 0 并读取实际端口。",
+      "`/openapi.json` 路由数 >80 是脆弱断言，路由增减会误报；应断言关键路由存在和关键链路可用。",
+      "`teaching/v2/sessions/start` 断言“无 LLM fallback 可开会话”可能依赖外部环境，通宵运行不稳定。",
+      "round4 样例包路径、只读复制、临时目录清理、子进程日志捕获未具体化。",
+      "未定义脚本失败时输出子进程日志的格式，AI 夜间失败后难以诊断。"
+    ],
+    "suggestions": [
+      "先做启动参数预检；若 launcher 不支持，改为直接以 uvicorn 启动 FastAPI app，并显式传临时数据目录和端口。",
+      "让服务绑定端口 0 或由测试框架分配端口并读取实际端口，避免探测竞态。",
+      "把路由数断言改为关键路径断言：`/api/health`、`/api/v1/books`、`/openapi.json`、sync preview/import/export、teaching session start 等存在且返回预期状态。",
+      "teaching v2 会话测试使用 mock/离线模式，保证无外部 LLM 时确定性通过。",
+      "round4 样例包固定从测试 fixture 复制到临时目录，结束后删除；失败时打印子进程 stdout/stderr 最后 N 行。",
+      "连续跑 2 次验证幂等，并检查临时目录和端口无残留。"
+    ]
+  },
+  "P5": {
+    "score": 88,
+    "issues": [
+      "只列了要新建的文件，未给出模块总览的验收模板和字段填写标准，AI 可能写空话文档。",
+      "未要求从真实入口文件/函数核对，文档可能再次与代码脱节。",
+      "`当前进度.md` 未明确必须包含已验证证据、未验证项、已知风险、回滚方式、下一步。",
+      "README 索引与文件一一对应只靠人工，缺少可执行检查。",
+      "未要求把 P1 的 lapses 新旧数据流和兼容性写进复习模块总览，关键修复知识可能丢失。"
+    ],
+    "suggestions": [
+      "给每份总览固定模板：职责、运作流程、入口文件+函数、接口、依赖、数据结构、坑、更新时间、验证命令。",
+      "复习模块总览必须写清 lapses 数据流、旧记录默认 0、AGAIN 递增条件、sync 兼容性和相关测试。",
+      "`当前进度.md` 必须包含：已完成项、验证命令与结果、未验证/跳过项、风险、回滚 tag/commit、下一步。",
+      "新增 README 索引检查脚本或清单，确保每个总览文件都出现在索引且链接可达。",
+      "文档中标注真实代码位置，避免只写概念。"
+    ]
+  },
+  "P6": {
+    "score": 82,
+    "issues": [
+      "e2e 因 Playwright 浏览器缺失可跳过且不阻塞，与“全绿才推送”矛盾；可能漏掉前端关键链路回归。",
+      "计划声称已有“tsc/build/单测三重保障”，但体检证据只列 tsc 和 build，未列前端单测命令和结果。",
+      "隐私扫描只写人工过 diff，不够具体；自选密码、token、本地 DB、日志、fixture 都可能漏。",
+      "推送前无备份 tag/分支、无 `git fetch` 检查远程分叉、无禁止强推的明确约束。",
+      "`check_session_close.py` 四查未列具体执行命令和失败处理。",
+      "推送失败停下报告是对的，但未要求保存完整验证日志和 commit hash。"
+    ],
+    "suggestions": [
+      "把 e2e 纳入门槛：能安装就执行 `npx playwright install chromium` 后跑；确实无法运行时必须由人工/API smoke 覆盖关键路径并记录豁免理由，不能默认不阻塞。",
+      "补前端单测证据；若没有前端单测，明确写“无”并说明 tsc/build/e2e/smoke 的覆盖边界。",
+      "推送前执行具体隐私检查：`git status --ignored`、`git diff --cached`、新增文件扫描 `.env/db/log/token/password`、检查测试 fixture 和自选密码。",
+      "推送前创建备份 tag/分支，`git fetch` 后检查 ahead/behind，明确禁止 `push --force`。",
+      "记录每个终检命令、退出码、关键输出和最终 commit hash；失败时停止并输出人话报告。",
+      "Android 强制重跑已正确，保留；同时检查工作区干净和未跟踪文件。"
+    ]
+  }
+}

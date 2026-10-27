@@ -1,0 +1,60 @@
+{
+  "总计划": {
+    "score": 89,
+    "issues": [
+      "P6 隐私门禁存在实质性二阶泄漏缺口：计划要求 privacy_scan.txt 记录命中上下文并 commit，但未规定脱敏/掩码；若命中真实 token、私钥或连接串，会把秘密写入仓库并进入后续 diff。",
+      "按执行门槛，P6 低于 90 分则总计划不应放行；P1-P5 未发现新增实质缺口。"
+    ],
+    "suggestions": [
+      "在 P6 第 6 条写死：privacy_scan.txt 只允许记录 文件:行、规则名、匹配长度/散列或掩码片段，禁止记录完整 secret；高置信命中时先阻断、不 commit 原始日志，待清除或确认误报后再写脱敏记录。",
+      "final_gate.py 增加对 logs/ 与 privacy_scan.txt 自身的秘密模式扫描；推送前置门增加“logs 中无完整高置信 secret”检查。"
+    ]
+  },
+  "P1": {
+    "score": 91,
+    "issues": [
+      "无新增实质缺口；FSRS lapses 数据流、同步兼容、Android 锁定测试、SM-2 保值与回滚护栏已覆盖。"
+    ],
+    "suggestions": []
+  },
+  "P2": {
+    "score": 93,
+    "issues": [
+      "无新增实质缺口；三处 undefined name 的文件行、导入方案、循环导入冒烟和 get_type_hints identity 断言已写死。"
+    ],
+    "suggestions": []
+  },
+  "P3a": {
+    "score": 91,
+    "issues": [
+      "无新增实质缺口；B1 删除前三查含 autoflush 隐式落库风险，B2 有 RHS 副作用判定，B4 有占位符预检，金样 diff 与回滚留痕已覆盖。"
+    ],
+    "suggestions": []
+  },
+  "P4": {
+    "score": 90,
+    "issues": [
+      "无新增实质缺口；preflight、临时库隔离、teaching v2 只接受 2xx、urllib 零依赖、进程清理和双跑日志均已覆盖。"
+    ],
+    "suggestions": []
+  },
+  "P5": {
+    "score": 92,
+    "issues": [
+      "无新增实质缺口；三篇总览模板、lapses 历史不可恢复声明、旧同步包清零风险声明、TODO_P6 占位和外部工具 SKIP/FAIL 口径已覆盖。"
+    ],
+    "suggestions": []
+  },
+  "P6": {
+    "score": 87,
+    "issues": [
+      "隐私扫描日志可能把真实 secret 上下文 commit 入库，形成二次泄漏；计划未写脱敏、未写命中即阻断原始日志入库、未把 logs/ 自身纳入 secret 扫描。",
+      "该缺口直接位于推送前置门，属于风险控制硬缺口，不能以 AI 复核表替代。"
+    ],
+    "suggestions": [
+      "privacy_scan.txt 只写入脱敏后的 文件:行、规则名、掩码值/散列，不写完整匹配内容；发现高置信命中时停止推送，清除后重新扫描。",
+      "final_gate.py 增加对 docs/superpowers/plans/logs/ 全目录及 privacy_scan.txt 的 secret 模式扫描，并把“logs 无完整高置信 secret”作为推送前硬门禁。",
+      "未推送前若 secret 已进入本地 commit，允许本地 amend/rebase 清除；推送后仍遵守不 force push，只走 revert/新 commit。"
+    ]
+  }
+}
