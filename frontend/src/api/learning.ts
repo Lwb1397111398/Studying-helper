@@ -167,4 +167,3 @@ export const getAILearningProgress = (
 }> => {
   return client.get(`/v1/learning/${bookId}/learn-progress`);
 };
-

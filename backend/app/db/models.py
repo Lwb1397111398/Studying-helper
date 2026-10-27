@@ -588,4 +588,3 @@ class BookConceptModel(Base):
         UniqueConstraint("book_id", "name", name="uq_book_concept_name"),
         Index("ix_book_concepts_book_id", "book_id"),
     )
-

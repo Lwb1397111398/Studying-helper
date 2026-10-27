@@ -493,5 +493,3 @@ async def get_teaching_stats(
         import logging
         logging.getLogger(__name__).error(f"教学统计异常: {e}", exc_info=True)
         raise HTTPException(status_code=500, detail="获取教学统计失败")
-
-
