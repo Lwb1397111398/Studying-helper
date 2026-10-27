@@ -35,3 +35,10 @@
 ## 推送目标
 
 - 分支：codex/stability-convergence → origin（base=origin/master）
+
+## post-push note
+
+- 推送时间：2026-10-28 04:47（git_push_github.py 首次推送因本地代理 127.0.0.1:7897 未运行失败，单次 `-c http.proxy=` 直连成功，未改全局配置）
+- 推送结果：0f010bf..bed09b8 codex/stability-convergence → origin（私有仓库）
+- hash 对比：local bed09b8546c201d7314a31573fef436c5bce96d4 == remote bed09b8546c201d7314a31573fef436c5bce96d4（ls-remote 实证一致）
+- 本 note 为推送后追加的纯文档 commit（简化门禁：git status --porcelain 为空 + 文档 diff 无代码）
