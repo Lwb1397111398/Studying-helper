@@ -10,8 +10,9 @@
 | [教学模块总览.md](教学模块总览.md) | teaching（v1 策略会话 + v2 资产状态机） |
 | [AI学习与精读模块总览.md](AI学习与精读模块总览.md) | ai_learning + learning_assets（LLM 分析 + 单元学习资产管线） |
 | [Android应用自更新模块总览.md](Android应用自更新模块总览.md) | android data/update（应用内检查/下载/安装） |
+| [Android端侧数据模块总览.md](Android端侧数据模块总览.md) | android data/db + repository + sync + algorithm（Room 库/仓库/同步包/FSRS 算法） |
 
-> 声明：**同步与 Android 端**暂无独立总览——sync 已有 `docs/modules/sync.md`，Android 自更新已有上表总览；端侧（data/db、data/repository、data/sync、data/algorithm）总览列为后续任务。
+> 声明：**同步与 Android 端**的其余文档——sync 已有 `docs/modules/sync.md`；端侧（data/db、data/repository、data/sync、data/algorithm）已由 `Android端侧数据模块总览.md` 覆盖。
 
 ## 后端（backend/，FastAPI）
 
