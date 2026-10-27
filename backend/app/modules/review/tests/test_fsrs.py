@@ -358,21 +358,89 @@ class TestFSRSLapsesFix:
             assert result.lapses == 2
 
     def test_quality_0_to_5_full_coverage(self):
-        """测试 3b：quality 0~5 全覆盖 → 恰好 0/1/2 递增（AGAIN 映射唯一判定）。
+        """测试 3b：quality 0~5 全覆盖 → 完整映射 0-2→AGAIN / 3→HARD / 4→GOOD / 5→EASY。
 
-        映射行为变更（P1 修复）：quality=2 只可能来自答错（quality_from_correctness
-        仅在答错且快速时返回 2；置信度调整对正确答案保底 3），故 2 → AGAIN；
-        与 Android 端"错题一律 AGAIN"及 SM-2"0-2 均失败"语义对齐。
+        映射行为变更（P1 修复，两处）：
+        - quality=2 只可能来自答错（quality_from_correctness 仅在答错且快速时返回 2；
+          置信度调整对正确答案保底 3），故 2 → AGAIN；与 Android 端"错题一律 AGAIN"
+          及 SM-2"0-2 均失败"语义对齐。
+        - quality=3 来自"答对但慢速/低置信度"（SM-2 语义"困难但正确"），改映射
+          HARD（原 GOOD），修复旧映射 HARD 档位无输入的死档；间隔变短方向保守。
         """
         sched = SpacedRepetitionV2(Algorithm.FSRS)
+        expected_grades = {0: 1, 1: 1, 2: 1, 3: 2, 4: 3, 5: 4}
         for quality in range(6):
             grade = sched._quality_to_grade(quality)
-            assert (grade == 1) == (quality in (0, 1, 2)), f"quality={quality} 映射错误"
+            assert grade == expected_grades[quality], f"quality={quality} 映射错误"
+            assert (grade == 1) == (quality in (0, 1, 2)), f"quality={quality} AGAIN 判定错误"
             schedule = sched.calculate_next_review(
                 quality, repetitions=3, ease_factor=2.5, interval=10,
                 now=self.FIXED_NOW, lapses=0,
             )
             assert schedule.lapses == (1 if quality in (0, 1, 2) else 0), f"quality={quality} lapses 记账错误"
+
+    def test_success_then_again_then_success_alternating(self):
+        """测试 5（评审补充）：成功→遗忘→再恢复的交替场景，lapses 只增不消。
+
+        reps 按真实业务路径递进（累计复习次数，与 Android 端 reviewCount 语义一致；
+        repetitions=0 会触发 _init_card 新卡分支，仅首答合法）。
+        GOOD(reps 3→4)→AGAIN(→5)→GOOD(→6)→AGAIN(→7)，同时断言 AGAIN 后
+        stability 重落、恢复后重新增长（遗忘-恢复循环的调度行为）。
+        """
+        sched = SpacedRepetitionV2(Algorithm.FSRS)
+        # 初始：已成功 3 次、间隔 10 天
+        state_after_good = sched.calculate_next_review(
+            4, repetitions=3, ease_factor=2.5, interval=10,
+            now=self.FIXED_NOW, lapses=0,
+        )
+        assert state_after_good.lapses == 0
+        assert state_after_good.repetitions == 4  # FSRS 路径累计 +1（reps 卡死修复）
+
+        # 第一次 AGAIN
+        after_again1 = sched.calculate_next_review(
+            1, repetitions=state_after_good.repetitions, ease_factor=2.5, interval=10,
+            now=self.FIXED_NOW, lapses=state_after_good.lapses,
+        )
+        assert after_again1.lapses == 1
+        assert after_again1.stability < state_after_good.stability  # 遗忘后稳定性重落
+
+        # 恢复 GOOD：lapses 保持 1
+        after_recover = sched.calculate_next_review(
+            4, repetitions=after_again1.repetitions, ease_factor=2.5,
+            interval=after_again1.interval_days,
+            now=self.FIXED_NOW, lapses=after_again1.lapses,
+        )
+        assert after_recover.lapses == 1
+
+        # 第二次 AGAIN：lapses 累计到 2，不因中途成功被清零
+        after_again2 = sched.calculate_next_review(
+            0, repetitions=after_recover.repetitions, ease_factor=2.5,
+            interval=after_recover.interval_days,
+            now=self.FIXED_NOW, lapses=after_recover.lapses,
+        )
+        assert after_again2.lapses == 2
+
+    def test_first_answer_enables_lapse_accounting_on_second(self):
+        """测试 6（reps 卡死修复的端到端锁）：首答（rep=0，新卡）后 reps 必须=1，
+        使第二次答题走 _update_card 开始累计 lapses。
+
+        修复前：FSRS 路径 ReviewSchedule 不设 repetitions → service new_rep 回退
+        旧值 0 → review_count 恒 0 → 每次都走 _init_card，lapses 永远为 0。
+        """
+        sched = SpacedRepetitionV2(Algorithm.FSRS)
+        first = sched.calculate_next_review(
+            1, repetitions=0, ease_factor=2.5, interval=1,
+            now=self.FIXED_NOW, lapses=0,
+        )
+        assert first.repetitions == 1, "首答后累计复习次数必须为 1"
+        # service 会把 new_rep=1 写回 review_count；第二次答题（首答错，不计 lapse：
+        # _init_card 新卡语义，与 FSRS 主循环一致）走 _update_card 开始记账
+        second = sched.calculate_next_review(
+            1, repetitions=first.repetitions, ease_factor=2.5,
+            interval=first.interval_days,
+            now=self.FIXED_NOW, lapses=first.lapses,
+        )
+        assert second.lapses == 1
 
     def test_pre_fix_snapshot_non_again_unchanged(self):
         """测试 4：修复前快照复现——非 AGAIN 路径 stability/difficulty/scheduled_days 与修复前完全一致；
@@ -383,11 +451,12 @@ class TestFSRSLapsesFix:
         sched = SpacedRepetitionV2(Algorithm.FSRS)
         # quality=2 修复前为 (275.693091, 0.860000, 280)——错题被当 HARD 成功回忆，
         # 修复后走 AGAIN 分支，调度数值与 q0/q1 相同（快照见 logs/p1_pre_fix_snapshot.txt）
+        # 复评第 2 轮新增：quality=3 从 GOOD 改映射 HARD，q3 数值更新为 HARD 路径值
         expected = {
             0: (2.744457, 1.720000, 3),
             1: (2.744457, 1.720000, 3),
             2: (2.744457, 1.720000, 3),
-            3: (931.079624, 0.000000, 365),
+            3: (275.693091, 0.860000, 280),
             4: (931.079624, 0.000000, 365),
             5: (2417.237818, 0.000000, 365),
         }

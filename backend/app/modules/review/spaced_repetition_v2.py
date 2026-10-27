@@ -171,21 +171,36 @@ class SpacedRepetitionV2:
             difficulty=result.difficulty,
             retrievability=result.retrievability,
             lapses=result.lapses,
-            scheduled_days=result.scheduled_days
+            scheduled_days=result.scheduled_days,
+            # FSRS 路径 repetitions=累计复习次数（进参+1），与 Android 端
+            # ReviewRepository "reps = existing.reps + 1 / 首答 = 1" 语义对齐。
+            # 缺此字段时 service 的 new_rep 回退旧值：首答后 review_count 恒 0，
+            # 下次 state.reps=0 永远走 _init_card 新卡分支，lapses/稳定性链失效。
+            repetitions=repetitions + 1
         )
 
     def _quality_to_grade(self, quality: int) -> int:
         """将质量分数 (0-5) 转换为 FSRS 评分 (1-4)
 
-        行为变更（P1 修复）：quality<=2 一律映射 AGAIN。
-        依据：quality=2 在本代码库只可能来自答错（quality_from_correctness 仅在
-        is_correct=False 且快速作答时返回 2；置信度调整对正确答案保底 3），
-        SM-2 语义中 0-2 均为失败，Android 端calculateQuality 也把错题一律记 AGAIN。
-        旧映射把"答错但快速"当 HARD 成功回忆，导致稳定性暴涨且不记遗忘。
+        行为变更（P1 修复）：
+        - quality<=2 一律映射 AGAIN。依据：quality=2 在本代码库只可能来自答错
+          （quality_from_correctness 仅在 is_correct=False 且快速作答时返回 2；
+          置信度调整对正确答案保底 3），SM-2 语义中 0-2 均为失败，Android 端
+          calculateQuality 也把错题一律记 AGAIN。旧映射把"答错但快速"当 HARD
+          成功回忆，导致稳定性暴涨且不记遗忘。
+        - quality=3 映射 HARD（原映射 GOOD）。依据：quality=3 只来自"答对但慢速"
+          或"正常速度+低置信度"，SM-2 语义即"困难但正确"，对应 FSRS HARD；
+          同时修复了旧映射中 HARD 档位无输入的死档问题。
+          影响方向保守：答对慢速的复习间隔变短（更频繁复习），无害。
+
+        业务定义：本项目复习提交无 learning/review 阶段之分，所有提交统一走
+        Review 路径，失败（AGAIN）即计一次 lapse，与 FSRS 主循环语义一致。
         """
         if quality <= 2:
             return 1  # AGAIN（答错即遗忘，无"错但简单"档位）
-        elif quality <= 4:
+        elif quality == 3:
+            return 2  # HARD（答对但困难）
+        elif quality == 4:
             return 3  # GOOD
         else:
             return 4  # EASY
