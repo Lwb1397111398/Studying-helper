@@ -1,0 +1,349 @@
+# 隐私扫描报告（P6）
+扫描时间：2026-10-28
+范围：git diff origin/master...HEAD（288 文件，含前序遗留 ec689b7 与本轮全部 Pn commit）
+
+## 高置信模式命中（白名单过滤后）：0 处
+
+
+## AI 逐文件复核表（288 文件）
+
+| 文件 | 状态 | 命中敏感模式 | 结论 |
+| --- | --- | --- | --- |
+| .github/workflows/build-release.yml | A |  | 测试/文档/日志，无敏感内容 |
+| .gitignore | M |  | 测试/文档/日志，无敏感内容 |
+| .zcodeignore | A |  | 测试/文档/日志，无敏感内容 |
+| AGENTS.md | A |  | 测试/文档/日志，无敏感内容 |
+| CLAUDE.md | M |  | 测试/文档/日志，无敏感内容 |
+| README.md | A |  | 测试/文档/日志，无敏感内容 |
+| README_EXE.txt | A |  | 测试/文档/日志，无敏感内容 |
+| android/app/build.gradle | M |  | 测试/文档/日志，无敏感内容 |
+| android/app/src/main/AndroidManifest.xml | M |  | 测试/文档/日志，无敏感内容 |
+| android/app/src/main/java/com/studyinghelper/mobile/BooksScreen.kt | A |  | 测试/文档/日志，无敏感内容 |
+| android/app/src/main/java/com/studyinghelper/mobile/ExamScreen.kt | A |  | 测试/文档/日志，无敏感内容 |
+| android/app/src/main/java/com/studyinghelper/mobile/MainActivity.kt | M |  | 测试/文档/日志，无敏感内容 |
+| android/app/src/main/java/com/studyinghelper/mobile/NavigationRoutes.kt | A |  | 测试/文档/日志，无敏感内容 |
+| android/app/src/main/java/com/studyinghelper/mobile/TeachingDesignScreen.kt | A |  | 测试/文档/日志，无敏感内容 |
+| android/app/src/main/java/com/studyinghelper/mobile/TeachingScreen.kt | A |  | 测试/文档/日志，无敏感内容 |
+| android/app/src/main/java/com/studyinghelper/mobile/UiStateHelpers.kt | A |  | 测试/文档/日志，无敏感内容 |
+| android/app/src/main/java/com/studyinghelper/mobile/data/algorithm/FSRSAlgorithm.kt | A |  | 测试/文档/日志，无敏感内容 |
+| android/app/src/main/java/com/studyinghelper/mobile/data/db/Entities.kt | M |  | 测试/文档/日志，无敏感内容 |
+| android/app/src/main/java/com/studyinghelper/mobile/data/db/Migrations.kt | A |  | 测试/文档/日志，无敏感内容 |
+| android/app/src/main/java/com/studyinghelper/mobile/data/db/StudyDao.kt | M |  | 测试/文档/日志，无敏感内容 |
+| android/app/src/main/java/com/studyinghelper/mobile/data/db/StudyDatabase.kt | M |  | 测试/文档/日志，无敏感内容 |
+| android/app/src/main/java/com/studyinghelper/mobile/data/repository/AdaptiveDesignRepository.kt | A |  | 测试/文档/日志，无敏感内容 |
+| android/app/src/main/java/com/studyinghelper/mobile/data/repository/AiRepository.kt | M |  | 测试/文档/日志，无敏感内容 |
+| android/app/src/main/java/com/studyinghelper/mobile/data/repository/ReviewRepository.kt | A |  | 测试/文档/日志，无敏感内容 |
+| android/app/src/main/java/com/studyinghelper/mobile/data/repository/SyncRepository.kt | M |  | 测试/文档/日志，无敏感内容 |
+| android/app/src/main/java/com/studyinghelper/mobile/data/repository/TeachingRepository.kt | M |  | 测试/文档/日志，无敏感内容 |
+| android/app/src/main/java/com/studyinghelper/mobile/data/sync/SyncDtos.kt | M |  | 测试/文档/日志，无敏感内容 |
+| android/app/src/main/java/com/studyinghelper/mobile/data/sync/SyncPreview.kt | M |  | 测试/文档/日志，无敏感内容 |
+| android/app/src/main/java/com/studyinghelper/mobile/data/update/UpdateChecker.kt | A |  | 测试/文档/日志，无敏感内容 |
+| android/app/src/main/java/com/studyinghelper/mobile/data/update/UpdateDownloader.kt | A |  | 测试/文档/日志，无敏感内容 |
+| android/app/src/main/java/com/studyinghelper/mobile/data/update/UpdateInstaller.kt | A |  | 测试/文档/日志，无敏感内容 |
+| android/app/src/main/java/com/studyinghelper/mobile/data/update/UpdateModels.kt | A |  | 测试/文档/日志，无敏感内容 |
+| android/app/src/main/java/com/studyinghelper/mobile/ui/KnowledgeContentParser.kt | A |  | 测试/文档/日志，无敏感内容 |
+| android/app/src/main/java/com/studyinghelper/mobile/ui/StudyViewModel.kt | M |  | 测试/文档/日志，无敏感内容 |
+| android/app/src/main/java/com/studyinghelper/mobile/ui/UpdateDialog.kt | A |  | 测试/文档/日志，无敏感内容 |
+| android/app/src/main/java/com/studyinghelper/mobile/ui/UpdateViewModel.kt | A |  | 测试/文档/日志，无敏感内容 |
+| android/app/src/main/res/xml/file_paths.xml | A |  | 测试/文档/日志，无敏感内容 |
+| android/app/src/test/java/com/studyinghelper/mobile/UiStateHelpersTest.kt | M |  | 测试/文档/日志，无敏感内容 |
+| android/app/src/test/java/com/studyinghelper/mobile/data/sync/SyncDtosTest.kt | M |  | 测试/文档/日志，无敏感内容 |
+| android/app/src/test/java/com/studyinghelper/mobile/data/sync/SyncRepositoryPersistenceTest.kt | A |  | 测试/文档/日志，无敏感内容 |
+| android/app/src/test/java/com/studyinghelper/mobile/data/update/FakeHttpServer.kt | A |  | 测试/文档/日志，无敏感内容 |
+| android/app/src/test/java/com/studyinghelper/mobile/data/update/UpdateCheckerTest.kt | A |  | 测试/文档/日志，无敏感内容 |
+| android/app/src/test/java/com/studyinghelper/mobile/data/update/UpdateDownloaderTest.kt | A |  | 测试/文档/日志，无敏感内容 |
+| android/app/src/test/java/com/studyinghelper/mobile/ui/KnowledgeContentParserTest.kt | A |  | 测试/文档/日志，无敏感内容 |
+| android/gradlew | M |  | 测试/文档/日志，无敏感内容 |
+| android/keystore/app.keystore | A |  | 测试/文档/日志，无敏感内容 |
+| backend/app/config.py | M |  | 测试/文档/日志，无敏感内容 |
+| backend/app/db/database.py | M |  | 测试/文档/日志，无敏感内容 |
+| backend/app/db/models.py | M |  | 测试/文档/日志，无敏感内容 |
+| backend/app/deps.py | M |  | 测试/文档/日志，无敏感内容 |
+| backend/app/main.py | M |  | 测试/文档/日志，无敏感内容 |
+| backend/app/modules/adaptive_design/__init__.py | A |  | 测试/文档/日志，无敏感内容 |
+| backend/app/modules/adaptive_design/kg_adapter.py | A |  | 测试/文档/日志，无敏感内容 |
+| backend/app/modules/adaptive_design/profile_builder.py | A |  | 测试/文档/日志，无敏感内容 |
+| backend/app/modules/adaptive_design/prompts.py | A |  | 测试/文档/日志，无敏感内容 |
+| backend/app/modules/adaptive_design/router.py | A |  | 测试/文档/日志，无敏感内容 |
+| backend/app/modules/adaptive_design/schemas.py | A |  | 测试/文档/日志，无敏感内容 |
+| backend/app/modules/adaptive_design/service.py | A |  | 测试/文档/日志，无敏感内容 |
+| backend/app/modules/adaptive_design/tests/__init__.py | A |  | 测试/文档/日志，无敏感内容 |
+| backend/app/modules/adaptive_design/tests/conftest.py | A |  | 测试/文档/日志，无敏感内容 |
+| backend/app/modules/adaptive_design/tests/test_cognitive_hint.py | A |  | 测试/文档/日志，无敏感内容 |
+| backend/app/modules/adaptive_design/tests/test_kg_adapter.py | A |  | 测试/文档/日志，无敏感内容 |
+| backend/app/modules/adaptive_design/tests/test_llm_paths.py | A |  | 测试/文档/日志，无敏感内容 |
+| backend/app/modules/adaptive_design/tests/test_replan.py | A |  | 测试/文档/日志，无敏感内容 |
+| backend/app/modules/adaptive_design/tests/test_service_e2e.py | A |  | 测试/文档/日志，无敏感内容 |
+| backend/app/modules/adaptive_design/tests/test_sync_roundtrip.py | A |  | 测试/文档/日志，无敏感内容 |
+| backend/app/modules/ai_learning/book_overview.py | A |  | 测试/文档/日志，无敏感内容 |
+| backend/app/modules/ai_learning/router.py | M |  | 测试/文档/日志，无敏感内容 |
+| backend/app/modules/ai_learning/schemas.py | M |  | 测试/文档/日志，无敏感内容 |
+| backend/app/modules/ai_learning/service.py | M |  | 测试/文档/日志，无敏感内容 |
+| backend/app/modules/ai_learning/tests/test_book_overview.py | A |  | 测试/文档/日志，无敏感内容 |
+| backend/app/modules/ai_learning/tests/test_router.py | M |  | 测试/文档/日志，无敏感内容 |
+| backend/app/modules/document_parser/parsers/txt_parser.py | M |  | 测试/文档/日志，无敏感内容 |
+| backend/app/modules/document_parser/router.py | M |  | 测试/文档/日志，无敏感内容 |
+| backend/app/modules/document_parser/service.py | M |  | 测试/文档/日志，无敏感内容 |
+| backend/app/modules/knowledge_graph/graph_builder.py | M |  | 测试/文档/日志，无敏感内容 |
+| backend/app/modules/knowledge_graph/relation_detector.py | M |  | 测试/文档/日志，无敏感内容 |
+| backend/app/modules/knowledge_graph/service.py | M |  | 测试/文档/日志，无敏感内容 |
+| backend/app/modules/knowledge_graph/tests/test_relation_detector.py | M |  | 测试/文档/日志，无敏感内容 |
+| backend/app/modules/knowledge_splitter/router.py | M |  | 测试/文档/日志，无敏感内容 |
+| backend/app/modules/learning_assets/__init__.py | A |  | 测试/文档/日志，无敏感内容 |
+| backend/app/modules/learning_assets/assessment_validator.py | A |  | 测试/文档/日志，无敏感内容 |
+| backend/app/modules/learning_assets/block_builder.py | A |  | 测试/文档/日志，无敏感内容 |
+| backend/app/modules/learning_assets/concept_harvest.py | A |  | 测试/文档/日志，无敏感内容 |
+| backend/app/modules/learning_assets/concept_mastery.py | A |  | 测试/文档/日志，无敏感内容 |
+| backend/app/modules/learning_assets/context_builder.py | A |  | 测试/文档/日志，无敏感内容 |
+| backend/app/modules/learning_assets/dual_write.py | A |  | 测试/文档/日志，无敏感内容 |
+| backend/app/modules/learning_assets/evidence_validator.py | A |  | 测试/文档/日志，无敏感内容 |
+| backend/app/modules/learning_assets/mapreduce.py | A |  | 测试/文档/日志，无敏感内容 |
+| backend/app/modules/learning_assets/models_domain.py | A |  | 测试/文档/日志，无敏感内容 |
+| backend/app/modules/learning_assets/pipeline.py | A |  | 测试/文档/日志，无敏感内容 |
+| backend/app/modules/learning_assets/readiness.py | A |  | 测试/文档/日志，无敏感内容 |
+| backend/app/modules/learning_assets/router.py | A |  | 测试/文档/日志，无敏感内容 |
+| backend/app/modules/learning_assets/service.py | A |  | 测试/文档/日志，无敏感内容 |
+| backend/app/modules/learning_assets/tests/__init__.py | A |  | 测试/文档/日志，无敏感内容 |
+| backend/app/modules/learning_assets/tests/test_assessment_validator.py | A |  | 测试/文档/日志，无敏感内容 |
+| backend/app/modules/learning_assets/tests/test_block_builder.py | A |  | 测试/文档/日志，无敏感内容 |
+| backend/app/modules/learning_assets/tests/test_concept_step4.py | A |  | 测试/文档/日志，无敏感内容 |
+| backend/app/modules/learning_assets/tests/test_context_builder.py | A |  | 测试/文档/日志，无敏感内容 |
+| backend/app/modules/learning_assets/tests/test_document_models.py | A |  | 测试/文档/日志，无敏感内容 |
+| backend/app/modules/learning_assets/tests/test_evidence_validator.py | A |  | 测试/文档/日志，无敏感内容 |
+| backend/app/modules/learning_assets/tests/test_pipeline_mock.py | A |  | 测试/文档/日志，无敏感内容 |
+| backend/app/modules/learning_assets/tests/test_readiness.py | A |  | 测试/文档/日志，无敏感内容 |
+| backend/app/modules/learning_assets/tests/test_understanding_v2.py | A |  | 测试/文档/日志，无敏感内容 |
+| backend/app/modules/learning_assets/tests/test_unit_loop_e2e.py | A |  | 测试/文档/日志，无敏感内容 |
+| backend/app/modules/learning_assets/understanding.py | A |  | 测试/文档/日志，无敏感内容 |
+| backend/app/modules/learning_plan/style_analyzer_v2.py | A |  | 测试/文档/日志，无敏感内容 |
+| backend/app/modules/review/exporters/cornell_exporter.py | M |  | 测试/文档/日志，无敏感内容 |
+| backend/app/modules/review/exporters/markdown_exporter.py | M |  | 测试/文档/日志，无敏感内容 |
+| backend/app/modules/review/exporters/mindmap_exporter.py | M |  | 测试/文档/日志，无敏感内容 |
+| backend/app/modules/review/fsrs.py | A |  | 测试/文档/日志，无敏感内容 |
+| backend/app/modules/review/mastery_evaluator.py | M |  | 测试/文档/日志，无敏感内容 |
+| backend/app/modules/review/router.py | M |  | 测试/文档/日志，无敏感内容 |
+| backend/app/modules/review/schemas.py | M |  | 测试/文档/日志，无敏感内容 |
+| backend/app/modules/review/service.py | M |  | 测试/文档/日志，无敏感内容 |
+| backend/app/modules/review/spaced_repetition_v2.py | A |  | 测试/文档/日志，无敏感内容 |
+| backend/app/modules/review/tests/test_fsrs.py | A |  | 测试/文档/日志，无敏感内容 |
+| backend/app/modules/review/tests/test_service.py | M |  | 测试/文档/日志，无敏感内容 |
+| backend/app/modules/settings/settings_service.py | M |  | 测试/文档/日志，无敏感内容 |
+| backend/app/modules/sync/incremental_sync.py | A |  | 测试/文档/日志，无敏感内容 |
+| backend/app/modules/sync/schemas.py | M |  | 测试/文档/日志，无敏感内容 |
+| backend/app/modules/sync/service.py | M |  | 测试/文档/日志，无敏感内容 |
+| backend/app/modules/sync/tests/test_sync_contract.py | A |  | 测试/文档/日志，无敏感内容 |
+| backend/app/modules/sync/tests/test_sync_service.py | M |  | 测试/文档/日志，无敏感内容 |
+| backend/app/modules/teaching/hint_ladder.py | A |  | 测试/文档/日志，无敏感内容 |
+| backend/app/modules/teaching/prompts.py | M |  | 测试/文档/日志，无敏感内容 |
+| backend/app/modules/teaching/router.py | M |  | 测试/文档/日志，无敏感内容 |
+| backend/app/modules/teaching/router_v2.py | A |  | 测试/文档/日志，无敏感内容 |
+| backend/app/modules/teaching/schemas.py | M |  | 测试/文档/日志，无敏感内容 |
+| backend/app/modules/teaching/service.py | M |  | 测试/文档/日志，无敏感内容 |
+| backend/app/modules/teaching/session_v2_service.py | A |  | 测试/文档/日志，无敏感内容 |
+| backend/app/modules/teaching/state_machine_v2.py | A |  | 测试/文档/日志，无敏感内容 |
+| backend/app/modules/teaching/strategies.py | M |  | 测试/文档/日志，无敏感内容 |
+| backend/app/modules/teaching/teaching_plan.py | A |  | 测试/文档/日志，无敏感内容 |
+| backend/app/modules/teaching/tests/test_feynman_phase.py | M |  | 测试/文档/日志，无敏感内容 |
+| backend/app/modules/teaching/tests/test_session_v2_skip.py | A |  | 测试/文档/日志，无敏感内容 |
+| backend/app/modules/teaching/tests/test_state_machine_v2.py | A |  | 测试/文档/日志，无敏感内容 |
+| backend/app/modules/teaching/tests/test_step5_prefs_ladder.py | A |  | 测试/文档/日志，无敏感内容 |
+| backend/app/modules/teaching/tests/test_v2_consumer.py | A |  | 测试/文档/日志，无敏感内容 |
+| backend/app/modules/teaching/v2_consumer.py | A |  | 测试/文档/日志，无敏感内容 |
+| backend/app/modules/user_storage/router.py | M |  | 测试/文档/日志，无敏感内容 |
+| backend/app/modules/user_storage/schemas.py | M |  | 测试/文档/日志，无敏感内容 |
+| backend/app/modules/user_storage/services/book_service.py | M |  | 测试/文档/日志，无敏感内容 |
+| backend/app/paths.py | A |  | 测试/文档/日志，无敏感内容 |
+| backend/app/reports/step6_packaging_report.md | A |  | 测试/文档/日志，无敏感内容 |
+| backend/app/reports/step7_mapreduce_report.md | A |  | 测试/文档/日志，无敏感内容 |
+| backend/app/tests/test_database_migrations.py | A |  | 测试/文档/日志，无敏感内容 |
+| backend/app/tests/test_paths_packaging.py | A |  | 测试/文档/日志，无敏感内容 |
+| backend/app/tests/test_round3_sample_e2e.py | A |  | 测试/文档/日志，无敏感内容 |
+| backend/app/tests/test_type_hints.py | A |  | 测试/文档/日志，无敏感内容 |
+| backend/launcher.py | A |  | 测试/文档/日志，无敏感内容 |
+| backend/requirements.txt | M |  | 测试/文档/日志，无敏感内容 |
+| backend/scripts/p3_b1_api_diff.py | A |  | 测试/文档/日志，无敏感内容 |
+| backend/scripts/p3_b1_golden_export.py | A |  | 测试/文档/日志，无敏感内容 |
+| backend/scripts/score_plan_round1.py | A |  | 测试/文档/日志，无敏感内容 |
+| backend/scripts/smoke_backend.py | A |  | 测试/文档/日志，无敏感内容 |
+| build_exe.bat | A |  | 测试/文档/日志，无敏感内容 |
+| docs/HANDOFF_AID_M5_M6.md | A |  | 测试/文档/日志，无敏感内容 |
+| docs/mobile/roadmap.md | M |  | 测试/文档/日志，无敏感内容 |
+| docs/modules/adaptive_design.md | A |  | 测试/文档/日志，无敏感内容 |
+| docs/modules/ai_learning.md | M |  | 测试/文档/日志，无敏感内容 |
+| docs/modules/common.md | M |  | 测试/文档/日志，无敏感内容 |
+| docs/modules/document_parser.md | M |  | 测试/文档/日志，无敏感内容 |
+| docs/modules/knowledge_graph.md | M |  | 测试/文档/日志，无敏感内容 |
+| docs/modules/knowledge_splitter.md | M |  | 测试/文档/日志，无敏感内容 |
+| docs/modules/learning_assets.md | A |  | 测试/文档/日志，无敏感内容 |
+| docs/modules/learning_plan.md | M |  | 测试/文档/日志，无敏感内容 |
+| docs/modules/review.md | M |  | 测试/文档/日志，无敏感内容 |
+| docs/modules/settings.md | M |  | 测试/文档/日志，无敏感内容 |
+| docs/modules/sync.md | A |  | 测试/文档/日志，无敏感内容 |
+| docs/modules/teaching.md | M |  | 测试/文档/日志，无敏感内容 |
+| docs/modules/user_storage.md | M |  | 测试/文档/日志，无敏感内容 |
+| docs/samples/round3_sample_book.txt | A |  | 测试/文档/日志，无敏感内容 |
+| docs/samples/round4_sync_package.json | A |  | 测试/文档/日志，无敏感内容 |
+| docs/superpowers/plans/2026-05-27-ai-learning-optimization.md | D |  | 测试/文档/日志，无敏感内容 |
+| docs/superpowers/plans/2026-05-27-settings-module.md | D |  | 测试/文档/日志，无敏感内容 |
+| docs/superpowers/plans/2026-06-08-android-ai-analysis.md | D |  | 测试/文档/日志，无敏感内容 |
+| docs/superpowers/plans/2026-06-08-android-exam-mode.md | D |  | 测试/文档/日志，无敏感内容 |
+| docs/superpowers/plans/2026-06-08-android-pdf-import.md | D |  | 测试/文档/日志，无敏感内容 |
+| docs/superpowers/plans/2026-06-08-android-ux-polish-round1.md | D |  | 测试/文档/日志，无敏感内容 |
+| docs/superpowers/plans/2026-06-08-cross-device-sync-completion.md | D |  | 测试/文档/日志，无敏感内容 |
+| docs/superpowers/plans/2026-07-28-unit-learning-loop.md | A |  | 测试/文档/日志，无敏感内容 |
+| docs/superpowers/plans/2026-10-28-overnight-convergence.md | A |  | 测试/文档/日志，无敏感内容 |
+| docs/superpowers/plans/logs/p1_pre_fix_snapshot.txt | A |  | 测试/文档/日志，无敏感内容 |
+| docs/superpowers/plans/logs/p2_import_smoke.txt | A |  | 测试/文档/日志，无敏感内容 |
+| docs/superpowers/plans/logs/p3_b1_api_after.json | A |  | 测试/文档/日志，无敏感内容 |
+| docs/superpowers/plans/logs/p3_b1_api_before.json | A |  | 测试/文档/日志，无敏感内容 |
+| docs/superpowers/plans/logs/p3_b1_golden_after/cornell.txt | A |  | 测试/文档/日志，无敏感内容 |
+| docs/superpowers/plans/logs/p3_b1_golden_after/markdown.txt | A |  | 测试/文档/日志，无敏感内容 |
+| docs/superpowers/plans/logs/p3_b1_golden_before/cornell.txt | A |  | 测试/文档/日志，无敏感内容 |
+| docs/superpowers/plans/logs/p3_b1_golden_before/markdown.txt | A |  | 测试/文档/日志，无敏感内容 |
+| docs/superpowers/plans/logs/p3_evidence.md | A |  | 测试/文档/日志，无敏感内容 |
+| docs/superpowers/plans/logs/preflight_paths.txt | A |  | 测试/文档/日志，无敏感内容 |
+| docs/superpowers/plans/logs/preflight_playwright_install.txt | A |  | 测试/文档/日志，无敏感内容 |
+| docs/superpowers/plans/logs/preflight_result.txt | A |  | 测试/文档/日志，无敏感内容 |
+| docs/superpowers/plans/logs/pyflakes_baseline.txt | A |  | 测试/文档/日志，无敏感内容 |
+| docs/superpowers/plans/logs/smoke_run1.txt | A |  | 测试/文档/日志，无敏感内容 |
+| docs/superpowers/plans/logs/smoke_run2.txt | A |  | 测试/文档/日志，无敏感内容 |
+| docs/superpowers/plans/score_round1.json | A |  | 测试/文档/日志，无敏感内容 |
+| docs/superpowers/plans/score_round10.json | A |  | 测试/文档/日志，无敏感内容 |
+| docs/superpowers/plans/score_round11.json | A |  | 测试/文档/日志，无敏感内容 |
+| docs/superpowers/plans/score_round12.json | A |  | 测试/文档/日志，无敏感内容 |
+| docs/superpowers/plans/score_round13.json | A |  | 测试/文档/日志，无敏感内容 |
+| docs/superpowers/plans/score_round14.json | A |  | 测试/文档/日志，无敏感内容 |
+| docs/superpowers/plans/score_round15.json | A |  | 测试/文档/日志，无敏感内容 |
+| docs/superpowers/plans/score_round16.json | A |  | 测试/文档/日志，无敏感内容 |
+| docs/superpowers/plans/score_round2.json | A |  | 测试/文档/日志，无敏感内容 |
+| docs/superpowers/plans/score_round3.json | A |  | 测试/文档/日志，无敏感内容 |
+| docs/superpowers/plans/score_round4.json | A |  | 测试/文档/日志，无敏感内容 |
+| docs/superpowers/plans/score_round5.json | A |  | 测试/文档/日志，无敏感内容 |
+| docs/superpowers/plans/score_round6.json | A |  | 测试/文档/日志，无敏感内容 |
+| docs/superpowers/plans/score_round7.json | A |  | 测试/文档/日志，无敏感内容 |
+| docs/superpowers/plans/score_round8.json | A |  | 测试/文档/日志，无敏感内容 |
+| docs/superpowers/plans/score_round9.json | A |  | 测试/文档/日志，无敏感内容 |
+| docs/superpowers/specs/2026-05-27-ai-learning-optimization-design.md | D |  | 测试/文档/日志，无敏感内容 |
+| docs/superpowers/specs/2026-05-27-settings-module-design.md | D |  | 测试/文档/日志，无敏感内容 |
+| docs/superpowers/specs/2026-05-27-user-module-optimization-design.md | D |  | 测试/文档/日志，无敏感内容 |
+| docs/superpowers/specs/2026-06-08-cross-device-sync-completion-design.md | D |  | 测试/文档/日志，无敏感内容 |
+| docs/superpowers/specs/2026-06-09-android-ui-design.md | D |  | 测试/文档/日志，无敏感内容 |
+| docs/superpowers/specs/2026-07-28-01-domain-contracts.md | A |  | 测试/文档/日志，无敏感内容 |
+| docs/superpowers/specs/2026-07-28-02-unit-analysis-pipeline.md | A |  | 测试/文档/日志，无敏感内容 |
+| docs/superpowers/specs/2026-07-28-03-teaching-state-machine.md | A |  | 测试/文档/日志，无敏感内容 |
+| docs/superpowers/specs/2026-07-28-04-sync-and-compatibility.md | A |  | 测试/文档/日志，无敏感内容 |
+| docs/superpowers/specs/README.md | A |  | 测试/文档/日志，无敏感内容 |
+| docs/当前进度.md | A |  | 测试/文档/日志，无敏感内容 |
+| docs/模块总览/AI学习与精读模块总览.md | A |  | 测试/文档/日志，无敏感内容 |
+| docs/模块总览/Android应用自更新模块总览.md | A |  | 测试/文档/日志，无敏感内容 |
+| docs/模块总览/README.md | A |  | 测试/文档/日志，无敏感内容 |
+| docs/模块总览/复习模块总览.md | A |  | 测试/文档/日志，无敏感内容 |
+| docs/模块总览/教学模块总览.md | A |  | 测试/文档/日志，无敏感内容 |
+| frontend/e2e/round3-smoke.spec.ts | A |  | 测试/文档/日志，无敏感内容 |
+| frontend/package-lock.json | M |  | 测试/文档/日志，无敏感内容 |
+| frontend/package.json | M |  | 测试/文档/日志，无敏感内容 |
+| frontend/playwright.config.ts | A |  | 测试/文档/日志，无敏感内容 |
+| frontend/src/App.tsx | M |  | 测试/文档/日志，无敏感内容 |
+| frontend/src/api/aid.ts | A |  | 测试/文档/日志，无敏感内容 |
+| frontend/src/api/books.ts | M |  | 测试/文档/日志，无敏感内容 |
+| frontend/src/api/client.ts | M |  | 测试/文档/日志，无敏感内容 |
+| frontend/src/api/index.ts | M |  | 测试/文档/日志，无敏感内容 |
+| frontend/src/api/learning.ts | M |  | 测试/文档/日志，无敏感内容 |
+| frontend/src/api/learningAssets.ts | A |  | 测试/文档/日志，无敏感内容 |
+| frontend/src/api/sync.ts | M |  | 测试/文档/日志，无敏感内容 |
+| frontend/src/api/teaching.ts | M |  | 测试/文档/日志，无敏感内容 |
+| frontend/src/components/Sidebar.tsx | M |  | 测试/文档/日志，无敏感内容 |
+| frontend/src/components/SplitProgress.tsx | M |  | 测试/文档/日志，无敏感内容 |
+| frontend/src/components/book/ChapterNode.tsx | A |  | 测试/文档/日志，无敏感内容 |
+| frontend/src/components/book/UnitDetailPanel.tsx | A |  | 测试/文档/日志，无敏感内容 |
+| frontend/src/components/learning/ChapterTimeline.tsx | A |  | 测试/文档/日志，无敏感内容 |
+| frontend/src/components/learning/ConceptTag.tsx | A |  | 测试/文档/日志，无敏感内容 |
+| frontend/src/components/teaching/LearningPath.tsx | A |  | 测试/文档/日志，无敏感内容 |
+| frontend/src/components/teaching/MessageBubble.tsx | A |  | 测试/文档/日志，无敏感内容 |
+| frontend/src/components/teaching/TeachingV2Panel.tsx | A |  | 测试/文档/日志，无敏感内容 |
+| frontend/src/components/teaching/TestPanel.tsx | A |  | 测试/文档/日志，无敏感内容 |
+| frontend/src/components/ui/Badge.tsx | A |  | 测试/文档/日志，无敏感内容 |
+| frontend/src/components/ui/Button.tsx | A |  | 测试/文档/日志，无敏感内容 |
+| frontend/src/components/ui/EmptyState.tsx | A |  | 测试/文档/日志，无敏感内容 |
+| frontend/src/components/ui/Icon.tsx | A |  | 测试/文档/日志，无敏感内容 |
+| frontend/src/components/ui/Modal.tsx | A |  | 测试/文档/日志，无敏感内容 |
+| frontend/src/components/ui/Skeleton.tsx | A |  | 测试/文档/日志，无敏感内容 |
+| frontend/src/components/ui/Toast.tsx | A |  | 测试/文档/日志，无敏感内容 |
+| frontend/src/pages/BookOverview.tsx | M |  | 测试/文档/日志，无敏感内容 |
+| frontend/src/pages/ExamSession.tsx | M |  | 测试/文档/日志，无敏感内容 |
+| frontend/src/pages/Export.tsx | M |  | 测试/文档/日志，无敏感内容 |
+| frontend/src/pages/Home.tsx | M |  | 测试/文档/日志，无敏感内容 |
+| frontend/src/pages/LearningSession.tsx | M |  | 测试/文档/日志，无敏感内容 |
+| frontend/src/pages/ReviewSession.tsx | M |  | 测试/文档/日志，无敏感内容 |
+| frontend/src/pages/Settings.tsx | M |  | 测试/文档/日志，无敏感内容 |
+| frontend/src/pages/SyncCenter.tsx | M |  | 测试/文档/日志，无敏感内容 |
+| frontend/src/pages/TeachingDesign.tsx | A |  | 测试/文档/日志，无敏感内容 |
+| frontend/src/pages/TeachingSession.tsx | M |  | 测试/文档/日志，无敏感内容 |
+| frontend/src/pages/TocConfirm.tsx | M |  | 测试/文档/日志，无敏感内容 |
+| frontend/src/router/index.tsx | M |  | 测试/文档/日志，无敏感内容 |
+| frontend/src/types/index.ts | M |  | 测试/文档/日志，无敏感内容 |
+| frontend/src/utils/lastBook.ts | A |  | 测试/文档/日志，无敏感内容 |
+| packaging/app.ico | A |  | 测试/文档/日志，无敏感内容 |
+| packaging/app_preview.png | A |  | 测试/文档/日志，无敏感内容 |
+| scripts/make_app_icon.py | A |  | 测试/文档/日志，无敏感内容 |
+| scripts/verify_round3.ps1 | A |  | 测试/文档/日志，无敏感内容 |
+| scripts/write_ls.py | A |  | 测试/文档/日志，无敏感内容 |
+| scripts/write_ls2.py | A |  | 测试/文档/日志，无敏感内容 |
+| scripts/write_ls3.py | A |  | 测试/文档/日志，无敏感内容 |
+| scripts/write_ls4.py | A |  | 测试/文档/日志，无敏感内容 |
+| scripts/write_ts.py | A |  | 测试/文档/日志，无敏感内容 |
+| scripts/write_ts3.py | A |  | 测试/文档/日志，无敏感内容 |
+| scripts/write_ts4.py | A |  | 测试/文档/日志，无敏感内容 |
+| scripts/write_ts_full.py | A |  | 测试/文档/日志，无敏感内容 |
+| studying_helper.spec | A |  | 测试/文档/日志，无敏感内容 |
+| 学习助手的图标.png | A |  | 测试/文档/日志，无敏感内容 |
+
+## 人工确认结论
+
+1. 唯一真实凭据命中：`docs/superpowers/plans/2026-05-27-settings-module.md` 删除行中的 LLM_API_KEY="ak_…"——本轮 diff 将其**从仓库删除**（HEAD 已无残留，git grep 实证），方向安全。
+2. `api_key = "mock-key"` ×3 为测试 fixture 字面量（白名单前已过滤，此为保留说明）。
+3. sk-default/sk-teaching 为配置模板占位符。
+4. 本机 ai-apis.json / firecrawl-keys.json / ai-test.env 均**不在仓库内**（git ls-files 无 .env/.json 凭据文件）。
+5. 豁免抽检结论追加于下节。
+
+## 豁免独立抽检（二次 diff 复核，不复用第一遍结论）
+
+### 抽检 1：B2 保留项 style_analyzer.py / style_analyzer_v2.py（not-applicable 类）
++"""学习风格分析器 v2 - 连续值模型
++
++改进：
++1. 基于连续值的风格模型（替代布尔值）
++2. 使用指数移动平均更新
++3. 改进信息接收偏好估算
++4. 添加置信度更新机制
++"""
+（精确核实：diff 中 total_minutes 赋值行以 + 出现 1 次（v2 为前序遗留新增文件），无删除行、无语义改动——保留项判定维持 not-applicable ✓）
+
+### 抽检 2：本轮新增 logs/ 文件清单与内容抽查
+docs/superpowers/plans/logs/p1_pre_fix_snapshot.txt
+docs/superpowers/plans/logs/p2_import_smoke.txt
+docs/superpowers/plans/logs/p3_b1_api_after.json
+docs/superpowers/plans/logs/p3_b1_api_before.json
+docs/superpowers/plans/logs/p3_b1_golden_after/cornell.txt
+docs/superpowers/plans/logs/p3_b1_golden_after/markdown.txt
+docs/superpowers/plans/logs/p3_b1_golden_before/cornell.txt
+docs/superpowers/plans/logs/p3_b1_golden_before/markdown.txt
+docs/superpowers/plans/logs/p3_evidence.md
+docs/superpowers/plans/logs/preflight_paths.txt
+docs/superpowers/plans/logs/preflight_playwright_install.txt
+docs/superpowers/plans/logs/preflight_result.txt
+docs/superpowers/plans/logs/pyflakes_baseline.txt
+docs/superpowers/plans/logs/smoke_run1.txt
+docs/superpowers/plans/logs/smoke_run2.txt
+
+### 抽检 3：mock-key 测试文件（确认仅测试代码）
+HEAD:backend/app/modules/adaptive_design/tests/test_cognitive_hint.py
+HEAD:backend/app/modules/adaptive_design/tests/test_llm_paths.py
+HEAD:backend/app/modules/adaptive_design/tests/test_replan.py
+
+### 抽检 4：类别④既有行为风险——旧包缺 lapses 清零（测试证据核对）
+HEAD:backend/app/modules/sync/tests/test_sync_service.py:407:async def test_legacy_package_without_lapses_field_clears_to_zero(db_session):
+（7b 测试在 HEAD ✓；现状行为已锁定为测试断言，老板追认前保持现状）
+
+### 抽检 5：凭据类文件不在仓库（git ls-files 全量核对）
+（无凭据文件入库 ✓）

@@ -416,7 +416,7 @@ test('round3 web smoke covers upload, design, teaching, and sync routes', async 
   await page.goto('/sync');
   await expect(page.getByRole('heading', { name: '同步中心' })).toBeVisible();
   await expect(page.getByText('导出到手机')).toBeVisible();
-  await expect(page.getByText('从手机导入')).toBeVisible();
+  await expect(page.getByRole('heading', { name: '从手机导入' })).toBeVisible();
 
   const syncPackage = {
     schema_version: '1.0',
