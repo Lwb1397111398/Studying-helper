@@ -2,6 +2,17 @@
 
 > 给老板（和接手的 AI）看的模块地图：每个模块一句话职责。想细看某个模块，先看这里定位，再进对应文件。
 
+## 详细总览（按模块名点开）
+
+| 总览文件 | 覆盖模块 |
+| --- | --- |
+| [复习模块总览.md](复习模块总览.md) | review（SM-2/FSRS 调度、lapses 数据流、导出器） |
+| [教学模块总览.md](教学模块总览.md) | teaching（v1 策略会话 + v2 资产状态机） |
+| [AI学习与精读模块总览.md](AI学习与精读模块总览.md) | ai_learning + learning_assets（LLM 分析 + 单元学习资产管线） |
+| [Android应用自更新模块总览.md](Android应用自更新模块总览.md) | android data/update（应用内检查/下载/安装） |
+
+> 声明：**同步与 Android 端**暂无独立总览——sync 已有 `docs/modules/sync.md`，Android 自更新已有上表总览；端侧（data/db、data/repository、data/sync、data/algorithm）总览列为后续任务。
+
 ## 后端（backend/，FastAPI）
 
 | 模块 | 职责 |
