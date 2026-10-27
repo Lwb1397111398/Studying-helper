@@ -423,3 +423,67 @@ async def test_legacy_package_without_lapses_field_clears_to_zero(db_session):
         )
     ).scalar_one()
     assert row.lapses == 0  # schema 默认值（既有行为）
+
+
+async def test_v2_teaching_session_fields_export_import_roundtrip(db_session):
+    """R1a 测试 1+2（v2 会话三字段同步保值）：
+    state_v2/asset_id/completion_status 导出携带、回灌后 DB 保值。
+    修复前 SyncTeachingSession 契约缺三字段，v2 会话导出即丢、回灌退化为 None。
+    """
+    raw = json.loads(ROUND4_FIXTURE.read_text(encoding="utf-8"))
+    raw["teaching_sessions"][0]["state_v2"] = "diagnose"
+    raw["teaching_sessions"][0]["asset_id"] = "asset-x"
+    raw["teaching_sessions"][0]["completion_status"] = "in_progress"
+    package = SyncPackage.model_validate(raw)
+    service = SyncService(db_session)
+
+    await service.import_package("anonymous", package)
+    exported = await service.export_book("anonymous", "round4-book")
+    session_out = next(s for s in exported.teaching_sessions if s.id == "round4-teaching")
+    assert session_out.state_v2 == "diagnose"
+    assert session_out.asset_id == "asset-x"
+    assert session_out.completion_status == "in_progress"
+
+    # 回灌（delete+add 重放）后查 DB 断言保值
+    await service.import_package("anonymous", exported)
+    row = (
+        await db_session.execute(
+            select(TeachingSessionModel).where(TeachingSessionModel.id == "round4-teaching")
+        )
+    ).scalar_one()
+    assert row.state_v2 == "diagnose"
+    assert row.asset_id == "asset-x"
+    assert row.completion_status == "in_progress"
+
+
+async def test_legacy_teaching_session_package_without_v2_fields_imports_clean(db_session):
+    """R1a 测试 3（旧包兼容）：不含 v2 三字段的旧版包导入不报错，DB 三列为 None。"""
+    raw = json.loads(ROUND4_FIXTURE.read_text(encoding="utf-8"))
+    assert "state_v2" not in raw["teaching_sessions"][0]  # 样例包本就是旧版形态
+    package = SyncPackage.model_validate(raw)
+    service = SyncService(db_session)
+
+    await service.import_package("anonymous", package)
+    row = (
+        await db_session.execute(
+            select(TeachingSessionModel).where(TeachingSessionModel.id == "round4-teaching")
+        )
+    ).scalar_one()
+    assert row.state_v2 is None
+    assert row.asset_id is None
+    assert row.completion_status is None
+
+
+async def test_v2_teaching_session_export_is_idempotent(db_session):
+    """R1a 测试 4（导出幂等）：同一数据连续两次 export，teaching_sessions 规范化 dump 一致。"""
+    raw = json.loads(ROUND4_FIXTURE.read_text(encoding="utf-8"))
+    raw["teaching_sessions"][0]["state_v2"] = "assess"
+    package = SyncPackage.model_validate(raw)
+    service = SyncService(db_session)
+
+    await service.import_package("anonymous", package)
+    first = await service.export_book("anonymous", "round4-book")
+    second = await service.export_book("anonymous", "round4-book")
+    dumps_first = [s.model_dump(mode="json") for s in first.teaching_sessions]
+    dumps_second = [s.model_dump(mode="json") for s in second.teaching_sessions]
+    assert dumps_first == dumps_second

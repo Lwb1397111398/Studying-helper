@@ -199,6 +199,11 @@ class SyncTeachingSession(BaseModel):
     status: str | None = "active"
     started_at: datetime
     ended_at: datetime | None = None
+    # v2 状态机会话字段（与 TeachingSessionModel 同名列）：v1 会话为 None；
+    # 默认 None 保证旧版包导入零破坏（delete+add 重放语义）
+    state_v2: str | None = None
+    asset_id: str | None = None
+    completion_status: str | None = None
 
 
 class SyncTeachingMessage(BaseModel):
