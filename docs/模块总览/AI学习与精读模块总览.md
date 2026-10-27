@@ -1,6 +1,6 @@
 # AI 学习与精读模块总览
 
-> 最后更新：2026-10-28（P5 补建；本轮该模块仅做死代码清理：ai_learning/service.py 两处 f-string 去 f 前缀，B4 批次）
+> 最后更新：2026-10-28 夜（round2 C1：ai_learning 与 learning_assets 共 8 条未用导入清理，职能面无变化；上轮 B4 为 f-string 清理）
 
 ## 模块职责（一句话）
 
