@@ -16,13 +16,13 @@ import hashlib
 import json
 import logging
 import os
-import re
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from typing import Any, Optional
 from uuid import uuid4
 
-from sqlalchemy import func, select
+from sqlalchemy import select
+
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.db.models import (

@@ -3,7 +3,8 @@
 from __future__ import annotations
 
 import json
-from dataclasses import asdict, dataclass, field
+from dataclasses import dataclass, field
+
 from typing import Any, List, Optional
 
 from sqlalchemy import select

@@ -12,7 +12,8 @@ from app.modules.learning_plan.schemas import (
 from app.modules.learning_plan.style_analyzer import LearningStyleAnalyzer
 from app.modules.ai_learning.schemas import LearnedUnit
 from app.common.errors import ServiceError, ErrorCode
-from app.db.models import KnowledgeUnitModel, LearningRecordModel, UserModel
+from app.db.models import KnowledgeUnitModel, LearningRecordModel
+
 
 # ===== 可配置常量 =====
 

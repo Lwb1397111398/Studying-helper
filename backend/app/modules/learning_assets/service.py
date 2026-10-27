@@ -13,7 +13,6 @@ from app.modules.learning_assets.pipeline import analyze_unit as pipeline_analyz
 from app.modules.learning_assets.understanding import (
     precompute_book_understanding,
     run_understanding,
-    to_legacy_view,
 )
 
 

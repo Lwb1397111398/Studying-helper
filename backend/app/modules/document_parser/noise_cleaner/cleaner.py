@@ -6,7 +6,8 @@ from typing import List
 from app.modules.document_parser.schemas import (
     NoiseRegion, PageTextInfo, PageInfo,
 )
-from app.modules.document_parser.noise_cleaner.header_footer import detect_header_footer, detect_header_footer_lines
+from app.modules.document_parser.noise_cleaner.header_footer import detect_header_footer_lines
+
 from app.modules.document_parser.noise_cleaner.front_matter import detect_front_matter
 from app.modules.document_parser.noise_cleaner.back_matter import detect_back_matter
 from app.modules.document_parser.noise_cleaner.toc_cleaner import detect_toc_pages

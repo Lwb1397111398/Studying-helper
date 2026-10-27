@@ -10,7 +10,8 @@
 import json
 import math
 from dataclasses import dataclass, field
-from typing import Optional, Dict, List, Any
+from typing import Optional, Dict, Any
+
 from sqlalchemy import select, func
 from sqlalchemy.ext.asyncio import AsyncSession
 

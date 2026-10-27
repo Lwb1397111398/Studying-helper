@@ -1,6 +1,5 @@
 """书籍服务"""
 import logging
-import os
 from uuid import uuid4
 
 from sqlalchemy import select, func, delete

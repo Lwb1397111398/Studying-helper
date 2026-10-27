@@ -1,0 +1,3 @@
+# pyflakes 白名单：保留的未用导入（每条：文件 符号 —— 原因）
+# app/db/database.py 22 条模型导入 —— SQLAlchemy 模型注册副作用导入，删除会破坏 create_all 的表注册（被 database.py:66 的 import 显式触发）
+# app/db/models.py 2 条 Mapped/mapped_column —— 文件用 Column() 旧式风格，导入确实未用，但属公共底层文件，保守保留防未来注解式迁移时缺失

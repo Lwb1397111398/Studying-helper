@@ -1,5 +1,4 @@
 """用户服务"""
-import json
 from uuid import uuid4
 
 from sqlalchemy import select, func

@@ -5,7 +5,8 @@ offline SyncPackage contract. It does not yet cover the full AID/FSRS sync
 surface, so production import/export must continue to use `service.py`.
 """
 
-from datetime import datetime, timezone
+from datetime import datetime
+
 from typing import Optional, List, Dict, Any
 from sqlalchemy import select, and_, or_
 from sqlalchemy.ext.asyncio import AsyncSession
