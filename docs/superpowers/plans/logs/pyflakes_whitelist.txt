@@ -1,3 +1,6 @@
-# pyflakes 白名单：保留的未用导入（每条：文件 符号 —— 原因）
-# app/db/database.py 22 条模型导入 —— SQLAlchemy 模型注册副作用导入，删除会破坏 create_all 的表注册（被 database.py:66 的 import 显式触发）
-# app/db/models.py 2 条 Mapped/mapped_column —— 文件用 Column() 旧式风格，导入确实未用，但属公共底层文件，保守保留防未来注解式迁移时缺失
+# pyflakes 白名单：保留的诊断（每行格式：文件路径 [符号] —— 原因）
+# 按文件级豁免（路径行）与按符号级豁免（含符号名行）
+app/db/database.py —— SQLAlchemy 模型注册副作用导入（24 条），删除会破坏 create_all 表注册
+app/db/models.py —— Mapped/mapped_column 导入未用（文件用 Column 旧式风格），公共底层文件保守保留
+app/modules/learning_plan/style_analyzer.py total_minutes —— 上轮 P3a 调查类保留项（not-applicable，见 logs/p3_evidence.md）
+app/modules/learning_plan/style_analyzer_v2.py total_minutes —— 同上

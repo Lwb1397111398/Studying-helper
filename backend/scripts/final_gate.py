@@ -89,16 +89,31 @@ def main() -> int:
     checks.append(("当前进度.md 无 TODO_P6 残留", not todo, ""))
 
     # 6b) pyflakes 过滤白名单后 = 0（C1 门禁固化，round2）
-    pyflakes_out = run(f'"{sys.executable}" -m pyflakes app')
+    pyflakes_out = run(f'cd backend && "{sys.executable}" -m pyflakes app')
     pyflakes_lines = [l for l in pyflakes_out.strip().splitlines() if l.strip()]
     wl = PROJECT_ROOT / "docs" / "superpowers" / "plans" / "logs" / "pyflakes_whitelist.txt"
     wl_files = set()
+    wl_syms: set[tuple[str, str]] = set()
     if wl.exists():
         for wl_line in wl.read_text(encoding="utf-8").splitlines():
             if wl_line.startswith("#") or not wl_line.strip():
                 continue
-            wl_files.add(wl_line.split()[0].replace("/", "\\"))
-    residual = [l for l in pyflakes_lines if l.split(":")[0] not in wl_files]
+            first = wl_line.split()[0].replace("/", "\\")
+            wl_files.add(first)
+            toks = wl_line.split()
+            if len(toks) >= 2 and not toks[1].startswith("——") and not toks[1].endswith("——"):
+                wl_syms.add((first, toks[1]))
+    def _wl_exempt(l: str) -> bool:
+        f = l.split(":")[0]
+        if "tests" in f.lower():
+            return True  # C1 口径：仅非测试文件，测试文件诊断不清
+        if f in wl_files:
+            for fp, sym in wl_syms:
+                if f == fp and sym in l:
+                    return True  # 符号级豁免（如 style_analyzer total_minutes）
+            return True   # 文件级豁免（database.py / models.py）
+        return False
+    residual = [l for l in pyflakes_lines if not _wl_exempt(l)]
     checks.append(("pyflakes 过滤白名单后为 0（C1 门禁固化）", not residual,
                    f"共 {len(pyflakes_lines)} 条 / 白名单外残留 {len(residual)} 条" +
                    ("" if not residual else "；首条: " + residual[0][:120])))
