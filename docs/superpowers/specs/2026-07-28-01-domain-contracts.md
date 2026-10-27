@@ -1,28 +1,28 @@
 # 01 领域契约（Domain Contracts）
 
-> 状态：设计完整版 v1（已按契约修正轮次定稿，待用户确认后进入实现）  
-> 目标：回答三件事——**谁产生这条数据？谁有权修改？什么条件下它才可以驱动教学？**  
+> 状态：设计完整版 v1（已按契约修正轮次定稿，待用户确认后进入实现）
+> 目标：回答三件事——**谁产生这条数据？谁有权修改？什么条件下它才可以驱动教学？**
 > 范围：领域对象、字段、生命周期、不变量、版本策略、旧模型映射。不含 UI 与具体 Prompt 正文。
 
 ---
 
 ## 0. 设计原则
 
-1. **语义拆分优先于表拆分**  
+1. **语义拆分优先于表拆分**
    现有 `LearningRecord` / `TeachingSession` / `KnowledgeUnit` 字段混用分析与学习语义。契约先钉死概念；物理表可分阶段迁移。
 
-2. **权威数据 vs 用户数据**  
-   - 服务端权威：书籍理解、章节理解、单元教学资产、题目标准答案、评分量表、分析任务。  
-   - 用户侧可写：教学会话状态、教学轮次、学习证据、笔记、复习作答事件。  
+2. **权威数据 vs 用户数据**
+   - 服务端权威：书籍理解、章节理解、单元教学资产、题目标准答案、评分量表、分析任务。
+   - 用户侧可写：教学会话状态、教学轮次、学习证据、笔记、复习作答事件。
    - 可派生：FSRS 调度结果可由证据事件重算。
 
-3. **版本不可变**  
+3. **版本不可变**
    教学会话绑定**特定资产版本**。分析结果更新只能发布新版本，不能静默覆盖正在使用的资产。
 
-4. **证据驱动掌握**  
+4. **证据驱动掌握**
    “学会”只能由 `LearningEvidence` 证明，不能由“看完讲解”或“点了完成”证明。
 
-5. **兼容优先**  
+5. **兼容优先**
    旧字段不删除；新语义以新对象/新表或 JSON 扩展落地，旧客户端可读降级。
 
 ---
@@ -55,18 +55,18 @@
 
 ### 2.1 属于本契约
 
-- 文档块与引用锚点  
-- 分析任务与理解产物（书/章/单元）  
-- 教学资产与评价标准  
-- 教学会话、轮次、中断问答  
-- 学习证据与复习项  
+- 文档块与引用锚点
+- 分析任务与理解产物（书/章/单元）
+- 教学资产与评价标准
+- 教学会话、轮次、中断问答
+- 学习证据与复习项
 - 用户学习计划（个性化路径）
 
 ### 2.2 不属于本契约（保持现有模块）
 
-- PDF/TXT/EPUB 原始解析算法细节（只要求产出 `DocumentBlock`）  
-- 知识图谱可视化布局  
-- LLM provider 配置 UI  
+- PDF/TXT/EPUB 原始解析算法细节（只要求产出 `DocumentBlock`）
+- 知识图谱可视化布局
+- LLM provider 配置 UI
 - 同步传输层实现细节（见 `04-sync-and-compatibility.md`）
 
 ### 2.3 明确禁止混用
@@ -142,8 +142,8 @@ AnalysisJob 产出 Understanding / Asset
 | source_revision | string | 清洗/解析版本哈希 |
 | created_at | datetime | |
 
-**谁产生**：document_parser / splitter 管线。  
-**谁可改**：仅解析重跑可生成新 revision；旧 block 标记 `superseded`，不原地改 text。  
+**谁产生**：document_parser / splitter 管线。
+**谁可改**：仅解析重跑可生成新 revision；旧 block 标记 `superseded`，不原地改 text。
 **驱动教学条件**：存在且 `source_revision` 与当前书一致。
 
 ### 4.2 EvidenceRef
@@ -436,7 +436,7 @@ AnalysisJob queued → running
 
 ### 5.2 会话绑定
 
-- `SESSION_STARTED` 时冻结 `asset_id`。  
+- `SESSION_STARTED` 时冻结 `asset_id`。
 - 若资产变 stale，进行中会话仍用旧 asset；新会话取新 active。
 
 ### 5.3 掌握判定不变量
@@ -450,7 +450,7 @@ supporting objectives 失败不单独阻止完成，但可生成 ReviewItem
 
 ### 5.4 引用不变量
 
-- required claim 的 `support_status` 必须为 `supported` 才可 `teachable`。  
+- required claim 的 `support_status` 必须为 `supported` 才可 `teachable`。
 - AI 例子：`content_origin=ai_generated_example`，**无**伪造 book EvidenceRef。
 
 ---
@@ -475,25 +475,25 @@ supporting objectives 失败不单独阻止完成，但可生成 ReviewItem
 
 ### 阶段 M0：DocumentBlock
 
-- 新表 `document_blocks`  
-- 解析/拆分后回填  
+- 新表 `document_blocks`
+- 解析/拆分后回填
 - 旧书：后台 job 从 unit content 近似切块（质量低于原生解析）
 
 ### 阶段 M1：分析与资产表
 
-- `analysis_jobs`  
-- `book_understandings` / `chapter_understandings`  
+- `analysis_jobs`
+- `book_understandings` / `chapter_understandings`
 - `unit_learning_assets`（大 JSON 可先单表 + 校验后的结构化列）
 
 ### 阶段 M2：证据与复习
 
-- `learning_evidences`  
-- `review_items`（或扩展 mastery）  
+- `learning_evidences`
+- `review_items`（或扩展 mastery）
 - `teaching_sessions` 加 `asset_id/parent_session_id/completion_status/pause_reason`
 
 ### 阶段 M3：同步合约 v1.1
 
-- 见 04 文档  
+- 见 04 文档
 - Android Entity + Migration + DTO 同步
 
 **迁移工具约束**：后端继续 `_add_column_if_missing` + `create_all`；新表用 ORM 创建。Android 升 `version` 并写 `Migration`。禁止破坏性 rename 无双写期。
@@ -502,10 +502,10 @@ supporting objectives 失败不单独阻止完成，但可生成 ReviewItem
 
 ## 8. API 序列化约束
 
-1. 对外返回 `readiness_status` 枚举字符串，不只返回 `quality_score`。  
-2. 教学开始接口若资产不可教，返回可操作错误码：`ASSET_PENDING` / `ASSET_INVALID` / `ASSET_STALE`。  
-3. 证据提交必须带 `attempt_id`，重复提交幂等返回首次结果。  
-4. 资产 GET 默认 `status=active`；会话回放按 `asset_id` 取历史版本。  
+1. 对外返回 `readiness_status` 枚举字符串，不只返回 `quality_score`。
+2. 教学开始接口若资产不可教，返回可操作错误码：`ASSET_PENDING` / `ASSET_INVALID` / `ASSET_STALE`。
+3. 证据提交必须带 `attempt_id`，重复提交幂等返回首次结果。
+4. 资产 GET 默认 `status=active`；会话回放按 `asset_id` 取历史版本。
 5. 所有时间 UTC；Android 本地临时时间在同步时带 `client_created_at`。
 
 ---
@@ -526,11 +526,11 @@ supporting objectives 失败不单独阻止完成，但可生成 ReviewItem
 
 只为“一个单元端到端”必需要落地的对象：
 
-1. `DocumentBlock`（当前章/单元范围即可）  
-2. `UnitLearningAsset` + Objective/Criterion/Question/Claim/EvidenceRef  
-3. `AnalysisJob`（unit scope）  
-4. `TeachingSession` + `TeachingTurn`  
-5. `LearningEvidence`  
+1. `DocumentBlock`（当前章/单元范围即可）
+2. `UnitLearningAsset` + Objective/Criterion/Question/Claim/EvidenceRef
+3. `AnalysisJob`（unit scope）
+4. `TeachingSession` + `TeachingTurn`
+5. `LearningEvidence`
 6. `ReviewItem`（可先写入现有 mastery 投影）
 
 书/章 Understanding 与完整 LearningPlan 可第二刀，但字段预留，避免再混进 Unit 资产。
@@ -539,19 +539,19 @@ supporting objectives 失败不单独阻止完成，但可生成 ReviewItem
 
 ## 11. 开放问题清单（实现前确认）
 
-1. OPEN-1 书型默认是否接受“通用 + unit_type 分支”？  
-2. OPEN-2 书外知识默认允许并标注？  
-3. DocumentBlock 坐标系：全书偏移 vs 章内偏移，选一并写死。  
-4. `LearningPlan` 第一版是新建表还是 AID 视图适配器？  
-5. 证据时间窗（多久的 assessment 仍算有效掌握）默认 14 天？  
+1. OPEN-1 书型默认是否接受“通用 + unit_type 分支”？
+2. OPEN-2 书外知识默认允许并标注？
+3. DocumentBlock 坐标系：全书偏移 vs 章内偏移，选一并写死。
+4. `LearningPlan` 第一版是新建表还是 AID 视图适配器？
+5. 证据时间窗（多久的 assessment 仍算有效掌握）默认 14 天？
 
 ---
 
 ## 12. 验收标准（契约层）
 
-- [ ] 任何“可教学”判定只依赖 `readiness_status`，不依赖 LLM confidence。  
-- [ ] 任一 required claim 可追溯到可校验 EvidenceRef。  
-- [ ] TeachingSession 能指出唯一 `asset_id`。  
-- [ ] LearningEvidence 独立可查询，且绑定 objective_id。  
-- [ ] 旧 LearningRecord / MasteryRecord 仍可读，语义文档化。  
-- [ ] 同步文档 04 能指出每个新字段的所有权。  
+- [ ] 任何“可教学”判定只依赖 `readiness_status`，不依赖 LLM confidence。
+- [ ] 任一 required claim 可追溯到可校验 EvidenceRef。
+- [ ] TeachingSession 能指出唯一 `asset_id`。
+- [ ] LearningEvidence 独立可查询，且绑定 objective_id。
+- [ ] 旧 LearningRecord / MasteryRecord 仍可读，语义文档化。
+- [ ] 同步文档 04 能指出每个新字段的所有权。
