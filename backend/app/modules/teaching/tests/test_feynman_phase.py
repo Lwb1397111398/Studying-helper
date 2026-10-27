@@ -14,7 +14,10 @@ from app.modules.teaching.strategies import select_phases
 
 def _make_mock_db_session():
     mock_db = AsyncMock()
-    mock_db.execute = AsyncMock()
+    # Python 3.12 中 AsyncMock 的 return_value 默认仍是 AsyncMock：execute 的
+    # 结果再调 .scalar_one_or_none() 等同步方法会生成无人 await 的 coroutine
+    # （pytest RuntimeWarning 来源）。execute 必须显式返回 MagicMock。
+    mock_db.execute = AsyncMock(return_value=MagicMock())
     mock_db.flush = AsyncMock()
     mock_db.add = MagicMock()
     return mock_db
