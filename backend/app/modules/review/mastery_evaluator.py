@@ -1,7 +1,7 @@
 """掌握度评估器 - 5维度评估模型（与 FSRS 集成）"""
 
 from datetime import datetime, timedelta, timezone
-from typing import List, Dict, Optional
+from typing import List
 
 from app.modules.review.schemas import MasteryAssessment
 

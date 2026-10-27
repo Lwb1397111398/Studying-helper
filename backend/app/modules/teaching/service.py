@@ -30,7 +30,6 @@ from app.modules.teaching.prompts import (
     ASSESS_PROMPT, SUMMARY_PROMPT,
     FEYNMAN_EXPLAIN_PROMPT, FEYNMAN_ASSESS_PROMPT,
     CORNELL_CUES_PROMPT, CORNELL_SUMMARY_PROMPT,
-    EXAMPLE_PROMPT,
     EXPLAIN_PROMPT_V2, CHECK_PROMPT_V2, REFLECT_PROMPT_V2,
     GRADE_PROMPT_V2, FEYNMAN_EXPLAIN_PROMPT_V2, REPAIR_PROMPT_V2,
 )
@@ -46,8 +45,7 @@ from app.modules.teaching.hint_ladder import (
 )
 from app.modules.teaching.strategies import select_teaching_strategy
 from app.modules.teaching.teaching_plan import (
-    TeachingPlan, TeachingPlanGenerator, CoverageTracker,
-    plan_generator, coverage_tracker,
+    TeachingPlan, plan_generator, coverage_tracker,
 )
 from app.modules.teaching.v2_consumer import (
     load_v2_teaching_context,

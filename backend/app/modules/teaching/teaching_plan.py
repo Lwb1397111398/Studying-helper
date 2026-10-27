@@ -13,7 +13,7 @@ from typing import List, Set, Dict, Optional
 from enum import Enum
 from datetime import datetime
 
-from app.modules.ai_learning.schemas import LearnedUnit, KeyPoint, Concept
+from app.modules.ai_learning.schemas import LearnedUnit
 
 
 class CoverageStatus(str, Enum):

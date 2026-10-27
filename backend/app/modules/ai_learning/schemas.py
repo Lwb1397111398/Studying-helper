@@ -3,7 +3,6 @@
 from pydantic import BaseModel, Field
 from typing import ClassVar, Optional, List
 from datetime import datetime
-from uuid import uuid4
 from enum import Enum
 
 

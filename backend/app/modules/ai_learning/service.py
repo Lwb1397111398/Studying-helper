@@ -19,11 +19,9 @@ from app.modules.ai_learning.schemas import (
     KeyPoint,
     Concept,
     LearningContext,
-    LearningProgress,
     BookLearningResult,
     BookOverview,
     ChapterOverview,
-    LearningStatus,
 )
 from app.modules.ai_learning.prompts import build_understand_prompt, build_merge_prompt, build_enrich_prompt, FOCUS_DIRECTIONS
 from app.modules.ai_learning.token_optimizer import TokenOptimizer

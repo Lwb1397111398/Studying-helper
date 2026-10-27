@@ -8,13 +8,15 @@ from typing import List, Optional
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.common.errors import ServiceError, ErrorCode, ERROR_STATUS_MAP
+from app.common.errors import ServiceError, ERROR_STATUS_MAP
 from app.db.database import get_db
 from app.db.models import KnowledgeUnitModel, TeachingSessionModel
 from app.deps import get_teaching_llm_client
 from app.modules.ai_learning.schemas import LearnedUnit, Concept, KeyPoint
 from app.modules.teaching.service import TeachingService
-from app.modules.teaching.schemas import TeachingMessage, UserQuestion, Annotation, SessionTest
+
+
+
 
 router = APIRouter(prefix="/api/v1/teaching", tags=["teaching"])
 

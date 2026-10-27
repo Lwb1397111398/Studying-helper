@@ -1,9 +1,9 @@
 """知识拆分服务"""
 
-from typing import List, Dict, Optional
+from typing import List
 from app.modules.document_parser.schemas import ParsedDocument, TOCItem
 from app.modules.knowledge_splitter.schemas import (
-    KnowledgeUnit, Chapter, SplitResult, SplitStats, Section, SubTitle
+    KnowledgeUnit, Chapter, SplitResult, SplitStats, Section
 )
 from app.modules.knowledge_splitter.splitter import TextSplitter
 

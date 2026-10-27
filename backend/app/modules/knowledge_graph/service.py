@@ -10,7 +10,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.common.errors import ServiceError, ErrorCode
 from app.db.models import KGNodeModel, KGEdgeModel
 from app.modules.knowledge_graph.schemas import (
-    KGNode, KGEdge, KnowledgeGraph, GraphStats,
+    KGNode, KGEdge, KnowledgeGraph,
     GraphQuery, SubGraph, VisualizationData,
     VisNode, VisEdge,
 )

@@ -1,7 +1,6 @@
 """思维导图导出器 - 支持Mermaid和PlantUML格式"""
 
 from typing import List, Dict
-from datetime import datetime
 
 from app.modules.review.schemas import ExportResult, ExportFormat
 

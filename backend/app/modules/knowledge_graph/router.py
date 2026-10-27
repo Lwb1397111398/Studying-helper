@@ -9,9 +9,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.common.errors import ServiceError, ErrorCode, ERROR_STATUS_MAP
 from app.db.database import get_db
 from app.db.models import KnowledgeUnitModel, ChapterModel
-from app.modules.knowledge_graph.schemas import (
-    KnowledgeGraph, GraphQuery, SubGraph, VisualizationData, KGEdge,
-)
+from app.modules.knowledge_graph.schemas import KnowledgeGraph, GraphQuery
 from app.modules.knowledge_graph.service import KnowledgeGraphService
 
 router = APIRouter(prefix="/api/v1/knowledge-graph", tags=["knowledge-graph"])

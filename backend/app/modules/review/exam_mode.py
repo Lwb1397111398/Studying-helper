@@ -3,7 +3,6 @@
 import random
 from typing import List, Dict, Optional
 from datetime import datetime, timezone
-from uuid import uuid4
 
 from app.modules.review.schemas import (
     ReviewSession, ReviewQuestion, ExamConfig, ExamResult, MasteryRecord,

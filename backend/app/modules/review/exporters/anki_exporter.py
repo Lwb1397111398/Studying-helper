@@ -1,7 +1,6 @@
 """Anki卡片导出器"""
 
 from typing import List, Dict
-from datetime import datetime
 
 from app.modules.review.schemas import ExportResult, ExportFormat
 

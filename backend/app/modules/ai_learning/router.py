@@ -1,7 +1,6 @@
 """AI学习路由"""
 
 import json
-import asyncio
 
 from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException
 from typing import List, Optional
@@ -313,7 +312,8 @@ async def get_learning_stats(db: AsyncSession = Depends(get_db)):
 @router.get("/report")
 async def get_learning_report(period: str = "week", db: AsyncSession = Depends(get_db)):
     """获取学习报告"""
-    from datetime import date as date_type, timedelta
+    from datetime import timedelta
+
 
     today = utc_now().date()
 

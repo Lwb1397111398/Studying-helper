@@ -18,7 +18,6 @@ from app.common.time_utils import utc_now
 from app.db.database import get_db
 from app.db.models import BookModel, ChapterModel, KnowledgeUnitModel, MasteryRecordModel, AnnotationModel
 from app.modules.knowledge_splitter.service import KnowledgeSplitterService, NoTOCError
-from app.modules.document_parser.schemas import ParsedDocument
 from app.modules.document_parser.parsers import PDFParser, TXTParser, EPUBParser
 from app.modules.document_parser.service import DocumentParserService
 
@@ -278,7 +277,6 @@ async def split_result(book_id: str, db: AsyncSession = Depends(get_db)):
         raise HTTPException(status_code=500, detail=prog["error"])
 
     # 返回最终结果
-    from app.modules.knowledge_splitter.schemas import SplitStats
 
     chapters_result = await db.execute(
         select(ChapterModel).where(ChapterModel.book_id == book_id).order_by(ChapterModel.order_index)

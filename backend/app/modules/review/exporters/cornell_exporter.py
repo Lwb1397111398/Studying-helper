@@ -1,6 +1,6 @@
 """康奈尔笔记导出器"""
 
-from typing import List, Dict, Optional
+from typing import List, Dict
 from datetime import datetime, timezone
 
 from app.modules.review.schemas import ExportResult, ExportFormat

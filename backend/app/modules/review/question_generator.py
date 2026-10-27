@@ -3,7 +3,6 @@
 import json
 import re
 from typing import List, Optional
-from uuid import uuid4
 
 from app.modules.knowledge_splitter.schemas import KnowledgeUnit
 from app.modules.review.schemas import ReviewQuestion

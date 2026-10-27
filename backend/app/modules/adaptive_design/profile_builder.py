@@ -6,7 +6,6 @@ LLM 不可用或失败时回退到规则化关键词匹配。
 """
 
 import json
-import re
 from typing import Optional
 
 from sqlalchemy import select, func

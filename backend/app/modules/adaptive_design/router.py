@@ -3,7 +3,6 @@
 from typing import Optional
 
 from fastapi import APIRouter, Depends, HTTPException
-from pydantic import BaseModel
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.common.errors import ServiceError, ErrorCode, ERROR_STATUS_MAP

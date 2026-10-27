@@ -9,7 +9,7 @@ from uuid import uuid4
 from sqlalchemy import select
 
 from app.common.errors import ServiceError, ErrorCode
-from app.common.llm_client import LLMClient, LLMMessage
+from app.common.llm_client import LLMMessage
 from app.db.models import MasteryRecordModel, ReviewSessionModel
 from app.modules.review.schemas import (
     MasteryRecord, ReviewSession, ReviewQuestion,
@@ -17,11 +17,7 @@ from app.modules.review.schemas import (
     ReviewFeedback, MasteryAssessment, FreeRecallResult, RecalledPoint,
 )
 from app.modules.review.spaced_repetition import calculate_next_review, quality_from_correctness
-from app.modules.review.spaced_repetition_v2 import (
-    SpacedRepetitionV2, Algorithm, ReviewSchedule,
-    calculate_next_review_v2, quality_from_correctness_v2
-)
-from app.modules.review.fsrs import FSRSScheduler, FSRSState, migrate_sm2_to_fsrs
+from app.modules.review.spaced_repetition_v2 import SpacedRepetitionV2, Algorithm
 from app.modules.review.helpers import check_answer, mastery_delta, calibration_adjustment
 from app.modules.review.mastery_evaluator import evaluate_mastery
 from app.modules.review.question_generator import generate_questions

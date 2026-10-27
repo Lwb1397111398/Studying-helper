@@ -2,7 +2,7 @@
 
 import json
 import math
-from typing import List, Optional
+from typing import List
 
 from app.modules.knowledge_graph.schemas import KGEdge
 

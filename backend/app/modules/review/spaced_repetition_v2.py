@@ -6,15 +6,13 @@
 
 from dataclasses import dataclass
 from datetime import datetime, timedelta
-from typing import Tuple, Optional, Literal
+from typing import Optional
 from enum import Enum
 
 from .fsrs import (
     FSRSScheduler,
     FSRSState,
-    FSRSResult,
     migrate_sm2_to_fsrs,
-    DEFAULT_PARAMETERS
 )
 from .spaced_repetition import (
     calculate_next_review as sm2_calculate_next_review,
